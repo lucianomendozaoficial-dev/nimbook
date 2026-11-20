@@ -99,40 +99,55 @@ La app resuelve esa ruta por CDN (`cdn.jsdelivr.net`) y, si falla, por `raw.gith
 Con Node.js instalado:
 
 ```bash
-node tools/deploy.mjs --repo tuusuario/NimbookGR --token github_pat_xxx --pages
+node tools/deploy.mjs --repo tuusuario/nimbook --token github_pat_xxx --pages
 ```
 
-Crea un **único commit** con la aplicación y los JSON vacíos, y activa GitHub Pages. Si el repositorio no existe, añade `--create`. También puedes subir los archivos a mano: basta con `index.html`, `css/`, `js/`, `assets/`, `manifest.webmanifest` y las carpetas `data/` y `media/`.
+Crea un **único commit** con la aplicación, los JSON vacíos y `config.js`. Si el repositorio no existe, añade `--create`.
 
-### 3. Entra y crea tu cuenta
+### 3. Configura la conexión (una sola vez)
 
-1. Abre `https://tuusuario.github.io/NimbookGR/`.
-2. Pega **usuario/repositorio**, el **token** y la rama (`main`).
-3. Pulsa **Crear cuenta nueva**, regístrate y publica lo primero.
+Edita **`config.js`** con tu repositorio y tu token:
 
-Para que entren tus amigos, comparte la URL y el token (o invítalos como colaboradores del repositorio para que usen su propio token). Quien tenga el token puede escribir en el repositorio: úsalo con gente de confianza y revócalo si se filtra.
+```js
+window.NIMBOOK_CONFIG = {
+  owner: 'tuusuario',
+  repo: 'nimbook',
+  branch: 'main',
+  token: 'github_pat_xxx',
+};
+```
 
-> Para que las imágenes carguen rápido por CDN y GitHub Pages funcione gratis, el repositorio debe ser **público**.
+Ese archivo es lo único técnico que existe: los usuarios **nunca** ven repositorios ni tokens, solo la pantalla de entrada y registro.
+
+### 4. Ábrela y regístrate
+
+1. Entra en `https://tuusuario.github.io/nimbook/`.
+2. Pulsa **Crear una cuenta nueva**, completa tus datos y publica tu primer momento.
+
+> Para que GitHub Pages funcione gratis y las imágenes carguen rápido por CDN, el repositorio debe ser **público** (Settings → General → Change visibility).
+>
+> El token queda dentro de `config.js` para que la web pueda guardar los datos. Cualquier visitante podría verlo, así que usa un token **limitado a ese repositorio** y con permiso solo de *Contents*. Si se filtra, revócalo, genera otro y vuelve a subir `config.js`.
 
 ---
 
 ## Probarlo en tu PC
 
-**Opción A — servidor incluido (sin instalar nada)**
+Haz doble clic en **`NimbookGR.bat`**. Abre el navegador en `http://localhost:4173/` con un servidor local y **datos de prueba guardados en tu PC**: los cambios que hagas ahí no los ve nadie hasta que publiques.
 
-Haz doble clic en **`NimbookGR.bat`**. Abre el navegador en `http://localhost:8080/` y sirve la carpeta del proyecto con PowerShell. Deja la ventana abierta mientras lo usas.
+- Los archivos `js` y `css` se **recargan solos** al guardarlos (no hace falta refrescar).
+- Los usuarios y publicaciones de prueba viven en `data/` y `media/` de tu carpeta.
+- Necesita Node.js (https://nodejs.org). Si no está instalado, el acceso directo te lo indica.
 
-> Abrir `index.html` con doble clic **no funciona**: los navegadores bloquean los módulos JavaScript en `file://`. Si lo haces, verás un aviso explicándolo.
+**Ver la web publicada desde el local** (con tus datos reales): abre `config.js` y listo; el modo local solo se activa con el lanzador.
 
-**Opción B — emulador de GitHub con datos de ejemplo (para desarrollar)**
+**Datos de ejemplo con 6 personas, fotos, grupos y chats**
 
 ```bash
-node tools/mock-server.mjs --port 4173     # API falsa + servidor estático
-python tools/seed_demo.py                  # 6 personas, fotos, grupos y chats
-# http://127.0.0.1:4173/?demo=1  entra directo como Nicolás Giménez
+python tools/seed_demo.py
+node tools/mock-server.mjs --port 4173 --open   # luego entra con ?demo=1
 ```
 
-Las cuentas de ejemplo usan la contraseña `demo1234`. Sin `?demo=1` el emulador se comporta como una instalación nueva (conectar → registrarse).
+Las cuentas de ejemplo usan la contraseña `demo1234`.
 
 **Volver a empezar sin datos**
 
@@ -140,7 +155,9 @@ Las cuentas de ejemplo usan la contraseña `demo1234`. Sin `?demo=1` el emulador
 node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpias
 ```
 
-**Pruebas automáticas** (Edge headless): `node tools/shots.mjs` → 23 comprobaciones y capturas en `.tmp/`.
+**Pruebas automáticas** (Edge headless): `node tools/shots.mjs` → 24 comprobaciones y capturas en `.tmp/`.
+
+> Abrir `index.html` con doble clic **no funciona**: los navegadores bloquean el JavaScript en `file://`. Si lo haces, verás un aviso explicándolo.
 
 ---
 
@@ -162,7 +179,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 
 - Cada «me gusta» o comentario es un commit: es el precio de usar GitHub como base de datos.
 - GitHub recomienda mantener los archivos por debajo de 1 MB; para comunidades grandes conviene dividir `feed.json` por mes.
-- El token vive en el navegador: usa uno limitado a ese repositorio y con caducidad.
+- El token está dentro de `config.js`: usa uno limitado a este repositorio y con caducidad, y revócalo si se filtra.
 - Si dos personas escriben a la vez, la app reintenta automáticamente; en el peor caso avisa para volver a intentarlo.
 
 ---
@@ -171,8 +188,9 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 
 ```
 index.html              punto de entrada (SPA)
+config.js               conexión con el almacenamiento (repo + token)
 manifest.webmanifest    PWA instalable
-NimbookGR.bat           lanzador local para Windows
+NimbookGR.bat           lanzador local para Windows (modo prueba, sin publicar)
 Iniciar-Nimbook.ps1     servidor local sin dependencias
 css/base.css            tokens, reset, tipografía, utilidades
 css/app.css             barra superior, columnas, navegación, componentes
