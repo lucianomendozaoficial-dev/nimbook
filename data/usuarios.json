@@ -1,32 +1,4 @@
 {
   "version": 1,
-  "users": [
-    {
-      "id": "u_3d5ju20r97tn",
-      "firstName": "Lucia",
-      "lastName": "Mendoza",
-      "name": "Lucia Mendoza",
-      "username": "lucia95231",
-      "password": {
-        "algo": "PBKDF2-SHA256",
-        "iterations": 150000,
-        "salt": "fmw6sUfm51Le2I4CP2/l1w==",
-        "hash": "Csidh2OdldpNDt6fevXVg2Dy/xxD2gKucE5sDkEwDQs="
-      },
-      "avatar": null,
-      "cover": null,
-      "bio": "",
-      "birthday": "",
-      "gender": "",
-      "whatsapp": "2615551234",
-      "instagram": "luciamendoza",
-      "location": "",
-      "work": "",
-      "education": "",
-      "friendIds": [],
-      "savedPostIds": [],
-      "createdAt": "2026-11-20T02:34:58.139Z",
-      "lastSeen": "2026-11-20T02:34:58.139Z"
-    }
-  ]
+  "users": []
 }
