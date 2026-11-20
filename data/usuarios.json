@@ -1,4 +1,32 @@
 {
   "version": 1,
-  "users": []
+  "users": [
+    {
+      "id": "u_l5hoi4r2stij",
+      "firstName": "Tuty",
+      "lastName": "Tuto",
+      "name": "Tuty Tuto",
+      "username": "tuty.ok",
+      "password": {
+        "algo": "PBKDF2-SHA256",
+        "iterations": 150000,
+        "salt": "SWLV4zhoPh8Ad2u2hGapzQ==",
+        "hash": "jUcK3PgpcBB3Xpc9BzVLAe2ZevNBLEI7m5ZjU7vj0eE="
+      },
+      "avatar": null,
+      "cover": null,
+      "bio": "",
+      "birthday": "2008-02-06",
+      "gender": "",
+      "whatsapp": "1151186792",
+      "instagram": "lucianomdz.ok",
+      "location": "",
+      "work": "",
+      "education": "",
+      "friendIds": [],
+      "savedPostIds": [],
+      "createdAt": "2026-11-20T02:50:12.715Z",
+      "lastSeen": "2026-11-20T02:50:12.715Z"
+    }
+  ]
 }
