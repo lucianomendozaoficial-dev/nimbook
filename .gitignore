@@ -1,0 +1,14 @@
+# dependencias / temporales
+node_modules/
+.tmp/
+*.log
+
+# token de GitHub (nunca se sube)
+.nimbook-token
+.token
+.env
+
+# sistema
+.DS_Store
+Thumbs.db
+desktop.ini
