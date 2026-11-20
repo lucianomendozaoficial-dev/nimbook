@@ -8,9 +8,15 @@
         "u_l5hoi4r2stij"
       ],
       "createdAt": "2026-11-20T03:35:00.205Z",
-      "updatedAt": "2026-11-20T03:35:00.205Z",
-      "lastMessage": null,
-      "reads": {}
+      "updatedAt": "2026-11-20T03:35:10.637Z",
+      "lastMessage": {
+        "text": "Hola",
+        "senderId": "u_zt0m5tr3ddem",
+        "at": 1795145710637
+      },
+      "reads": {
+        "u_zt0m5tr3ddem": 1795145710637
+      }
     }
   ]
 }
