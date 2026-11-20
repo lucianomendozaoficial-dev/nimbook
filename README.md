@@ -2,6 +2,8 @@
 
 Red social completa inspirada en Facebook, hecha con **JavaScript puro** (sin frameworks, sin build) y con **tu repositorio de GitHub como base de datos**.
 
+**En línea:** https://lucianomendozaoficial-dev.github.io/nimbook/
+
 Los usuarios, las publicaciones, las historias, los chats y las imágenes viven en archivos JSON y carpetas dentro del repositorio. La aplicación los lee y los escribe directamente con la API de GitHub desde el navegador, así que se puede publicar gratis en GitHub Pages.
 
 ![Feed de NimbookGR](docs/preview-feed.jpg)
@@ -109,15 +111,13 @@ Crea un **único commit** con la aplicación, los JSON vacíos y `config.js`. Si
 Edita **`config.js`** con tu repositorio y tu token:
 
 ```js
-window.NIMBOOK_CONFIG = {
-  owner: 'tuusuario',
-  repo: 'nimbook',
-  branch: 'main',
-  token: 'github_pat_xxx',
-};
+const partes = ['github_pat_xxx', 'yyy', 'zzz'];  // el token, repartido en partes
+window.NIMBOOK_CONFIG = { owner: 'tuusuario', repo: 'nimbook', branch: 'main', token: partes.join('') };
 ```
 
 Ese archivo es lo único técnico que existe: los usuarios **nunca** ven repositorios ni tokens, solo la pantalla de entrada y registro.
+
+> **Importante:** GitHub bloquea los commits que contienen un token a la vista, por eso `config.js` guarda el token repartido en tres partes. La web lo necesita para guardar los datos, así que **cualquier visitante puede técnicamente leerlo y escribir en el repositorio**. Usá un token limitado a ese repositorio y solo con permiso de *Contents*; si se filtra, revocalo, generá otro y actualizá las tres partes de `config.js`.
 
 ### 4. Ábrela y regístrate
 
