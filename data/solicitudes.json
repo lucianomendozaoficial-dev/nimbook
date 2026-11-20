@@ -1,4 +1,12 @@
 {
   "version": 1,
-  "requests": []
+  "requests": [
+    {
+      "id": "fr_mwofedgok7feghlk5e",
+      "from": "u_zt0m5tr3ddem",
+      "to": "u_l5hoi4r2stij",
+      "status": "pending",
+      "createdAt": "2026-11-20T03:34:57.960Z"
+    }
+  ]
 }
