@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta name="theme-color" content="#0866FF">
+<meta name="description" content="NimbookGR — conéctate y comparte con las personas que quieres.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="NimbookGR">
+<meta property="og:description" content="Conéctate y comparte con las personas que quieres.">
+<meta property="og:image" content="assets/logo/nimbook-logo-512.png">
+<meta property="og:type" content="website">
+<title>NimbookGR</title>
+
+<link rel="icon" href="assets/logo/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/logo/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="shortcut icon" href="assets/logo/favicon.ico">
+<link rel="apple-touch-icon" href="assets/logo/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://api.github.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://raw.githubusercontent.com">
+
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+<div id="root" class="root"></div>
+
+<div id="splash" class="splash">
+  <img src="assets/logo/nimbook-logo-128.png" alt="NimbookGR" width="88" height="88">
+  <div class="splash-name">NimbookGR</div>
+  <div class="splash-bar"><span></span></div>
+  <p class="splash-msg" id="splash-msg">Conectando…</p>
+
+  <div id="splash-error" class="splash-error" hidden>
+    <h2>No se pudo iniciar NimbookGR</h2>
+    <p id="splash-error-msg"></p>
+    <button type="button" id="splash-retry">Reintentar</button>
+    <p class="splash-hint">
+      Si abriste el archivo <code>index.html</code> con doble clic, el navegador bloquea
+      el JavaScript de NimbookGR. Ábrelo desde su dirección web o con el acceso
+      directo <code>NimbookGR.bat</code>.
+    </p>
+  </div>
+</div>
+
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+<div id="modal-root" class="modal-root"></div>
+
+<noscript>
+  <div style="padding:40px;text-align:center;font-family:system-ui">
+    NimbookGR necesita JavaScript activado para funcionar.
+  </div>
+</noscript>
+
+<script>
+  // Detección temprana: si algo falla al arrancar, nunca dejar la pantalla en "Conectando…"
+  (function () {
+    var splash = document.getElementById('splash');
+    var errorBox = document.getElementById('splash-error');
+    var errorMsg = document.getElementById('splash-error-msg');
+    var retry = document.getElementById('splash-retry');
+
+    function fail(message) {
+      if (!splash || splash.classList.contains('hide') || window.__NB_READY__) return;
+      if (!errorBox || !errorBox.hidden) return;
+      splash.classList.add('has-error');
+      errorBox.hidden = false;
+      if (message) errorMsg.textContent = message;
+      var bar = splash.querySelector('.splash-bar');
+      if (bar) bar.style.display = 'none';
+      var msg = document.getElementById('splash-msg');
+      if (msg) msg.style.display = 'none';
+    }
+
+    retry.addEventListener('click', function () { location.reload(); });
+
+    if (location.protocol === 'file:') {
+      fail('Estás abriendo index.html como archivo local (file://). Los navegadores bloquean el JavaScript de las páginas abiertas así.');
+    }
+
+    window.addEventListener('error', function (event) {
+      if (window.__NB_READY__) return;
+      var target = event.target;
+      if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+        fail('No se pudo cargar ' + (target.src || target.href) + '. Revisa que la carpeta del proyecto esté completa.');
+      }
+    }, true);
+
+    window.addEventListener('unhandledrejection', function (event) {
+      if (window.__NB_READY__) return;
+      var reason = event.reason;
+      fail(reason && reason.message ? reason.message : 'Error inesperado al iniciar.');
+    });
+
+    setTimeout(function () {
+      if (window.__NB_READY__) return;
+      fail('La aplicación tardó demasiado en iniciar. Revisa tu conexión y vuelve a intentarlo.');
+    }, 9000);
+  })();
+</script>
+<script src="config.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
