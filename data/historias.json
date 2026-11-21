@@ -1,4 +1,12 @@
 {
   "version": 1,
-  "stories": []
+  "stories": [
+    {
+      "id": "s_mwpsf11s90i9uu",
+      "userId": "u_mwpsb9lbbclb4v",
+      "image": "media/historias/mwpsezfy-wpsezf.jpg",
+      "text": "",
+      "createdAt": "2026-11-21T02:27:09.712Z"
+    }
+  ]
 }
