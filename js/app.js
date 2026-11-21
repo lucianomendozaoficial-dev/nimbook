@@ -9,7 +9,7 @@ import {
   attach, state, hydrateCache, loadCore, subscribe,
   refreshUserData, refreshFeed, displayName,
 } from './core/store.js';
-import { restoreSession } from './core/auth.js';
+import { restoreSession, readSession } from './core/auth.js';
 import { startRouter, parseRoute } from './core/router.js';
 import { mountTopbar } from './components/topbar.js';
 import { mountSidebar } from './components/sidebar.js';
@@ -314,6 +314,14 @@ async function boot() {
 
   attach(cfg);
   hydrateCache();
+
+  // Sin sesión guardada no hace falta esperar a la red: mostramos el acceso
+  // al instante y traemos los datos en segundo plano.
+  if (!readSession()) {
+    renderAuth();
+    loadCore().catch((err) => console.warn('[boot] datos en segundo plano', err?.message));
+    return;
+  }
 
   try {
     setSplashMessage('Preparando tu cuenta…');
