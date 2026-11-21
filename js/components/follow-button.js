@@ -23,7 +23,7 @@ export function followButton(user, { size = 'sm', onChange, wide = false } = {})
       icon(following ? 'check' : 'user-plus', size === 'sm' ? 15 : 17),
       el('span', { text: following ? 'Siguiendo' : 'Seguir' }),
     );
-    button.title = following ? 'Dejar de seguir' : `Seguir a ${user.name || user.username}`;
+    button.title = following ? 'Dejar de seguir' : `Seguir a @${user.username}`;
   }
 
   button.addEventListener('click', async (event) => {
@@ -34,7 +34,7 @@ export function followButton(user, { size = 'sm', onChange, wide = false } = {})
     try {
       const nowFollowing = await toggleFollow(user.id);
       playSound(nowFollowing ? 'follow' : 'open');
-      toast(nowFollowing ? `Ahora seguís a ${user.name || user.username}` : 'Dejaste de seguir',
+      toast(nowFollowing ? `Ahora seguís a @${user.username}` : 'Dejaste de seguir',
         { type: 'success' });
       paint();
       onChange?.(nowFollowing);

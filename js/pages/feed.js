@@ -24,17 +24,7 @@ export function feedPage() {
   let seed = Number(sessionStorage.getItem('zuma.feedSeed') || 0) || Math.floor(Math.random() * 9999) + 1;
   sessionStorage.setItem('zuma.feedSeed', String(seed));
 
-  const toolbar = el('div', { class: 'feed-toolbar' });
-  const refreshBtn = el('button', {
-    class: 'btn ghost sm', type: 'button', title: 'Actualizar',
-    onclick: () => refresh(),
-  }, icon('refresh', 16), 'Actualizar');
-  toolbar.append(
-    el('span', { class: 'muted small', text: 'Novedades' }),
-    refreshBtn,
-  );
-
-  root.append(toolbar, stories.el, composer, list, moreWrap);
+  root.append(stories.el, composer, list, moreWrap);
 
   function renderComposer() {
     clear(composer);
@@ -108,8 +98,6 @@ export function feedPage() {
   }
 
   async function refresh() {
-    refreshBtn.disabled = true;
-    playSound('open');
     clear(list);
     list.appendChild(loading);
     try {
@@ -120,7 +108,6 @@ export function feedPage() {
       toast('No pudimos actualizar. Revisá tu conexión.', { type: 'error' });
     } finally {
       loading.remove();
-      refreshBtn.disabled = false;
       renderComposer();
       renderList();
     }

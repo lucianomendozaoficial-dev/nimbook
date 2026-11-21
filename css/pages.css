@@ -1315,3 +1315,11 @@ select.input { appearance: none; background-image: none; cursor: pointer; }
   padding: 0 4px 8px;
 }
 .feed-toolbar .btn { gap: 6px; }
+
+/* ---------- usuario visible en el perfil ---------- */
+.profile-fullname {
+  margin-top: 2px; font-size: 14px; color: var(--text-2); font-weight: 500;
+}
+@media (max-width: 767px) {
+  .profile-fullname { font-size: 13px; }
+}

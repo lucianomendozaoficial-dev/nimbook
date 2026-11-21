@@ -259,13 +259,21 @@ export const userByUsername = (username) =>
     state.userIndex.find((user) => user.username?.toLowerCase() === String(username || '').toLowerCase())?.id,
   ) || null;
 
-export function displayName(user) {
+/** Nombre y apellido reales (para el perfil). */
+export function fullName(user) {
   if (!user) return 'Usuario';
   return user.name || [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || 'Usuario';
 }
 
+/** Etiqueta visible en toda la app: el usuario. */
+export function displayName(user) {
+  if (!user) return '@usuario';
+  if (user.username) return '@' + user.username;
+  return fullName(user);
+}
+
 export function initialsOf(user) {
-  const name = displayName(user).trim();
+  const name = fullName(user).trim();
   const parts = name.split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();

@@ -4,7 +4,7 @@
 import { el, clear, formatCount, longDate, monthYear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, userById, userByUsername, displayName, followersOf, followingOf,
+  state, userById, userByUsername, displayName, fullName, followersOf, followingOf,
   countFollowers, countFollowing, loadFollowers, loadFollowing, loadPost, loadUser,
   postsByAuthor, canSeePost, relationWith, updateProfileCache,
 } from '../core/store.js';
@@ -220,6 +220,7 @@ export function profilePage(username, { preview = false } = {}) {
         el('div', { class: 'profile-avatar-big' }, avatarEl(user, 'xxl')),
         el('div', { class: 'profile-info' },
           el('h1', { class: 'profile-name', text: displayName(user) }),
+          el('div', { class: 'profile-fullname', text: fullName(user) }),
           user.bio ? el('p', { class: 'muted', text: user.bio }) : null,
           el('div', { class: 'profile-stats' },
             el('a', { href: `#/u/${user.username}/seguidores`, text: `${formatCount(countFollowers(user.id))} seguidores` }),
@@ -288,7 +289,7 @@ export function profilePage(username, { preview = false } = {}) {
         el('div', { class: 'ut-img' }, avatarEl(person, 'xl')),
         el('div', { class: 'ut-body' },
           el('span', { class: 'ut-name', text: displayName(person) }),
-          el('span', { class: 'ut-sub', text: `@${person.username}` }))))));
+          el('span', { class: 'ut-sub', text: fullName(person) }))))));
   }
 
   function photosSection(user) {

@@ -1,6 +1,6 @@
 import { el, clear, debounce, normalize } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { state, displayName, searchPeople, relationWith } from '../core/store.js';
+import { state, displayName, fullName, searchPeople, relationWith } from '../core/store.js';
 import { avatarEl, emptyState } from '../core/ui.js';
 import { followButton } from '../components/follow-button.js';
 import { navigate, goBack, parseRoute } from '../core/router.js';
@@ -30,7 +30,7 @@ export function searchPage(initial = '') {
       el('a', { href: `#/u/${person.username}` }, avatarEl(person, 'md')),
       el('div', { class: 'grow', style: { minWidth: '0' } },
         el('a', { href: `#/u/${person.username}`, class: 'post-name', text: displayName(person) }),
-        el('div', { class: 'muted small', text: `@${person.username}` })),
+        el('div', { class: 'muted small', text: fullName(person) })),
       relation === 'self' ? el('span', { class: 'chip', text: 'Vos' }) : followButton(person));
   }
 

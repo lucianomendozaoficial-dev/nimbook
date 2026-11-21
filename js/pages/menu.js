@@ -3,7 +3,7 @@
    ========================================================================== */
 import { el } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { state, displayName, countFollowers, countFollowing } from '../core/store.js';
+import { state, displayName, fullName, countFollowers, countFollowing } from '../core/store.js';
 import { avatarEl, toast } from '../core/ui.js';
 import { logout } from '../core/auth.js';
 import { navigate } from '../core/router.js';
@@ -35,7 +35,7 @@ export function menuPage() {
         avatarEl(me, 'xl'),
         el('div', { class: 'grow' },
           el('div', { class: 'menu-profile-name', text: displayName(me) }),
-          el('div', { class: 'muted small', text: `@${me.username}` }),
+          el('div', { class: 'muted small', text: fullName(me) }),
           el('div', { class: 'muted small' },
             `${countFollowers(me.id)} seguidores · ${countFollowing(me.id)} siguiendo`)),
         icon('chevron-right', 20, { cls: 'dim' }))),

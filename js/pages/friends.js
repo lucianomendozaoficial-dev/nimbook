@@ -4,7 +4,7 @@
 import { el, clear, normalize, debounce } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, followersOf, followingOf, followSuggestions, mutualFollowers,
+  state, displayName, fullName, followersOf, followingOf, followSuggestions, mutualFollowers,
   countFollowers, countFollowing, relationWith, isFollowing, loadFollowers, loadFollowing,
 } from '../core/store.js';
 import { avatarEl, emptyState } from '../core/ui.js';
@@ -115,9 +115,9 @@ export function friendsPage(tab = 'seguidores') {
         .map((person) => state.users.get(person.id) || person);
       content.appendChild(grid(people, (person) => {
         const relation = relationWith(me.id, person.id);
-        if (relation === 'following') return `@${person.username} · lo seguís`;
-        if (relation === 'follows-you') return `@${person.username} · te sigue`;
-        return `@${person.username}`;
+        if (relation === 'following') return `${fullName(person)} · lo seguís`;
+        if (relation === 'follows-you') return `${fullName(person)} · te sigue`;
+        return fullName(person);
       }) || el('div', { class: 'card' }, emptyState({ iconName: 'search', title: 'Sin resultados' })));
       return;
     }
