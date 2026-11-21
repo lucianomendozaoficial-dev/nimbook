@@ -1,12 +1,4 @@
 {
   "version": 1,
-  "users": [
-    {
-      "id": "u_mwpqk76oi4mi4a",
-      "username": "pruebapqjlep",
-      "name": "Prueba Automatica",
-      "avatar": null,
-      "createdAt": "2026-11-21T01:35:11.712Z"
-    }
-  ]
+  "users": []
 }
