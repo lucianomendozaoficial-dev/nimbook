@@ -1,4 +1,32 @@
 {
   "version": 1,
-  "users": []
+  "users": [
+    {
+      "id": "u_eiuk1snd96or",
+      "firstName": "Luciano",
+      "lastName": "Mendoza",
+      "name": "Luciano Mendoza",
+      "username": "lucianomdz.ok",
+      "password": {
+        "algo": "PBKDF2-SHA256",
+        "iterations": 150000,
+        "salt": "gZF1haYLGmwJxHuLjQ+b7g==",
+        "hash": "m5jQ2tWpKeVXjYR2R9qd1/s9mswEnWd/tcC3APVDtgk="
+      },
+      "avatar": null,
+      "cover": null,
+      "bio": "",
+      "birthday": "",
+      "gender": "",
+      "whatsapp": "",
+      "instagram": "",
+      "location": "",
+      "work": "",
+      "education": "",
+      "friendIds": [],
+      "savedPostIds": [],
+      "createdAt": "2026-11-21T00:30:38.619Z",
+      "lastSeen": "2026-11-21T00:30:38.619Z"
+    }
+  ]
 }
