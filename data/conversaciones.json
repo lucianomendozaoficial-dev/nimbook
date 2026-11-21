@@ -1,23 +1,4 @@
 {
   "version": 1,
-  "conversations": [
-    {
-      "id": "cv_mwofef70batjx8yapf",
-      "memberIds": [
-        "u_zt0m5tr3ddem",
-        "u_l5hoi4r2stij"
-      ],
-      "createdAt": "2026-11-20T03:35:00.205Z",
-      "updatedAt": "2026-11-20T03:39:59.804Z",
-      "lastMessage": {
-        "text": "💪",
-        "senderId": "u_l5hoi4r2stij",
-        "at": 1795145999804
-      },
-      "reads": {
-        "u_zt0m5tr3ddem": 1795170524803,
-        "u_l5hoi4r2stij": 1795145999804
-      }
-    }
-  ]
+  "conversations": []
 }

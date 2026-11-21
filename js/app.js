@@ -26,6 +26,10 @@ import { groupsPage, groupPage } from './pages/groups.js';
 import { savedPage } from './pages/saved.js';
 import { searchPage } from './pages/search.js';
 import { settingsPage } from './pages/settings.js';
+import { menuPage } from './pages/menu.js';
+import { mountInstallBanner } from './components/install-banner.js';
+import { initPwa } from './core/pwa.js';
+import { unlockSounds, playSound } from './core/sounds.js';
 
 const root = document.getElementById('root');
 const splash = document.getElementById('splash');
@@ -87,16 +91,17 @@ function buildShell() {
   const topbar = mountTopbar();
   const left = mountSidebar();
   const right = mountRightRail();
+  const installBanner = mountInstallBanner();
   const center = el('div', { class: 'col-center' });
   const main = el('main', { class: 'main' }, left.el, center, right.el);
 
   const mobileNav = el('nav', { class: 'mobile-nav', 'aria-label': 'Navegación móvil' });
   const items = [
-    { id: 'feed', icon: 'home', label: 'Inicio', href: '#/feed' },
-    { id: 'friends', icon: 'users', label: 'Amigos', href: '#/friends' },
-    { id: 'messages', icon: 'message', label: 'Mensajes', href: '#/messages', badge: 'chats' },
-    { id: 'notifications', icon: 'bell', label: 'Notificaciones', href: '#/notifications', badge: 'notifs' },
-    { id: 'settings', icon: 'menu', label: 'Menú', href: '#/settings' },
+    { id: 'feed', icon: 'home', label: 'Inicio', href: '#/inicio' },
+    { id: 'friends', icon: 'users', label: 'Seguidores', href: '#/seguidores' },
+    { id: 'messages', icon: 'message', label: 'Mensajes', href: '#/mensajes', badge: 'chats' },
+    { id: 'notifications', icon: 'bell', label: 'Avisos', href: '#/notificaciones', badge: 'notifs' },
+    { id: 'menu', icon: 'menu', label: 'Menú', href: '#/menu' },
   ];
   const navButtons = new Map();
   for (const item of items) {
@@ -112,7 +117,7 @@ function buildShell() {
     mobileNav.appendChild(link);
   }
 
-  root.append(el('div', { class: 'app' }, topbar.el, main, mobileNav));
+  root.append(el('div', { class: 'app' }, topbar.el, main, mobileNav, installBanner.el));
   document.body.classList.add('has-shell');
 
   const api = {
@@ -124,8 +129,7 @@ function buildShell() {
       const route = parseRoute();
       const active = route.name === 'group' ? 'groups'
         : route.name === 'post' ? 'feed'
-          : route.name === 'profile' ? 'friends'
-            : route.name;
+          : route.name;
       for (const [id, link] of navButtons) {
         link.classList.toggle('active', id === active);
       }
@@ -163,6 +167,7 @@ function layoutFor(route) {
     case 'saved': return { right: false, left: true, wide: true };
     case 'search': return { right: false, left: true, wide: true };
     case 'settings': return { right: false, left: true, wide: true };
+    case 'menu': return { right: false, left: true, wide: true };
     case 'post': return { right: false, left: true, wide: false };
     default: return { right: true, left: true, wide: false };
   }
@@ -181,6 +186,7 @@ function pageFor(route) {
     case 'saved': return savedPage();
     case 'search': return searchPage(route.query.q || '');
     case 'settings': return settingsPage(route.params.tab);
+    case 'menu': return menuPage();
     default:
       return {
         el: el('div', { class: 'card' },
@@ -188,7 +194,7 @@ function pageFor(route) {
             iconName: 'alert',
             title: 'Página no encontrada',
             description: 'La dirección que abriste no existe en NimbookGR.',
-            action: el('a', { class: 'btn primary', href: '#/feed', text: 'Ir al inicio' }),
+            action: el('a', { class: 'btn primary', href: '#/inicio', text: 'Ir al inicio' }),
           })),
         onData() {},
         destroy() {},
@@ -230,10 +236,16 @@ async function startApp() {
   shell.setLayout(layoutFor(parseRoute()));
   shell.refreshChrome();
 
+  let lastUnread = state.ui.unreadNotifs;
+  let lastChats = state.ui.unreadChats;
   subscribe((topic) => {
     if (topic === 'offline') {
       toast('Se perdió la conexión. Estás viendo lo último que cargaste.', { type: 'error' });
     }
+    if (state.ui.unreadNotifs > lastUnread) playSound('notification');
+    if (state.ui.unreadChats > lastChats) playSound('notification');
+    lastUnread = state.ui.unreadNotifs;
+    lastChats = state.ui.unreadChats;
     shell?.refreshChrome();
     currentPage?.onData?.(topic);
   });
@@ -278,7 +290,12 @@ function startPolling() {
 
 async function boot() {
   initTheme();
+  initPwa();
   setSplashMessage('Iniciando NimbookGR…');
+
+  // desbloquea el audio con el primer toque (política de los navegadores)
+  const unlock = () => { unlockSounds(); document.removeEventListener('pointerdown', unlock); };
+  document.addEventListener('pointerdown', unlock, { once: true });
 
   if (window.location.protocol === 'file:') {
     showBootError(

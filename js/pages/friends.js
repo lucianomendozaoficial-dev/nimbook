@@ -1,21 +1,20 @@
 /* ==========================================================================
-   pages/friends.js — amigos, solicitudes y sugerencias
+   pages/friends.js — seguidores, siguiendo y sugerencias
    ========================================================================== */
 import { el, clear, formatCount, normalize, debounce } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, friendsOf, incomingRequests, outgoingRequests, friendSuggestions,
-  userById, mutualFriends, friendCount, relationWith,
+  state, displayName, followersOf, followingOf, followSuggestions,
+  mutualFollowers, countFollowers, countFollowing, relationWith, isFollowing,
 } from '../core/store.js';
-import { avatarEl, emptyState, toast, confirmDialog } from '../core/ui.js';
+import { avatarEl, emptyState, toast } from '../core/ui.js';
 import { mediaImg } from '../core/media.js';
-import {
-  acceptFriendRequest, rejectFriendRequest, sendFriendRequest, removeFriend,
-} from '../core/actions.js';
+import { followButton } from '../components/follow-button.js';
 import { navigate } from '../core/router.js';
+import { emptyFriendsIllustration } from '../core/illustrations.js';
 
 function userTile(user, { subtitle = '', actions = [] } = {}) {
-  const tile = el('div', { class: 'user-tile' },
+  return el('div', { class: 'user-tile' },
     el('a', { href: `#/u/${user.username}`, class: 'ut-img' },
       user.avatar
         ? mediaImg(user.avatar, { alt: displayName(user) })
@@ -31,294 +30,197 @@ function userTile(user, { subtitle = '', actions = [] } = {}) {
       el('a', { href: `#/u/${user.username}`, class: 'ut-name', text: displayName(user) }),
       el('span', { class: 'ut-sub', text: subtitle }),
       actions.length ? el('div', { class: 'ut-actions' }, ...actions) : null));
-  return tile;
 }
 
-function friendRow(user, { actions = [] } = {}) {
-  return el('div', { class: 'friend-card' },
-    el('a', { href: `#/u/${user.username}` }, avatarEl(user, 'lg')),
-    el('div', { class: 'grow', style: { minWidth: '0' } },
-      el('a', {
-        href: `#/u/${user.username}`, class: 'fc-name', text: displayName(user),
-        style: { display: 'block' },
-      }),
-      el('span', { class: 'fc-sub', text: `@${user.username}` })),
-    el('div', { class: 'fc-actions' }, ...actions));
-}
+const TABS = [
+  { id: 'seguidores', label: 'Seguidores' },
+  { id: 'siguiendo', label: 'Siguiendo' },
+  { id: 'sugerencias', label: 'Sugerencias' },
+  { id: 'todos', label: 'Todas las personas' },
+];
 
-export function friendsPage(tab = 'friends') {
+export function friendsPage(tab = 'seguidores') {
   const root = el('div');
+  const me = state.me;
   let query = '';
 
-  const TABS = [
-    { id: 'friends', label: 'Amigos' },
-    { id: 'requests', label: 'Solicitudes' },
-    { id: 'suggestions', label: 'Sugerencias' },
-    { id: 'all', label: 'Todas las personas' },
-  ];
-
   const tabsBar = el('div', { class: 'tabs' });
-  for (const item of TABS) {
-    const count = item.id === 'friends' ? friendCount(state.me.id)
-      : item.id === 'requests' ? incomingRequests(state.me.id).length : null;
-    tabsBar.appendChild(el('button', {
-      class: `tab ${tab === item.id ? 'active' : ''}`, type: 'button',
-      onclick: () => { window.location.hash = `/friends/${item.id}`; },
-    }, item.label, count ? el('span', { class: 'tab-count', text: `· ${count}` }) : null));
+  function renderTabs() {
+    clear(tabsBar);
+    const counts = {
+      seguidores: countFollowers(me.id),
+      siguiendo: countFollowing(me.id),
+      sugerencias: followSuggestions(me.id, 99).length,
+      todos: state.users.length - 1,
+    };
+    for (const item of TABS) {
+      tabsBar.appendChild(el('a', {
+        class: `tab ${tab === item.id ? 'active' : ''}`.trim(),
+        href: `#/seguidores${item.id === 'seguidores' ? '' : `/${item.id}`}`,
+      }, item.label, counts[item.id] ? el('span', { class: 'tab-count', text: `· ${counts[item.id]}` }) : null));
+    }
   }
 
   const searchInput = el('input', {
-    type: 'search', placeholder: 'Buscar amigos…', 'aria-label': 'Buscar amigos',
+    type: 'search', placeholder: 'Buscar personas…', 'aria-label': 'Buscar personas',
   });
-  const searchWrap = el('div', { class: 'search-inline', style: { margin: '12px 0' } },
+  const searchWrap = el('div', { class: 'search-inline', style: { margin: '12px 0 4px' } },
     icon('search', 18), searchInput);
 
   const content = el('div', { style: { padding: '4px 0 16px' } });
-
-  const head = el('div', { class: 'section-head' },
-    el('h1', { text: 'Amigos' }));
+  const title = {
+    seguidores: 'Seguidores',
+    siguiendo: 'Siguiendo',
+    sugerencias: 'Sugerencias para ti',
+    todos: 'Todas las personas',
+  }[tab] || 'Seguidores';
+  const subtitle = {
+    seguidores: 'Las personas que siguen tu perfil.',
+    siguiendo: 'Las personas que ves en tu muro.',
+    sugerencias: 'Gente que quizá te interese seguir.',
+    todos: 'Todas las cuentas de NimbookGR.',
+  }[tab] || '';
 
   root.append(el('div', { class: 'page-card' },
     el('div', { style: { padding: '16px 16px 0' } },
-      head,
-      tab === 'requests' || tab === 'suggestions' || tab === 'all' ? null : searchWrap,
+      el('div', { class: 'section-head', style: { marginBottom: '4px' } },
+        el('div', null,
+          el('h1', { text: title }),
+          el('p', { class: 'muted small', text: subtitle }))),
+      searchWrap,
       tabsBar)),
   content);
 
   searchInput.addEventListener('input', debounce(() => {
     query = normalize(searchInput.value);
     render();
-  }, 180));
+  }, 160));
 
-  function renderFriends() {
-    const all = friendsOf(state.me.id).sort((a, b) => displayName(a).localeCompare(displayName(b)));
-    const list = query ? all.filter((u) => normalize(displayName(u)).includes(query)
-      || normalize(u.username).includes(query)) : all;
-    if (!all.length) {
-      content.appendChild(el('div', { class: 'card' },
-        emptyState({
-          iconName: 'users',
-          title: 'Todavía no tienes amigos',
-          description: 'Busca personas que conozcas y envíales una solicitud.',
-          action: el('button', {
-            class: 'btn primary', type: 'button', text: 'Ver sugerencias',
-            onclick: () => { window.location.hash = '/friends/suggestions'; },
-          }),
-        })));
-      return;
+  function actionRow(person, { showFollow = true } = {}) {
+    const actions = [];
+    if (showFollow) {
+      actions.push(followButton(person, { onChange: () => renderTabs() }));
     }
-    if (!list.length) {
-      content.appendChild(el('div', { class: 'card' },
-        emptyState({ iconName: 'search', title: 'Sin coincidencias', description: 'Prueba con otro nombre.' })));
-      return;
-    }
-    content.appendChild(el('div', { class: 'muted small', style: { padding: '4px 16px 8px' },
-      text: `${formatCount(list.length)} amigos` }));
-    const grid = el('div', { class: 'friend-grid', style: { padding: '0 16px 16px' } });
-    for (const friend of list) {
-      grid.appendChild(userTile(friend, {
-        subtitle: `@${friend.username}`,
-        actions: [
-          el('button', {
-            class: 'btn sm', type: 'button', text: 'Mensaje',
-            onclick: () => navigate(`/messages?u=${friend.id}`),
-          }),
-          el('button', {
-            class: 'btn sm ghost icon-only', type: 'button', 'aria-label': 'Quitar amigo',
-            title: 'Quitar amigo',
-            onclick: () => {
-              confirmDialog({
-                title: `¿Eliminar a ${displayName(friend)}?`,
-                message: 'Dejarán de ser amigos en NimbookGR.',
-                confirmText: 'Eliminar', danger: true,
-              }).then(async (ok) => {
-                if (!ok) return;
-                try {
-                  await removeFriend(friend.id);
-                  toast('Amistad eliminada', { type: 'success' });
-                  render();
-                } catch (err) { toast(err.message, { type: 'error' }); }
-              });
-            },
-          }, icon('user-x', 16)),
-        ],
-      }));
-    }
-    content.appendChild(grid);
+    actions.push(el('button', {
+      class: 'btn sm icon-only', type: 'button', 'aria-label': 'Enviar mensaje', title: 'Enviar mensaje',
+      onclick: () => navigate(`/mensajes?u=${person.id}`),
+    }, icon('message', 16)));
+    return actions;
   }
 
-  function renderRequests() {
-    const incoming = incomingRequests(state.me.id);
-    const outgoing = outgoingRequests(state.me.id);
+  function grid(people, { subtitleFor, showFollow = true } = {}) {
+    if (!people.length) return null;
+    const box = el('div', { class: 'friend-grid', style: { padding: '8px 16px 16px' } });
+    for (const person of people) {
+      box.appendChild(userTile(person, {
+        subtitle: subtitleFor ? subtitleFor(person) : `@${person.username}`,
+        actions: actionRow(person, { showFollow }),
+      }));
+    }
+    return box;
+  }
 
-    if (!incoming.length && !outgoing.length) {
-      content.appendChild(el('div', { class: 'card' },
-        emptyState({
-          iconName: 'user-plus',
-          title: 'No hay solicitudes pendientes',
-          description: 'Aquí aparecerán las personas que quieran añadirte.',
-        })));
+  function renderEmpty({ illustration = '', iconName = 'users', title: text, description = '', action = null }) {
+    content.appendChild(el('div', { class: 'card' },
+      emptyState({ illustration, iconName, title: text, description, action })));
+  }
+
+  function renderFollowers() {
+    const people = followersOf(me.id)
+      .filter((u) => !query || normalize(displayName(u)).includes(query))
+      .sort((a, b) => displayName(a).localeCompare(displayName(b)));
+    if (!people.length) {
+      renderEmpty({
+        illustration: emptyFriendsIllustration(),
+        title: 'Todavía no tienes seguidores',
+        description: 'Comparte tu perfil para que más personas te sigan. Mientras tanto, seguí a otros.',
+        action: el('button', {
+          class: 'btn primary', type: 'button', text: 'Ver sugerencias',
+          onclick: () => { window.location.hash = '/seguidores/sugerencias'; },
+        }),
+      });
       return;
     }
+    content.appendChild(grid(people, {
+      subtitleFor: (p) => (isFollowing(me.id, p.id) ? 'Te sigue · la seguís' : 'Te sigue'),
+    }));
+  }
 
-    if (incoming.length) {
-      const card = el('div', { class: 'card pad' },
-        el('h3', { class: 'card-title', text: `Solicitudes recibidas · ${incoming.length}` }));
-      for (const request of incoming) {
-        const user = userById(request.from);
-        if (!user) continue;
-        card.appendChild(friendRow(user, {
-          actions: [
-            el('button', {
-              class: 'btn primary sm', type: 'button', text: 'Confirmar',
-              onclick: async (event) => {
-                const button = event.currentTarget;
-                button.disabled = true;
-                try {
-                  await acceptFriendRequest(request.id);
-                  toast(`Ahora eres amigo de ${displayName(user)}`, { type: 'success' });
-                  render();
-                } catch (err) { button.disabled = false; toast(err.message, { type: 'error' }); }
-              },
-            }),
-            el('button', {
-              class: 'btn sm', type: 'button', text: 'Eliminar',
-              onclick: async () => {
-                try {
-                  await rejectFriendRequest(request.id);
-                  render();
-                } catch (err) { toast(err.message, { type: 'error' }); }
-              },
-            }),
-          ],
-        }));
-      }
-      content.appendChild(card);
+  function renderFollowing() {
+    const people = followingOf(me.id)
+      .filter((u) => !query || normalize(displayName(u)).includes(query))
+      .sort((a, b) => displayName(a).localeCompare(displayName(b)));
+    if (!people.length) {
+      renderEmpty({
+        iconName: 'user-plus',
+        title: 'Todavía no seguís a nadie',
+        description: 'Seguí personas para ver sus publicaciones en tu muro.',
+        action: el('button', {
+          class: 'btn primary', type: 'button', text: 'Ver sugerencias',
+          onclick: () => { window.location.hash = '/seguidores/sugerencias'; },
+        }),
+      });
+      return;
     }
-
-    if (outgoing.length) {
-      const card = el('div', { class: 'card pad', style: { marginTop: '16px' } },
-        el('h3', { class: 'card-title', text: `Solicitudes enviadas · ${outgoing.length}` }));
-      for (const request of outgoing) {
-        const user = userById(request.to);
-        if (!user) continue;
-        card.appendChild(friendRow(user, {
-          actions: [
-            el('button', {
-              class: 'btn sm', type: 'button', text: 'Cancelar',
-              onclick: async () => {
-                try {
-                  await rejectFriendRequest(request.id);
-                  render();
-                } catch (err) { toast(err.message, { type: 'error' }); }
-              },
-            }),
-          ],
-        }));
-      }
-      content.appendChild(card);
-    }
+    content.appendChild(grid(people, {
+      showFollow: true,
+      subtitleFor: (p) => (isFollowing(p.id, me.id) ? `@${p.username} · te sigue` : `@${p.username}`),
+    }));
   }
 
   function renderSuggestions() {
-    const suggestions = friendSuggestions(state.me.id, 24);
-    if (!suggestions.length) {
-      content.appendChild(el('div', { class: 'card' },
-        emptyState({
-          iconName: 'sparkles',
-          title: 'No hay sugerencias por ahora',
-          description: 'Cuando se registren más personas las verás aquí.',
-        })));
+    const people = followSuggestions(me.id, 40)
+      .filter((u) => !query || normalize(displayName(u)).includes(query));
+    if (!people.length) {
+      renderEmpty({
+        title: 'No hay sugerencias por ahora',
+        description: 'Cuando se registren más personas las vas a ver acá.',
+      });
       return;
     }
-    const grid = el('div', { class: 'friend-grid', style: { padding: '0 16px' } });
-    for (const person of suggestions) {
-      const mutual = mutualFriends(state.me.id, person.id).length;
-      const button = el('button', {
-        class: 'btn primary sm', type: 'button', text: 'Añadir amigo',
-        onclick: async (event) => {
-          const btn = event.currentTarget;
-          btn.disabled = true;
-          try {
-            await sendFriendRequest(person.id);
-            btn.textContent = 'Solicitud enviada';
-            btn.classList.remove('primary');
-            toast(`Solicitud enviada a ${displayName(person)}`, { type: 'success' });
-          } catch (err) { btn.disabled = false; toast(err.message, { type: 'error' }); }
-        },
-      });
-      grid.appendChild(userTile(person, {
-        subtitle: mutual ? `${mutual} amigo${mutual === 1 ? '' : 's'} en común` : 'Nuevo en NimbookGR',
-        actions: [button],
-      }));
-    }
-    content.appendChild(grid);
+    content.appendChild(grid(people, {
+      subtitleFor: (p) => {
+        const mutual = mutualFollowers(me.id, p.id).length;
+        return mutual ? `${mutual} seguidor${mutual === 1 ? '' : 'es'} en común` : 'Nueva en NimbookGR';
+      },
+    }));
   }
 
   function renderAll() {
     const people = state.users
-      .filter((u) => u.id !== state.me.id)
+      .filter((u) => u.id !== me.id)
+      .filter((u) => !query || normalize(displayName(u)).includes(query)
+        || normalize(u.username).includes(query))
       .sort((a, b) => displayName(a).localeCompare(displayName(b)));
-    const list = query ? people.filter((u) => normalize(displayName(u)).includes(query)) : people;
-    if (!list.length) {
-      content.appendChild(el('div', { class: 'card' },
-        emptyState({ iconName: 'search', title: 'Sin resultados' })));
+    if (!people.length) {
+      renderEmpty({ iconName: 'search', title: 'Sin resultados' });
       return;
     }
-    const grid = el('div', { class: 'friend-grid', style: { padding: '0 16px' } });
-    for (const person of list) {
-      const relation = relationWith(state.me.id, person.id);
-      grid.appendChild(userTile(person, {
-        subtitle: relation === 'friends' ? 'Amigos' : `@${person.username}`,
-        actions: [
-          relation === 'friends'
-            ? el('button', {
-              class: 'btn sm', type: 'button', text: 'Mensaje',
-              onclick: () => navigate(`/messages?u=${person.id}`),
-            })
-            : el('button', {
-              class: 'btn sm primary', type: 'button',
-              text: relation === 'requested' ? 'Solicitud enviada' : 'Añadir amigo',
-              disabled: relation === 'requested',
-              onclick: async (event) => {
-                const btn = event.currentTarget;
-                btn.disabled = true;
-                try {
-                  await sendFriendRequest(person.id);
-                  btn.textContent = 'Solicitud enviada';
-                  toast('Solicitud enviada', { type: 'success' });
-                } catch (err) { btn.disabled = false; toast(err.message, { type: 'error' }); }
-              },
-            }),
-        ],
-      }));
-    }
-    content.appendChild(grid);
+    content.appendChild(grid(people, {
+      subtitleFor: (p) => {
+        const relation = relationWith(me.id, p.id);
+        if (relation === 'following') return `@${p.username} · lo seguís`;
+        if (relation === 'follows-you') return `@${p.username} · te sigue`;
+        return `@${p.username}`;
+      },
+    }));
   }
 
   function render() {
     clear(content);
-    if (tab === 'requests') renderRequests();
-    else if (tab === 'suggestions') renderSuggestions();
-    else if (tab === 'all') renderAll();
-    else renderFriends();
+    renderTabs();
+    if (tab === 'siguiendo') renderFollowing();
+    else if (tab === 'sugerencias') renderSuggestions();
+    else if (tab === 'todos') renderAll();
+    else renderFollowers();
   }
 
   render();
   return {
     el: root,
-    onData() {
-      // actualiza contadores de pestañas y contenido
-      const buttons = tabsBar.querySelectorAll('.tab');
-      const counts = [friendCount(state.me.id), incomingRequests(state.me.id).length, 0, 0];
-      buttons.forEach((button, index) => {
-        const existing = button.querySelector('.tab-count');
-        const value = counts[index];
-        if (!value) { existing?.remove(); return; }
-        if (existing) existing.textContent = `· ${value}`;
-        else button.appendChild(el('span', { class: 'tab-count', text: `· ${value}` }));
-      });
-      if (tab === 'friends' || tab === 'requests' || tab === 'suggestions') render();
+    onData: () => {
+      if (query) render();
+      else renderTabs();
     },
   };
 }

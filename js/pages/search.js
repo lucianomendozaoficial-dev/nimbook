@@ -3,11 +3,11 @@
    ========================================================================== */
 import { el, clear, debounce, formatCount, timeAgo } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { state, displayName, searchEverything, relationWith, friendCount, userById } from '../core/store.js';
-import { avatarEl, emptyState, toast } from '../core/ui.js';
+import { state, displayName, searchEverything, relationWith, countFollowers, userById } from '../core/store.js';
+import { avatarEl, emptyState } from '../core/ui.js';
 import { mediaImg } from '../core/media.js';
+import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
-import { sendFriendRequest } from '../core/actions.js';
 
 export function searchPage(initialQuery = '') {
   const root = el('div');
@@ -88,26 +88,13 @@ export function searchPage(initialQuery = '') {
             }),
             el('span', {
               class: 'small muted',
-              text: `${formatCount(friendCount(person.id))} amigos · @${person.username}`,
+              text: `${formatCount(countFollowers(person.id))} seguidores · @${person.username}`,
             })),
-          relation === 'friends'
-            ? el('span', { class: 'chip', text: 'Amigos' })
-            : relation === 'requested'
-              ? el('span', { class: 'chip', text: 'Solicitud enviada' })
-              : el('button', {
-                class: 'btn soft sm', type: 'button', text: 'Añadir',
-                onclick: async (event) => {
-                  const button = event.currentTarget;
-                  button.disabled = true;
-                  try {
-                    await sendFriendRequest(person.id);
-                    button.textContent = 'Enviado';
-                  } catch (err) {
-                    button.disabled = false;
-                    toast(err.message, { type: 'error' });
-                  }
-                },
-              })));
+          relation === 'following'
+            ? el('span', { class: 'chip brand', text: 'Siguiendo' })
+            : relation === 'follows-you'
+              ? el('span', { class: 'chip', text: 'Te sigue' })
+              : followButton(person)));
       }
       results.appendChild(card);
     }

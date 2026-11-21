@@ -346,7 +346,7 @@ for person in PEOPLE:
         "location": person["city"],
         "work": person["work"],
         "education": person["edu"],
-        "friendIds": [],
+        "following": [],
         "savedPostIds": [],
         "createdAt": iso(days_ago=120 + person["idx"] * 9),
         "lastSeen": iso(minutes_ago=3 + person["idx"] * 4),
@@ -362,7 +362,7 @@ FRIENDS = {
     "u_carlos": ["u_luis"],
 }
 for uid, friends in FRIENDS.items():
-    BY_ID[uid]["friendIds"] = friends
+    BY_ID[uid]["following"] = friends
 
 # --------------------------------------------------------------------------- #
 #  publicaciones
@@ -592,7 +592,7 @@ notifications = [
      "reaction": "love", "at": iso(minutes_ago=18), "read": False},
     {"id": "n_2", "type": "comment", "actorId": "u_luis", "postId": "p_demo_nimbook",
      "commentId": "c_5", "at": iso(hours_ago=5), "read": False},
-    {"id": "n_3", "type": "friend_request", "actorId": "u_carlos",
+    {"id": "n_3", "type": "follow", "actorId": "u_carlos",
      "at": iso(hours_ago=8), "read": False},
     {"id": "n_4", "type": "share", "actorId": "u_luis", "postId": "p_demo_nimbook",
      "at": iso(hours_ago=4), "read": True},
@@ -617,10 +617,6 @@ print("escribiendo JSON...")
 dump("data/usuarios.json", {"version": 1, "users": users})
 dump("data/feed.json", {"version": 1, "posts": posts})
 dump("data/comentarios.json", {"version": 1, "comments": comments})
-dump("data/solicitudes.json", {"version": 1, "requests": [
-    {"id": "fr_1", "from": "u_carlos", "to": "u_demo", "status": "pending", "createdAt": iso(hours_ago=8)},
-    {"id": "fr_2", "from": "u_maria", "to": "u_carlos", "status": "pending", "createdAt": iso(hours_ago=20)},
-]})
 dump("data/conversaciones.json", {"version": 1, "conversations": conversations})
 dump("data/grupos.json", {"version": 1, "groups": groups})
 dump("data/historias.json", {"version": 1, "stories": stories})

@@ -54,9 +54,55 @@ export function themeLabel() {
 export function initTheme() {
   const theme = readTheme();
   applyTheme(theme);
+  applyAccent(readAccent());
   const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
   mq?.addEventListener?.('change', () => {
     if (readTheme() === 'auto') applyTheme('auto');
   });
   return theme;
+}
+
+/* ------------------------------ color de acento --------------------------- */
+
+const ACCENT_KEY = 'nb.accent.v1';
+const ACCENTS = [
+  { id: 'azul', label: 'Azul', color: '#0866ff' },
+  { id: 'violeta', label: 'Violeta', color: '#7c3aed' },
+  { id: 'verde', label: 'Verde', color: '#0f9d6f' },
+  { id: 'rosa', label: 'Rosa', color: '#e11d48' },
+  { id: 'naranja', label: 'Naranja', color: '#ea580c' },
+];
+export { ACCENTS };
+
+export function readAccent() {
+  try {
+    const saved = localStorage.getItem(ACCENT_KEY);
+    if (ACCENTS.some((accent) => accent.id === saved)) return saved;
+  } catch { /* noop */ }
+  return 'azul';
+}
+
+function shade(hex, amount) {
+  const value = hex.replace('#', '');
+  const num = parseInt(value, 16);
+  const r = Math.max(0, Math.min(255, ((num >> 16) & 255) + amount));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 255) + amount));
+  const b = Math.max(0, Math.min(255, (num & 255) + amount));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+export function applyAccent(id = readAccent()) {
+  const accent = ACCENTS.find((item) => item.id === id) || ACCENTS[0];
+  const root = document.documentElement;
+  root.style.setProperty('--brand', accent.color);
+  root.style.setProperty('--brand-hover', shade(accent.color, -18));
+  root.style.setProperty('--brand-active', shade(accent.color, -34));
+  root.dataset.accent = accent.id;
+  return accent.id;
+}
+
+export function setAccent(id) {
+  try { localStorage.setItem(ACCENT_KEY, id); } catch { /* noop */ }
+  applyAccent(id);
+  return id;
 }

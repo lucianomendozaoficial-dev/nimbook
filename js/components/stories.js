@@ -4,7 +4,7 @@
 import { el, clear, timeAgo, STORY_GRADIENTS, hashCode } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, storiesGrouped, userById, isFriend, initialsOf,
+  state, displayName, storiesGrouped, userById, initialsOf,
 } from '../core/store.js';
 import { avatarEl, openModal, toast } from '../core/ui.js';
 import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../core/media.js';

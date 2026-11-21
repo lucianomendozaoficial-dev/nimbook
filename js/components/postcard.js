@@ -8,9 +8,11 @@ import {
   canSeePost,
 } from '../core/store.js';
 import {
-  avatarEl, openModal, confirmDialog, toast, dropdown, lightbox, REACTIONS,
-  REACTION_ORDER, emojiPicker, closeMenus,
+  avatarEl, openModal, confirmDialog, toast, dropdown, lightbox,
+  emojiPicker, closeMenus,
 } from '../core/ui.js';
+import { REACTIONS, REACTION_ORDER, reactionIcon } from '../core/reactions.js';
+import { playSound } from '../core/sounds.js';
 import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../core/media.js';
 import {
   setReaction, addComment, deleteComment, setCommentReaction, deletePost, updatePost,
@@ -140,8 +142,8 @@ export function postCard(post, { onUpdate } = {}) {
   let replyTo = null;
   let pendingMedia = null;
   const expandedReplies = new Set();
-  let hoverTimer = null;
   let popoverEl = null;
+  let outsideHandler = null;
 
   const postData = () => state.posts.find((p) => p.id === post.id) || post;
 
@@ -299,9 +301,9 @@ export function postCard(post, { onUpdate } = {}) {
       const stack = el('span', { class: 'react-stack' });
       for (const type of summary.types.slice(0, 3)) {
         stack.appendChild(el('span', { class: 'rb', title: REACTIONS[type].label },
-          REACTIONS[type].emoji));
+          reactionIcon(type, 18)));
       }
-      left.append(stack, el('span', { text: formatCount(summary.total) }));
+      left.append(stack, el('span', { class: 'reactions-total', text: formatCount(summary.total) }));
     }
 
     const right = el('div', { class: 'right' });
@@ -326,66 +328,69 @@ export function postCard(post, { onUpdate } = {}) {
     clear(actionsEl);
 
     const likeBtn = el('button', {
-      class: `post-act ${mine ? 'liked' : ''}`, type: 'button',
+      class: `post-act like-act ${mine ? 'liked' : ''}`, type: 'button',
       'aria-label': mine ? REACTIONS[mine].label : 'Me gusta',
+      'aria-haspopup': 'true',
     },
-    mine
-      ? el('span', { style: { fontSize: '18px', lineHeight: '1' }, text: REACTIONS[mine].emoji })
-      : icon('thumbsup', 20),
-    el('span', { text: mine ? REACTIONS[mine].label : 'Me gusta' }));
+    mine ? reactionIcon(mine, 23) : icon('thumbsup', 21),
+    el('span', { class: 'post-act-label', text: mine ? REACTIONS[mine].label : 'Me gusta' }));
+
+    function onOutside(event) {
+      if (!popoverEl) return;
+      if (popoverEl.contains(event.target) || likeBtn.contains(event.target)) return;
+      hidePopover();
+    }
 
     const showPopover = () => {
       if (!root.isConnected) return;
       hidePopover();
-      const bar = el('div', { class: 'react-pop' });
+      const bar = el('div', { class: 'react-pop', role: 'menu' });
       for (const type of REACTION_ORDER) {
-        bar.appendChild(el('button', {
-          type: 'button', title: REACTIONS[type].label, 'aria-label': REACTIONS[type].label,
+        const option = el('button', {
+          class: 'react-option', type: 'button', role: 'menuitem',
+          'aria-label': REACTIONS[type].label,
           onclick: (event) => {
             event.stopPropagation();
             hidePopover();
             applyReaction(type);
           },
-        }, REACTIONS[type].emoji));
+        },
+        reactionIcon(type, 34),
+        el('span', { class: 'react-option-label', text: REACTIONS[type].label }));
+        bar.appendChild(option);
       }
       actionsEl.appendChild(bar);
       const rect = likeBtn.getBoundingClientRect();
       const rootRect = actionsEl.getBoundingClientRect();
-      bar.style.left = `${Math.max(4, Math.min(rect.left - rootRect.left, rootRect.width - bar.offsetWidth - 4))}px`;
-      bar.style.bottom = `${rootRect.height + 6}px`;
+      const barRect = bar.getBoundingClientRect();
+      bar.style.left = `${Math.max(4, Math.min(rect.left - rootRect.left, rootRect.width - barRect.width - 4))}px`;
+      bar.style.bottom = `${rootRect.height + 8}px`;
       popoverEl = bar;
+      outsideHandler = onOutside;
+      playSound('open');
+      document.addEventListener('pointerdown', onOutside, true);
     };
 
-    likeBtn.addEventListener('mouseenter', () => {
-      if (isTouch()) return;
-      clearTimeout(hoverTimer);
-      hoverTimer = setTimeout(showPopover, 320);
-    });
-    likeBtn.addEventListener('mouseleave', () => {
-      clearTimeout(hoverTimer);
-      setTimeout(() => {
-        if (!popoverEl?.matches(':hover')) hidePopover();
-      }, 220);
-    });
-
-    // mantener pulsado en móvil para elegir reacción
+    // mantener apretado (ratón o dedo) para elegir reacción
     let pressTimer = null;
     let suppressClick = false;
-    likeBtn.addEventListener('pointerdown', () => {
-      if (!isTouch()) return;
+    const startPress = (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
       clearTimeout(pressTimer);
       pressTimer = setTimeout(() => {
         suppressClick = true;
         showPopover();
-      }, 420);
-    });
-    for (const eventName of ['pointerup', 'pointercancel', 'pointerleave']) {
-      likeBtn.addEventListener(eventName, () => clearTimeout(pressTimer));
-    }
+        try { navigator.vibrate?.(10); } catch { /* noop */ }
+      }, 340);
+    };
+    const cancelPress = () => clearTimeout(pressTimer);
 
+    likeBtn.addEventListener('pointerdown', startPress);
+    for (const eventName of ['pointerup', 'pointercancel', 'pointerleave']) {
+      likeBtn.addEventListener(eventName, cancelPress);
+    }
     likeBtn.addEventListener('click', () => {
       if (suppressClick) { suppressClick = false; return; }
-      // clic normal: quita tu reacción o pone "me gusta" (como en Facebook)
       applyReaction(mine ? null : 'like');
     });
     likeBtn.addEventListener('contextmenu', (event) => {
@@ -395,26 +400,36 @@ export function postCard(post, { onUpdate } = {}) {
 
     const commentBtn = el('button', {
       class: 'post-act', type: 'button', 'aria-label': 'Comentar',
-      onclick: () => openComments(true),
-    }, icon('message', 20), el('span', { text: 'Comentar' }));
+      onclick: () => { playSound('open'); openComments(true); },
+    }, icon('message', 21), el('span', { class: 'post-act-label', text: 'Comentar' }));
 
     const shareBtn = el('button', {
       class: 'post-act', type: 'button', 'aria-label': 'Compartir',
       onclick: () => openShare(current),
-    }, icon('share', 20), el('span', { text: 'Compartir' }));
+    }, icon('share', 21), el('span', { class: 'post-act-label', text: 'Compartir' }));
 
     actionsEl.append(likeBtn, commentBtn, shareBtn);
   }
 
   function hidePopover() {
-    popoverEl?.remove();
+    if (!popoverEl) return;
+    popoverEl.remove();
     popoverEl = null;
+    if (outsideHandler) {
+      document.removeEventListener('pointerdown', outsideHandler, true);
+      outsideHandler = null;
+    }
   }
 
   async function applyReaction(type) {
+    const before = reactionSummary(postData()).mine;
+    if (type === null) playSound('unlike');
+    else if (type === 'like' && before !== 'like') playSound('like');
+    else playSound('reaction');
     try {
       await setReaction(post.id, type);
     } catch (err) {
+      playSound('error');
       toast(err.message || 'No se pudo reaccionar.', { type: 'error' });
     }
   }
@@ -459,6 +474,7 @@ export function postCard(post, { onUpdate } = {}) {
           try {
             await createPost({ text: textarea.value, shareOf: original.id });
             api.close();
+            playSound('send');
             toast('Publicación compartida', { type: 'success' });
             onUpdate?.();
           } catch (err) {
@@ -521,7 +537,7 @@ export function postCard(post, { onUpdate } = {}) {
       reactions.length
         ? el('span', {
           class: 'row gap-4', style: { color: 'var(--text-2)' },
-        }, '👍', el('span', { text: formatCount(reactions.length) }))
+        }, reactionIcon('like', 15), el('span', { text: formatCount(reactions.length) }))
         : null,
       el('button', {
         type: 'button', text: 'Responder',
@@ -648,6 +664,7 @@ export function postCard(post, { onUpdate } = {}) {
           parentId: replyTo?.id || null,
           media: pendingMedia ? [{ path: pendingMedia.path, type: pendingMedia.type }] : [],
         });
+        playSound('comment');
         draft.text = '';
         pendingMedia = null;
         replyTo = null;
@@ -727,7 +744,6 @@ export function postCard(post, { onUpdate } = {}) {
       }
     },
     destroy: () => {
-      clearTimeout(hoverTimer);
       hidePopover();
       closeMenus();
     },

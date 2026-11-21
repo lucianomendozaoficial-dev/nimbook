@@ -57,20 +57,27 @@
   z-index: 500;
   display: flex; align-items: center; gap: 8px;
   padding: 0 16px;
-  background: var(--card);
-  border-bottom: 1px solid var(--line-soft);
-  box-shadow: var(--shadow-xs);
+  background: linear-gradient(180deg, #0b6bff 0%, #0553db 100%);
+  color: #fff;
+  box-shadow: 0 2px 16px rgba(4, 28, 84, .24);
+}
+html[data-theme="dark"] .topbar {
+  background: linear-gradient(180deg, #12233f 0%, #0b1729 100%);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, .5);
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 .brand {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 9px;
   border-radius: var(--r-full); padding: 4px; flex: none;
 }
-.brand:hover { text-decoration: none; }
-.brand img { width: 40px; height: 40px; border-radius: 50%; }
+.brand:hover { text-decoration: none; background: rgba(255, 255, 255, .12); }
+.brand img {
+  width: 40px; height: 40px; border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .18);
+}
 .brand-word {
-  font-size: 22px; font-weight: 700; letter-spacing: -.5px; color: var(--brand);
+  font-size: 22px; font-weight: 800; letter-spacing: -.6px; color: #fff;
   display: none;
 }
 
@@ -78,15 +85,20 @@
   position: relative;
   display: flex; align-items: center;
   height: 40px; width: 240px;
-  background: var(--card-2); border-radius: var(--r-full);
-  padding: 0 12px; gap: 8px; color: var(--text-2);
-  transition: background var(--fast) var(--ease), width var(--med) var(--ease);
+  background: rgba(255, 255, 255, .17); border-radius: var(--r-full);
+  padding: 0 12px; gap: 8px; color: rgba(255, 255, 255, .82);
+  transition: background var(--fast) var(--ease), width var(--med) var(--ease), color var(--fast);
 }
-.tb-search:focus-within { background: var(--card); box-shadow: inset 0 0 0 1px var(--line); width: 280px; }
+.tb-search:focus-within {
+  background: #fff; color: var(--text-2); width: 280px;
+  box-shadow: 0 6px 18px rgba(4, 28, 84, .18);
+}
 .tb-search input {
-  flex: 1; min-width: 0; font-size: 15px; color: var(--text); background: transparent;
+  flex: 1; min-width: 0; font-size: 15px; color: #fff; background: transparent;
 }
-.tb-search input::placeholder { color: var(--text-2); }
+.tb-search input::placeholder { color: rgba(255, 255, 255, .78); }
+.tb-search:focus-within input { color: var(--text); }
+.tb-search:focus-within input::placeholder { color: var(--text-3); }
 
 .tb-nav {
   display: flex; align-items: center; justify-content: center;
@@ -96,22 +108,22 @@
   position: relative;
   width: 112px; max-width: 22vw; height: 44px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: var(--r-sm); color: var(--text-2);
+  border-radius: 12px; color: rgba(255, 255, 255, .8);
   transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
-.tb-tab:hover { background: var(--hover); color: var(--text); text-decoration: none; }
-.tb-tab.active { color: var(--brand); }
+.tb-tab:hover { background: rgba(255, 255, 255, .14); color: #fff; text-decoration: none; }
+.tb-tab.active { color: #fff; }
 .tb-tab.active::after {
-  content: ""; position: absolute; left: 8px; right: 8px; bottom: -6px; height: 3px;
-  border-radius: 3px 3px 0 0; background: var(--brand);
+  content: ""; position: absolute; left: 10px; right: 10px; bottom: -6px; height: 3px;
+  border-radius: 3px 3px 0 0; background: #fff;
 }
-.tb-tab.active:hover { background: transparent; }
+.tb-tab.active:hover { background: rgba(255, 255, 255, .14); }
 .tb-tab .badge-dot {
-  position: absolute; top: 8px; right: 26px;
+  position: absolute; top: 6px; right: 24px;
   min-width: 18px; height: 18px; padding: 0 5px;
   border-radius: 9px; background: var(--danger); color: #fff;
   font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
-  border: 2px solid var(--card);
+  border: 2px solid #0b6bff;
 }
 
 .topbar-right { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
@@ -119,20 +131,23 @@
   position: relative;
   width: 40px; height: 40px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--card-2); color: var(--text);
+  background: rgba(255, 255, 255, .16); color: #fff;
   transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
-.tb-btn.menu-grid { background: var(--card-2); }
-.tb-btn:hover { background: var(--card-3); }
+.tb-btn.menu-grid { background: rgba(255, 255, 255, .16); }
+.tb-btn:hover { background: rgba(255, 255, 255, .28); }
 .tb-btn:active { transform: scale(.93); }
 .tb-btn.avatar-btn { background: transparent; padding: 0; }
+.tb-btn.avatar-btn .avatar { box-shadow: 0 0 0 2px rgba(255, 255, 255, .55); }
 .tb-btn .badge-dot {
   position: absolute; top: -2px; right: -2px;
   min-width: 19px; height: 19px; padding: 0 5px;
   border-radius: 10px; background: var(--danger); color: #fff;
   font-size: 11px; font-weight: 700; line-height: 19px; text-align: center;
-  border: 2px solid var(--card);
+  border: 2px solid #0b6bff;
 }
+html[data-theme="dark"] .tb-tab .badge-dot,
+html[data-theme="dark"] .tb-btn .badge-dot { border-color: #12233f; }
 
 .tb-search-mobile { display: none; }
 
@@ -549,12 +564,13 @@ html[data-theme="dark"] .chip.green { background: rgba(49,162,76,.2); color: #6d
   .card { border-radius: 0; box-shadow: none; margin-bottom: 8px; }
   .page-card { border-radius: 0; }
   .mobile-nav { display: flex; }
-  .topbar { padding: 0 8px; border-bottom: none; box-shadow: var(--shadow-xs); }
-  .brand img { width: 36px; height: 36px; }
+  .topbar { padding: 0 8px; box-shadow: 0 2px 12px rgba(4, 28, 84, .26); }
+  .brand img { width: 36px; height: 36px; border-radius: 10px; }
   .brand-word { font-size: 20px; }
   .tb-btn { width: 38px; height: 38px; background: transparent; }
+  .tb-btn.menu-grid { display: none; }
   .tb-btn.menu-grid { background: transparent; }
-  .tb-btn:hover { background: var(--hover); }
+  .tb-btn:hover { background: rgba(255, 255, 255, .18); }
   .toast { font-size: 14px; }
   .modal { width: 100%; max-height: 92vh; border-radius: var(--r-lg) var(--r-lg) 0 0; align-self: flex-end; }
   .modal-backdrop { padding: 0; align-items: flex-end; }

@@ -1,5 +1,6 @@
 /* ==========================================================================
    router.js — rutas por hash (funciona en GitHub Pages sin configuración)
+   Acepta nombres en español y también los antiguos en inglés.
    ========================================================================== */
 
 const listeners = new Set();
@@ -14,25 +15,44 @@ export function parseRoute(hash = window.location.hash) {
   const [first, second, third] = segments;
 
   switch (first) {
-    case 'feed': return { name: 'feed', params: {}, query };
-    case 'friends': return { name: 'friends', params: { tab: second || 'friends' }, query };
-    case 'messages': return { name: 'messages', params: { id: second || null }, query };
-    case 'notifications': return { name: 'notifications', params: {}, query };
+    case 'feed':
+    case 'inicio':
+      return { name: 'feed', params: {}, query };
+    case 'friends':
+    case 'seguidores':
+    case 'people':
+      return { name: 'friends', params: { tab: second || 'seguidores' }, query };
+    case 'messages':
+    case 'mensajes':
+      return { name: 'messages', params: { id: second || null }, query };
+    case 'notifications':
+    case 'notificaciones':
+      return { name: 'notifications', params: {}, query };
     case 'groups':
+    case 'grupos':
       return second
         ? { name: 'group', params: { id: second }, query }
         : { name: 'groups', params: {}, query };
-    case 'saved': return { name: 'saved', params: {}, query };
-    case 'search': return { name: 'search', params: {}, query };
-    case 'settings': return { name: 'settings', params: { tab: second || 'cuenta' }, query };
+    case 'saved':
+    case 'guardados':
+      return { name: 'saved', params: {}, query };
+    case 'search':
+    case 'buscar':
+      return { name: 'search', params: {}, query };
+    case 'settings':
+    case 'ajustes':
+      return { name: 'settings', params: { tab: second || 'cuenta' }, query };
+    case 'menu':
+      return { name: 'menu', params: {}, query };
     case 'u':
+    case 'perfil':
       return {
         name: 'profile',
         params: { username: second || '', tab: third || 'posts' },
         query,
       };
-    case 'p': return { name: 'post', params: { id: second || '' }, query };
-    case 'photo': return { name: 'photo', params: { username: second || '', id: third || '' }, query };
+    case 'p':
+      return { name: 'post', params: { id: second || '' }, query };
     default:
       return { name: 'notfound', params: { path: pathPart }, query };
   }
@@ -55,7 +75,7 @@ export function navigate(to, { replace = false } = {}) {
 
 export function back() {
   if (window.history.length > 1) window.history.back();
-  else navigate('/feed');
+  else navigate('/inicio');
 }
 
 function emit() {
@@ -76,6 +96,4 @@ export function startRouter(fn) {
   return parseRoute();
 }
 
-export function hrefFor(route) {
-  return `#${route}`;
-}
+export const hrefFor = (route) => `#${route}`;

@@ -78,6 +78,8 @@ const P = {
   filter: '<path d="M3.5 5.5h17l-6.6 7.7v5.6l-3.8 2v-7.6z"/>',
   list: '<path d="M8.5 6.5h12M8.5 12h12M8.5 17.5h12"/><circle cx="4" cy="6.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="17.5" r="1.4" fill="currentColor" stroke="none"/>',
   sparkles: '<path d="m12 3 1.9 4.9L19 9.8l-5.1 1.9L12 16.6l-1.9-4.9L5 9.8l5.1-1.9z"/><path d="m18.5 15.5.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/>',
+  volume: '<path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9.5 9.5 0 0 1 0 13"/>',
+  'volume-x': '<path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>',
   story: '<path d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5"/><path d="M12 8v8M8 12h8"/><path d="M3.5 8.2A8.5 8.5 0 0 1 8 3.9"/>',
   key: '<circle cx="8" cy="15.5" r="4.5"/><path d="m11.2 12.3 7.3-7.3M16 4.5l3.5 3.5M14 6.5l3.5 3.5"/>',
   mail: '<rect x="2.8" y="4.8" width="18.4" height="14.4" rx="2.2"/><path d="m3.4 6.6 8.6 6 8.6-6"/>',

@@ -11,6 +11,7 @@ export const NOTIF_ICON = {
   reaction: { name: 'heart', cls: 'like' },
   comment: { name: 'message', cls: 'comment' },
   reply: { name: 'reply', cls: 'comment' },
+  follow: { name: 'user-plus', cls: 'friend' },
   friend_request: { name: 'user-plus', cls: 'friend' },
   friend_accept: { name: 'user-check', cls: 'friend' },
   share: { name: 'share', cls: 'share' },
@@ -22,13 +23,14 @@ export function notificationLabel(notification) {
   const actor = userById(notification.actorId);
   const name = actor?.name || 'Alguien';
   switch (notification.type) {
-    case 'like': return `${name} reaccionó a tu publicación.`;
+    case 'like': return `${name} le dio me gusta a tu publicación.`;
     case 'reaction': {
       const label = REACTIONS[notification.reaction]?.label || 'reaccionó';
-      return `${name} ${label.toLowerCase() === 'me gusta' ? 'le dio me gusta' : `reaccionó con ${REACTIONS[notification.reaction]?.emoji || '❤️'}`} a tu publicación.`;
+      return `${name} reaccionó con ${REACTIONS[notification.reaction]?.emoji || '❤️'} a tu publicación (${label}).`;
     }
     case 'comment': return `${name} comentó tu publicación.`;
     case 'reply': return `${name} respondió a tu comentario.`;
+    case 'follow': return `${name} empezó a seguirte.`;
     case 'friend_request': return `${name} te envió una solicitud de amistad.`;
     case 'friend_accept': return `${name} aceptó tu solicitud de amistad.`;
     case 'share': return `${name} compartió tu publicación.`;
@@ -40,13 +42,13 @@ export function notificationLabel(notification) {
 
 export function notificationHref(notification) {
   if (notification.postId) return `#/p/${notification.postId}`;
-  if (notification.type === 'friend_request') return '#/friends/requests';
-  if (notification.type === 'friend_accept' || notification.type === 'welcome') {
+  if (notification.type === 'follow' || notification.type === 'friend_accept'
+    || notification.type === 'welcome' || notification.type === 'friend_request') {
     const actor = userById(notification.actorId);
-    return actor ? `#/u/${actor.username}` : '#/notifications';
+    return actor ? `#/u/${actor.username}` : '#/notificaciones';
   }
-  if (notification.groupId) return `#/groups/${notification.groupId}`;
-  return '#/notifications';
+  if (notification.groupId) return `#/grupos/${notification.groupId}`;
+  return '#/notificaciones';
 }
 
 export function notificationItem(notification, { compact = false } = {}) {

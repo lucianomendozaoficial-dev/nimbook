@@ -4,12 +4,13 @@
 import { el, clear, timeAgo, chatStamp, dayLabel, debounce, isMobile } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, conversationsFor, userById, unreadCountIn, friendsOf, userByUsername,
+  state, displayName, conversationsFor, userById, unreadCountIn, followingOf, userByUsername,
 } from '../core/store.js';
 import {
   avatarEl, emptyState, openModal, toast, lightbox, emojiPicker,
 } from '../core/ui.js';
 import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../core/media.js';
+import { playSound } from '../core/sounds.js';
 import {
   ensureConversation, loadChat, sendMessage, markConversationRead,
 } from '../core/actions.js';
@@ -211,6 +212,7 @@ export function messagesPage(query = {}) {
       textarea.style.height = 'auto';
       pendingMedia = null;
       updateSendState();
+      playSound('send');
       renderChat();
       scrollToBottom();
       try {
@@ -303,7 +305,7 @@ export function messagesPage(query = {}) {
   }
 
   function newChatModal() {
-    const friends = friendsOf(me.id);
+    const friends = followingOf(me.id);
     const input = el('input', {
       class: 'input', type: 'search', placeholder: 'Buscar amigos…', 'aria-label': 'Buscar amigos',
     });

@@ -4,7 +4,7 @@
 import { ensureDoc, SKIP } from './db.js';
 import {
   state, PATHS, notifPath, chatPath, syncFromDb, notify,
-  userById, conversationFor, isFriend,
+  userById, conversationFor, isFollowing,
 } from './store.js';
 import { hashPassword, verifyPassword } from './crypto.js';
 import { ValidationError } from './auth.js';
@@ -283,80 +283,41 @@ export async function setCommentReaction(commentId, type) {
   }, { empty: EMPTY('comments'), message: 'NimbookGR: reacción en comentario' });
 }
 
-/* -------------------------------- amigos --------------------------------- */
+/* ------------------------------ seguidores -------------------------------- */
 
-export async function sendFriendRequest(userId) {
+export async function followUser(userId) {
   const me = requireMe();
   if (userId === me.id) return;
-  if (isFriend(me.id, userId)) return;
-  const existing = state.requests.find((r) =>
-    (r.from === me.id && r.to === userId) || (r.from === userId && r.to === me.id));
-  if (existing) return;
-
-  const request = {
-    id: uid('fr_'),
-    from: me.id,
-    to: userId,
-    status: 'pending',
-    createdAt: nowISO(),
-  };
-
-  await state.db.mutate(PATHS.friends, (doc) => {
-    ensureDoc(doc, 'requests');
-    if (doc.requests.some((r) => r.from === me.id && r.to === userId)) return SKIP;
-    doc.requests.push(request);
-    return doc;
-  }, { empty: EMPTY('requests'), message: 'NimbookGR: solicitud de amistad' });
-
-  await pushNotification(userId, { type: 'friend_request', actorId: me.id });
-}
-
-export async function acceptFriendRequest(requestId) {
-  const me = requireMe();
-  const request = state.requests.find((r) => r.id === requestId);
-  if (!request) return;
-  if (request.to !== me.id) throw new Error('Esta solicitud no es para ti.');
+  if (isFollowing(me.id, userId)) return;
 
   await state.db.mutate(PATHS.users, (doc) => {
-    const a = doc.users?.find((u) => u.id === request.from);
-    const b = doc.users?.find((u) => u.id === request.to);
-    if (!a || !b) return SKIP;
-    a.friendIds = Array.from(new Set([...(a.friendIds || []), b.id]));
-    b.friendIds = Array.from(new Set([...(b.friendIds || []), a.id]));
+    const target = doc.users?.find((u) => u.id === me.id);
+    if (!target) return SKIP;
+    target.following = Array.from(new Set([...(target.following || []), userId]));
+    delete target.friendIds;
     return doc;
-  }, { empty: EMPTY('users'), message: 'NimbookGR: nueva amistad' });
+  }, { empty: EMPTY('users'), message: 'NimbookGR: nuevo seguidor' });
 
-  await state.db.mutate(PATHS.friends, (doc) => {
-    ensureDoc(doc, 'requests');
-    doc.requests = doc.requests.filter((r) => r.id !== requestId);
-    return doc;
-  }, { empty: EMPTY('requests'), message: 'NimbookGR: aceptar solicitud' });
-
-  await pushNotification(request.from, { type: 'friend_accept', actorId: me.id });
+  await pushNotification(userId, { type: 'follow', actorId: me.id });
 }
 
-export async function rejectFriendRequest(requestId) {
-  const me = requireMe();
-  const request = state.requests.find((r) => r.id === requestId);
-  if (!request) return;
-  if (request.to !== me.id && request.from !== me.id) return;
-
-  await state.db.mutate(PATHS.friends, (doc) => {
-    ensureDoc(doc, 'requests');
-    doc.requests = doc.requests.filter((r) => r.id !== requestId);
-    return doc;
-  }, { empty: EMPTY('requests'), message: 'NimbookGR: cancelar solicitud' });
-}
-
-export async function removeFriend(userId) {
+export async function unfollowUser(userId) {
   const me = requireMe();
   await state.db.mutate(PATHS.users, (doc) => {
-    const a = doc.users?.find((u) => u.id === me.id);
-    const b = doc.users?.find((u) => u.id === userId);
-    if (a) a.friendIds = (a.friendIds || []).filter((id) => id !== userId);
-    if (b) b.friendIds = (b.friendIds || []).filter((id) => id !== me.id);
+    const target = doc.users?.find((u) => u.id === me.id);
+    if (!target) return SKIP;
+    target.following = (target.following || []).filter((id) => id !== userId);
     return doc;
-  }, { empty: EMPTY('users'), message: 'NimbookGR: eliminar amistad' });
+  }, { empty: EMPTY('users'), message: 'NimbookGR: dejar de seguir' });
+}
+
+export async function toggleFollow(userId) {
+  if (isFollowing(state.me?.id, userId)) {
+    await unfollowUser(userId);
+    return false;
+  }
+  await followUser(userId);
+  return true;
 }
 
 /* -------------------------------- perfil --------------------------------- */

@@ -13,7 +13,6 @@ const SCHEMA = {
   'data/usuarios.json': { version: 1, users: [] },
   'data/feed.json': { version: 1, posts: [] },
   'data/comentarios.json': { version: 1, comments: [] },
-  'data/solicitudes.json': { version: 1, requests: [] },
   'data/conversaciones.json': { version: 1, conversations: [] },
   'data/grupos.json': { version: 1, groups: [] },
   'data/historias.json': { version: 1, stories: [] },

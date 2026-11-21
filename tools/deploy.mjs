@@ -90,7 +90,6 @@ const EMPTY_DATA = {
   'data/usuarios.json': { version: 1, users: [] },
   'data/feed.json': { version: 1, posts: [] },
   'data/comentarios.json': { version: 1, comments: [] },
-  'data/solicitudes.json': { version: 1, requests: [] },
   'data/conversaciones.json': { version: 1, conversations: [] },
   'data/grupos.json': { version: 1, groups: [] },
   'data/historias.json': { version: 1, stories: [] },
@@ -177,7 +176,7 @@ for (const rel of PLACEHOLDERS) {
 
 if (args['with-demo']) {
   for (const rel of ['data/usuarios.json', 'data/feed.json', 'data/comentarios.json',
-    'data/solicitudes.json', 'data/conversaciones.json', 'data/grupos.json', 'data/historias.json']) {
+    'data/conversaciones.json', 'data/grupos.json', 'data/historias.json']) {
     try { files.set(rel, await fs.readFile(path.join(ROOT, rel))); } catch { /* noop */ }
   }
 }

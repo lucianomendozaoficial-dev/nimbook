@@ -9,7 +9,6 @@ export const PATHS = {
   users: 'data/usuarios.json',
   posts: 'data/feed.json',
   comments: 'data/comentarios.json',
-  friends: 'data/solicitudes.json',
   conversations: 'data/conversaciones.json',
   groups: 'data/grupos.json',
   stories: 'data/historias.json',
@@ -22,7 +21,6 @@ export const SCHEMA = {
   users: { key: 'users', empty: () => ({ version: 1, users: [] }) },
   posts: { key: 'posts', empty: () => ({ version: 1, posts: [] }) },
   comments: { key: 'comments', empty: () => ({ version: 1, comments: [] }) },
-  friends: { key: 'friends', empty: () => ({ version: 1, requests: [] }) },
   conversations: { key: 'conversations', empty: () => ({ version: 1, conversations: [] }) },
   groups: { key: 'groups', empty: () => ({ version: 1, groups: [] }) },
   stories: { key: 'stories', empty: () => ({ version: 1, stories: [] }) },
@@ -36,7 +34,6 @@ export const state = {
   users: [],
   posts: [],
   comments: [],
-  requests: [],
   conversations: [],
   groups: [],
   stories: [],
@@ -46,9 +43,8 @@ export const state = {
     usersById: new Map(),
     usersByName: new Map(),
     commentsByPost: new Map(),
-    friendsOf: new Map(),
-    requestsTo: new Map(),
-    requestsFrom: new Map(),
+    followingOf: new Map(),
+    followersOf: new Map(),
     postsByAuthor: new Map(),
   },
   status: {
@@ -128,26 +124,25 @@ function buildIndexes() {
   idx.usersById = new Map();
   idx.usersByName = new Map();
   idx.commentsByPost = new Map();
-  idx.friendsOf = new Map();
-  idx.requestsTo = new Map();
-  idx.requestsFrom = new Map();
+  idx.followingOf = new Map();
+  idx.followersOf = new Map();
   idx.postsByAuthor = new Map();
 
   for (const user of state.users) {
     idx.usersById.set(user.id, user);
     if (user.username) idx.usersByName.set(user.username.toLowerCase(), user);
-    idx.friendsOf.set(user.id, new Set(user.friendIds || []));
+    // `friendIds` se conserva por compatibilidad con cuentas viejas.
+    idx.followingOf.set(user.id, new Set(user.following || user.friendIds || []));
+    idx.followersOf.set(user.id, new Set());
+  }
+  for (const user of state.users) {
+    for (const target of idx.followingOf.get(user.id)) {
+      idx.followersOf.get(target)?.add(user.id);
+    }
   }
   for (const comment of state.comments) {
     if (!idx.commentsByPost.has(comment.postId)) idx.commentsByPost.set(comment.postId, []);
     idx.commentsByPost.get(comment.postId).push(comment);
-  }
-  for (const request of state.requests) {
-    if (request.status && request.status !== 'pending') continue;
-    if (!idx.requestsTo.has(request.to)) idx.requestsTo.set(request.to, []);
-    if (!idx.requestsFrom.has(request.from)) idx.requestsFrom.set(request.from, []);
-    idx.requestsTo.get(request.to).push(request);
-    idx.requestsFrom.get(request.from).push(request);
   }
   for (const post of state.posts) {
     if (!idx.postsByAuthor.has(post.authorId)) idx.postsByAuthor.set(post.authorId, []);
@@ -163,7 +158,6 @@ export function syncFromDb() {
   const usersDoc = state.db.peek(PATHS.users);
   const postsDoc = state.db.peek(PATHS.posts);
   const commentsDoc = state.db.peek(PATHS.comments);
-  const friendsDoc = state.db.peek(PATHS.friends);
   const convDoc = state.db.peek(PATHS.conversations);
   const groupsDoc = state.db.peek(PATHS.groups);
   const storiesDoc = state.db.peek(PATHS.stories);
@@ -171,7 +165,6 @@ export function syncFromDb() {
   state.users = asList(usersDoc, 'users');
   state.posts = asList(postsDoc, 'posts');
   state.comments = asList(commentsDoc, 'comments');
-  state.requests = asList(friendsDoc, 'requests');
   state.conversations = asList(convDoc, 'conversations');
   state.groups = asList(groupsDoc, 'groups');
   state.stories = asList(storiesDoc, 'stories').filter(isStoryAlive);
@@ -238,7 +231,7 @@ export async function loadCore({ revalidate = true } = {}) {
 
 export async function refreshUserData() {
   if (!state.db || !state.me) return;
-  await state.db.loadMany([notifPath(state.me.id), PATHS.conversations, PATHS.friends], { revalidate: true });
+  await state.db.loadMany([notifPath(state.me.id), PATHS.conversations, PATHS.users], { revalidate: true });
   syncFromDb();
   notify('data');
 }
@@ -267,50 +260,50 @@ export function initialsOf(user) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export const isFriend = (a, b) => Boolean(state.indexes.friendsOf.get(a)?.has(b));
+export const isFollowing = (followerId, targetId) =>
+  Boolean(state.indexes.followingOf.get(followerId)?.has(targetId));
 
-export function friendsOf(userId) {
-  const ids = state.indexes.friendsOf.get(userId);
+export function followingOf(userId) {
+  const ids = state.indexes.followingOf.get(userId);
   if (!ids) return [];
   return [...ids].map(userById).filter(Boolean);
 }
 
-export function mutualFriends(a, b) {
-  const sa = state.indexes.friendsOf.get(a);
-  const sb = state.indexes.friendsOf.get(b);
+export function followersOf(userId) {
+  const ids = state.indexes.followersOf.get(userId);
+  if (!ids) return [];
+  return [...ids].map(userById).filter(Boolean);
+}
+
+/** Personas que siguen a ambos (para las sugerencias). */
+export function mutualFollowers(a, b) {
+  const sa = state.indexes.followersOf.get(a);
+  const sb = state.indexes.followersOf.get(b);
   if (!sa || !sb) return [];
   const out = [];
   for (const id of sa) if (sb.has(id)) out.push(userById(id));
   return out.filter(Boolean);
 }
 
-export function incomingRequests(userId) {
-  return (state.indexes.requestsTo.get(userId) || []).filter((r) => (r.status || 'pending') === 'pending');
-}
-
-export function outgoingRequests(userId) {
-  return (state.indexes.requestsFrom.get(userId) || []).filter((r) => (r.status || 'pending') === 'pending');
-}
-
-export function requestBetween(a, b) {
-  if (!a || !b) return null;
-  return state.requests.find((r) => (r.from === a && r.to === b) || (r.from === b && r.to === a)) || null;
-}
-
 /** Relación del usuario `me` con `other`. */
 export function relationWith(meId, otherId) {
   if (!meId || !otherId) return 'none';
   if (meId === otherId) return 'self';
-  if (isFriend(meId, otherId)) return 'friends';
-  const req = requestBetween(meId, otherId);
-  if (req && (req.status || 'pending') === 'pending') {
-    return req.from === meId ? 'requested' : 'incoming';
-  }
+  if (isFollowing(meId, otherId)) return 'following';
+  if (isFollowing(otherId, meId)) return 'follows-you';
   return 'none';
 }
 
-export function friendCount(userId) {
-  return state.indexes.friendsOf.get(userId)?.size || 0;
+export function countFollowers(userId) {
+  return state.indexes.followersOf.get(userId)?.size || 0;
+}
+
+export function countFollowing(userId) {
+  return state.indexes.followingOf.get(userId)?.size || 0;
+}
+
+export function isMutual(a, b) {
+  return isFollowing(a, b) && isFollowing(b, a);
 }
 
 export function postsByAuthor(userId) {
@@ -330,7 +323,9 @@ export function canSeePost(post, viewerId) {
   if (post.authorId === viewerId) return true;
   const privacy = post.privacy || 'public';
   if (privacy === 'public') return true;
-  if (privacy === 'friends') return Boolean(viewerId) && isFriend(post.authorId, viewerId);
+  if (privacy === 'friends' || privacy === 'followers') {
+    return Boolean(viewerId) && isFollowing(viewerId, post.authorId);
+  }
   return false;
 }
 
@@ -420,20 +415,26 @@ export function storiesGrouped(viewerId) {
   for (const [userId, list] of byUser) {
     const user = userById(userId);
     if (!user) continue;
-    if (userId !== viewerId && !isFriend(userId, viewerId) && (user.privacyFriendsOnly ?? false)) continue;
     list.sort((a, b) => parseTicks(b.createdAt) - parseTicks(a.createdAt));
     groups.push({ user, stories: list, latest: list[0] });
   }
-  groups.sort((a, b) => parseTicks(b.latest.createdAt) - parseTicks(a.latest.createdAt));
+  // primero las personas que seguís (y vos), después el resto
+  groups.sort((a, b) => {
+    const score = (group) => (group.user.id === viewerId ? 2 : (isFollowing(viewerId, group.user.id) ? 1 : 0));
+    const diff = score(b) - score(a);
+    if (diff !== 0) return diff;
+    return parseTicks(b.latest.createdAt) - parseTicks(a.latest.createdAt);
+  });
   return groups;
 }
 
-export function friendSuggestions(viewerId, limit = 12) {
+export function followSuggestions(viewerId, limit = 12) {
   if (!viewerId) return [];
-  const mine = state.indexes.friendsOf.get(viewerId) || new Set();
+  const mine = state.indexes.followingOf.get(viewerId) || new Set();
   return state.users
-    .filter((u) => u.id !== viewerId && !mine.has(u.id) && !requestBetween(viewerId, u.id))
-    .sort((a, b) => mutualFriends(viewerId, b.id).length - mutualFriends(viewerId, a.id).length)
+    .filter((u) => u.id !== viewerId && !mine.has(u.id))
+    .sort((a, b) =>
+      (state.indexes.followersOf.get(b.id)?.size || 0) - (state.indexes.followersOf.get(a.id)?.size || 0))
     .slice(0, limit);
 }
 

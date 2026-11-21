@@ -1,73 +1,73 @@
 /* ==========================================================================
-   rightrail.js — contactos y sugerencias (columna derecha)
+   rightrail.js — personas que seguís y sugerencias (columna derecha)
    ========================================================================== */
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, friendsOf, friendSuggestions, mutualFriends, userById,
+  state, displayName, followingOf, followSuggestions, mutualFollowers, countFollowers,
 } from '../core/store.js';
-import { avatarEl, toast } from '../core/ui.js';
+import { avatarEl } from '../core/ui.js';
 import { isOnline } from '../core/auth.js';
-import { sendFriendRequest } from '../core/actions.js';
+import { followButton } from './follow-button.js';
 
 export function mountRightRail() {
-  const root = el('aside', { class: 'col-right', 'aria-label': 'Contactos y sugerencias' });
+  const root = el('aside', { class: 'col-right', 'aria-label': 'Personas y sugerencias' });
 
   function render() {
     clear(root);
     const me = state.me;
     if (!me) return;
 
-    const friends = friendsOf(me.id)
+    const following = followingOf(me.id)
       .sort((a, b) => Number(isOnline(b)) - Number(isOnline(a)));
-    const online = friends.filter(isOnline);
-    const ordered = [...online, ...friends.filter((f) => !isOnline(f))];
+    const online = following.filter(isOnline);
+    const ordered = [...online, ...following.filter((person) => !isOnline(person))];
 
     const head = el('div', { class: 'rail-title' },
-      el('span', { text: 'Contactos' }),
+      el('span', { text: 'Siguiendo' }),
       el('span', { class: 'row gap-4' },
         el('button', {
-          class: 'btn-icon', type: 'button', title: 'Buscar contactos', 'aria-label': 'Buscar contactos',
-          onclick: () => { window.location.hash = '/friends'; },
+          class: 'btn-icon', type: 'button', title: 'Buscar personas', 'aria-label': 'Buscar personas',
+          onclick: () => { window.location.hash = '/seguidores/todos'; },
         }, icon('search', 18)),
         el('button', {
-          class: 'btn-icon', type: 'button', title: 'Añadir amigos', 'aria-label': 'Añadir amigos',
-          onclick: () => { window.location.hash = '/friends/suggestions'; },
+          class: 'btn-icon', type: 'button', title: 'Ver sugerencias', 'aria-label': 'Ver sugerencias',
+          onclick: () => { window.location.hash = '/seguidores/sugerencias'; },
         }, icon('user-plus', 18))));
     root.appendChild(head);
 
-    if (!friends.length) {
+    if (!following.length) {
       root.appendChild(el('div', {
         class: 'muted small', style: { padding: '4px 10px 10px' },
-        text: 'Cuando añadas amigos aparecerán aquí.',
+        text: 'Cuando sigas a alguien aparecerá acá.',
       }));
     } else {
       const list = el('div');
-      for (const friend of ordered.slice(0, 14)) {
+      for (const person of ordered.slice(0, 12)) {
         list.appendChild(el('a', {
-          class: 'rail-item', href: `#/messages?u=${friend.id}`,
-          title: `Enviar mensaje a ${displayName(friend)}`,
+          class: 'rail-item', href: `#/mensajes?u=${person.id}`,
+          title: `Enviar mensaje a ${displayName(person)}`,
         },
-        el('span', { class: `presence ${isOnline(friend) ? '' : 'offline'}`.trim() },
-          avatarEl(friend, 'sm'),
+        el('span', { class: `presence ${isOnline(person) ? '' : 'offline'}`.trim() },
+          avatarEl(person, 'sm'),
           el('span', { class: 'dot' })),
-        el('span', { class: 'name', text: displayName(friend) })));
+        el('span', { class: 'name', text: displayName(person) })));
       }
       root.appendChild(list);
-      if (friends.length > 14) {
+      if (following.length > 12) {
         root.appendChild(el('a', {
-          class: 'rail-item', href: '#/friends',
+          class: 'rail-item', href: '#/seguidores/siguiendo',
           style: { color: 'var(--brand)', fontWeight: '600' },
-        }, el('span', { class: 'name', text: `Ver los ${friends.length} amigos` })));
+        }, el('span', { class: 'name', text: `Ver las ${following.length} personas que seguís` })));
       }
     }
 
-    const suggestions = friendSuggestions(me.id, 5);
+    const suggestions = followSuggestions(me.id, 4);
     if (suggestions.length) {
       root.appendChild(el('div', { class: 'rail-sep' }));
       root.appendChild(el('div', { class: 'rail-title' }, 'Sugerencias para ti'));
       for (const person of suggestions) {
-        const mutual = mutualFriends(me.id, person.id).length;
+        const mutual = mutualFollowers(me.id, person.id).length;
         const row = el('div', { class: 'rail-item', style: { gap: '10px' } },
           el('a', { href: `#/u/${person.username}` }, avatarEl(person, 'sm')),
           el('div', { class: 'grow', style: { minWidth: '0' } },
@@ -78,24 +78,11 @@ export function mountRightRail() {
             }),
             el('span', {
               class: 'dim tiny',
-              text: mutual ? `${mutual} amigo${mutual === 1 ? '' : 's'} en común` : 'Nuevo en NimbookGR',
+              text: mutual
+                ? `${mutual} seguidor${mutual === 1 ? '' : 'es'} en común`
+                : `${countFollowers(person.id)} seguidores`,
             })),
-          el('button', {
-            class: 'btn soft sm', type: 'button', text: 'Añadir',
-            onclick: async (event) => {
-              const button = event.currentTarget;
-              button.disabled = true;
-              try {
-                await sendFriendRequest(person.id);
-                button.textContent = 'Enviado';
-                button.classList.remove('soft');
-                toast(`Solicitud enviada a ${displayName(person)}`, { type: 'success' });
-              } catch (err) {
-                button.disabled = false;
-                toast(err.message, { type: 'error' });
-              }
-            },
-          }));
+          followButton(person, { onChange: () => render() }));
         root.appendChild(row);
       }
     }

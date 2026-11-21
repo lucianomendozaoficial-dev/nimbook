@@ -4,16 +4,15 @@
 import { el, clear, formatCount, longDate, timeAgo, monthYear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, userByUsername, displayName, friendsOf, friendCount, postsByAuthor, canSeePost,
-  relationWith, incomingRequests, mutualFriends, userById,
+  state, userByUsername, displayName, followersOf, followingOf, countFollowers, countFollowing,
+  postsByAuthor, canSeePost, relationWith, userById, mutualFollowers,
 } from '../core/store.js';
 import {
-  avatarEl, emptyState, openModal, toast, confirmDialog, dropdown, lightbox,
+  avatarEl, emptyState, openModal, toast, lightbox,
 } from '../core/ui.js';
 import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../core/media.js';
-import {
-  updateProfile, sendFriendRequest, acceptFriendRequest, rejectFriendRequest, removeFriend,
-} from '../core/actions.js';
+import { updateProfile } from '../core/actions.js';
+import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
 import { mountComposer, openComposer } from '../components/composer.js';
 import { navigate } from '../core/router.js';
@@ -21,14 +20,14 @@ import { ValidationError } from '../core/auth.js';
 
 const TABS = [
   { id: 'posts', label: 'Publicaciones' },
-  { id: 'friends', label: 'Amigos' },
-  { id: 'photos', label: 'Fotos' },
+  { id: 'seguidores', label: 'Seguidores' },
+  { id: 'fotos', label: 'Fotos' },
   { id: 'about', label: 'Información' },
 ];
 
 /* ------------------------------ editar perfil ---------------------------- */
 
-function editProfileModal(user, onSaved) {
+export function editProfileModal(user, onSaved) {
   const nameInput = el('input', { class: 'input', value: user.name || '', maxlength: '60' });
   const usernameInput = el('input', {
     class: 'input', value: user.username || '', maxlength: '30', autocapitalize: 'none',
@@ -152,7 +151,7 @@ function relationButtons(user, onChanged) {
 
   const msgBtn = el('button', {
     class: 'btn', type: 'button',
-    onclick: () => navigate(`/messages?u=${user.id}`),
+    onclick: () => navigate(`/mensajes?u=${user.id}`),
   }, icon('message', 18), 'Mensaje');
 
   if (relation === 'self') {
@@ -168,68 +167,8 @@ function relationButtons(user, onChanged) {
     return wrap;
   }
 
-  if (relation === 'friends') {
-    const friendBtn = el('button', {
-      class: 'btn', type: 'button',
-    }, icon('user-check', 18), 'Amigos');
-    friendBtn.addEventListener('click', () => {
-      dropdown(friendBtn, [
-        {
-          icon: 'user-x', label: 'Eliminar de amigos', danger: true,
-          onClick: async () => {
-            const ok = await confirmDialog({
-              title: `¿Eliminar a ${displayName(user)} de tus amigos?`,
-              description: '',
-              confirmText: 'Eliminar amigo', danger: true, iconName: 'user-x',
-            });
-            if (!ok) return;
-            try {
-              await removeFriend(user.id);
-              toast('Amistad eliminada', { type: 'success' });
-              onChanged?.();
-            } catch (err) { toast(err.message, { type: 'error' }); }
-          },
-        },
-      ]);
-    });
-    wrap.append(friendBtn, msgBtn);
-  } else if (relation === 'requested') {
-    wrap.append(el('button', {
-      class: 'btn', type: 'button',
-    }, icon('clock', 18), 'Solicitud enviada'));
-    wrap.appendChild(msgBtn);
-  } else if (relation === 'incoming') {
-    const request = state.requests.find((r) => r.from === user.id && r.to === me.id);
-    wrap.append(
-      el('button', {
-        class: 'btn primary', type: 'button',
-        onclick: async (event) => {
-          const button = event.currentTarget;
-          button.disabled = true;
-          try {
-            await acceptFriendRequest(request.id);
-            toast('Ahora son amigos', { type: 'success' });
-            onChanged?.();
-          } catch (err) { button.disabled = false; toast(err.message, { type: 'error' }); }
-        },
-      }, icon('user-check', 18), 'Aceptar solicitud'),
-      msgBtn);
-  } else {
-    wrap.append(el('button', {
-      class: 'btn primary', type: 'button',
-      onclick: async (event) => {
-        const button = event.currentTarget;
-        button.disabled = true;
-        try {
-          await sendFriendRequest(user.id);
-          button.textContent = 'Solicitud enviada';
-          button.classList.remove('primary');
-          toast('Solicitud enviada', { type: 'success' });
-          onChanged?.();
-        } catch (err) { button.disabled = false; toast(err.message, { type: 'error' }); }
-      },
-    }, icon('user-plus', 18), 'Añadir amigo'), msgBtn);
-  }
+  wrap.append(followButton(user, { size: 'lg', onChange: onChanged }));
+  if (relation === 'follows-you' || relation === 'following') wrap.append(msgBtn);
   return wrap;
 }
 
@@ -280,7 +219,6 @@ export function profilePage(username) {
   }
 
   function headElement(target, isMe) {
-    const friends = friendsOf(target.id);
     const avatarWrap = el('div', { class: 'profile-avatar-wrap' },
       el('div', { class: 'profile-avatar' },
         target.avatar
@@ -311,17 +249,23 @@ export function profilePage(username) {
         }, icon('camera', 17))
         : null);
 
+    const followers = followersOf(target.id);
     const titles = el('div', { class: 'profile-titles' },
       el('h1', { class: 'profile-name', text: displayName(target) }),
       target.bio ? el('div', { class: 'muted', style: { marginTop: '4px', maxWidth: '520px' }, text: target.bio }) : null,
       el('div', { class: 'profile-friends' },
-        friends.length
+        followers.length
           ? el('span', { class: 'avatar-stack' },
-            ...friends.slice(0, 3).map((friend) => avatarEl(friend, 'xs')))
+            ...followers.slice(0, 3).map((follower) => avatarEl(follower, 'xs')))
           : null,
         el('a', {
-          href: `#/u/${target.username}/friends`,
-          text: `${formatCount(friendCount(target.id))} amigos`,
+          href: `#/u/${target.username}/seguidores`,
+          text: `${formatCount(countFollowers(target.id))} seguidores`,
+        }),
+        el('span', { text: '·' }),
+        el('a', {
+          href: `#/u/${target.username}/siguiendo`,
+          text: `${formatCount(countFollowing(target.id))} siguiendo`,
         }),
         el('span', { text: '·' }),
         el('span', { text: `${formatCount(postsByAuthor(target.id).length)} publicaciones` })));
@@ -335,8 +279,8 @@ export function profilePage(username) {
     // pestañas
     const tabs = el('div', { class: 'profile-nav' });
     for (const tab of TABS) {
-      const label = tab.id === 'friends'
-        ? `${tab.label} · ${formatCount(friendCount(target.id))}`
+      const label = tab.id === 'seguidores'
+        ? `${tab.label} · ${formatCount(countFollowers(target.id))}`
         : tab.label;
       tabs.appendChild(el('button', {
         class: `tab ${currentTab() === tab.id ? 'active' : ''}`, type: 'button',
@@ -398,20 +342,20 @@ export function profilePage(username) {
         }))));
   }
 
-  function friendsCard(target) {
-    const friends = friendsOf(target.id);
-    if (!friends.length) return null;
+  function followersCard(target) {
+    const followers = followersOf(target.id);
+    if (!followers.length) return null;
     return el('div', { class: 'card intro-card' },
       el('div', { class: 'row between' },
-        el('h3', { class: 'card-title', text: `Amigos · ${formatCount(friends.length)}` }),
+        el('h3', { class: 'card-title', text: `Seguidores · ${formatCount(followers.length)}` }),
         el('button', {
           class: 'link small', type: 'button', text: 'Ver todos',
-          onclick: () => goTab('friends'),
+          onclick: () => goTab('seguidores'),
         })),
       el('div', { class: 'profile-friend-grid' },
-        ...friends.slice(0, 9).map((friend) => el('a', {
-          class: 'pf', href: `#/u/${friend.username}`,
-        }, avatarEl(friend, 'lg'), el('span', { text: displayName(friend) })))));
+        ...followers.slice(0, 9).map((follower) => el('a', {
+          class: 'pf', href: `#/u/${follower.username}`,
+        }, avatarEl(follower, 'lg'), el('span', { text: displayName(follower) })))));
   }
 
   function postsSection(target) {
@@ -445,37 +389,44 @@ export function profilePage(username) {
     return wrap;
   }
 
-  function friendsSection(target) {
-    const friends = friendsOf(target.id);
-    if (!friends.length) {
-      return el('div', { class: 'card' },
-        emptyState({
-          iconName: 'users',
-          title: 'Sin amigos todavía',
-          description: 'Cuando añada amigos, aparecerán aquí.',
-        }));
-    }
-    const grid = el('div', { class: 'friend-grid' });
-    for (const friend of friends) {
-      grid.appendChild(el('a', { class: 'user-tile', href: `#/u/${friend.username}` },
-        el('div', { class: 'ut-img' },
-          friend.avatar
-            ? mediaImg(friend.avatar, { alt: displayName(friend) })
-            : el('div', {
-              class: 'center',
-              style: {
-                width: '100%', height: '100%', fontSize: '34px', color: '#fff', fontWeight: '700',
-                background: 'linear-gradient(135deg,#1877f2,#42b0ff)',
-              },
-              text: (displayName(friend) || '?').slice(0, 2).toUpperCase(),
-            })),
-        el('div', { class: 'ut-body' },
-          el('span', { class: 'ut-name', text: displayName(friend) }),
-          el('span', { class: 'ut-sub', text: `@${friend.username}` }))));
-    }
-    return el('div', { class: 'card pad' },
-      el('h3', { class: 'card-title', text: `Amigos · ${formatCount(friends.length)}` }),
-      grid);
+  function followersSection(target) {
+    const followers = followersOf(target.id);
+    const following = followingOf(target.id);
+    const wrap = el('div');
+    const gridWrap = (title, people, emptyText) => {
+      const card = el('div', { class: 'card pad' },
+        el('h3', { class: 'card-title', text: `${title} · ${formatCount(people.length)}` }));
+      if (!people.length) {
+        card.appendChild(el('p', { class: 'muted small', text: emptyText }));
+        return card;
+      }
+      const grid = el('div', { class: 'friend-grid', style: { paddingTop: '6px' } });
+      for (const person of people) {
+        grid.appendChild(el('a', { class: 'user-tile', href: `#/u/${person.username}` },
+          el('div', { class: 'ut-img' },
+            person.avatar
+              ? mediaImg(person.avatar, { alt: displayName(person) })
+              : el('div', {
+                class: 'center',
+                style: {
+                  width: '100%', height: '100%', fontSize: '34px', color: '#fff', fontWeight: '700',
+                  background: 'linear-gradient(135deg,#1877f2,#42b0ff)',
+                },
+                text: (displayName(person) || '?').slice(0, 2).toUpperCase(),
+              })),
+          el('div', { class: 'ut-body' },
+            el('span', { class: 'ut-name', text: displayName(person) }),
+            el('span', { class: 'ut-sub', text: `@${person.username}` }))));
+      }
+      card.appendChild(grid);
+      return card;
+    };
+    wrap.append(
+      gridWrap('Seguidores', followers, `Todavía nadie sigue a ${displayName(target)}.`),
+      el('div', { style: { height: '16px' } }),
+      gridWrap('Siguiendo', following, `${displayName(target)} todavía no sigue a nadie.`),
+    );
+    return wrap;
   }
 
   function photosSection(target) {
@@ -518,7 +469,8 @@ export function profilePage(username) {
       ['WhatsApp', target.whatsapp ? `+${target.whatsapp}` : '—'],
       ['Instagram', target.instagram ? `@${target.instagram}` : '—'],
       ['Miembro desde', monthYear(target.createdAt)],
-      ['Amigos', formatCount(friendCount(target.id))],
+      ['Seguidores', formatCount(countFollowers(target.id))],
+      ['Siguiendo', formatCount(countFollowing(target.id))],
     ];
     return el('div', { class: 'card pad' },
       el('h3', { class: 'card-title', text: 'Información' }),
@@ -548,11 +500,11 @@ export function profilePage(username) {
     const tab = currentTab();
     root.append(coverElement(target, isMe), headElement(target, isMe));
 
-    if (tab === 'friends') {
-      root.appendChild(friendsSection(target));
+    if (tab === 'seguidores' || tab === 'siguiendo' || tab === 'friends') {
+      root.appendChild(followersSection(target));
       return;
     }
-    if (tab === 'photos') {
+    if (tab === 'fotos' || tab === 'photos') {
       root.appendChild(photosSection(target));
       return;
     }
@@ -566,7 +518,7 @@ export function profilePage(username) {
       el('div', { class: 'profile-side' },
         introCard(target),
         photosCard(target),
-        friendsCard(target)));
+        followersCard(target)));
     root.appendChild(grid);
   }
 

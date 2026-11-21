@@ -1,19 +1,42 @@
 {
-  "name": "NimbookGR",
+  "name": "NimbookGR — tu red social",
   "short_name": "Nimbook",
-  "description": "NimbookGR — conéctate y comparte con las personas que quieres.",
+  "description": "Comparte momentos, historias y mensajes con las personas que quieres.",
   "lang": "es",
   "dir": "ltr",
+  "id": "/nimbook/",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
   "background_color": "#F0F2F5",
-  "theme_color": "#0866FF",
-  "categories": ["social", "communication"],
+  "theme_color": "#0B6BFF",
+  "categories": ["social", "communication", "lifestyle"],
   "icons": [
     { "src": "assets/logo/nimbook-logo-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/logo/nimbook-logo-256.png", "sizes": "256x256", "type": "image/png" },
     { "src": "assets/logo/nimbook-logo-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "assets/logo/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Inicio",
+      "short_name": "Inicio",
+      "url": "./index.html#/inicio",
+      "icons": [{ "src": "assets/logo/nimbook-logo-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mensajes",
+      "short_name": "Mensajes",
+      "url": "./index.html#/mensajes",
+      "icons": [{ "src": "assets/logo/nimbook-logo-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mi perfil",
+      "short_name": "Perfil",
+      "url": "./index.html#/menu",
+      "icons": [{ "src": "assets/logo/nimbook-logo-192.png", "sizes": "192x192" }]
+    }
   ]
 }

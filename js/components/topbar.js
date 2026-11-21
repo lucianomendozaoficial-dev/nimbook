@@ -13,12 +13,13 @@ import {
 import { logout } from '../core/auth.js';
 import { notificationItem } from './notifications-list.js';
 import { themeCycle, themeLabel } from '../core/theme.js';
+import { canInstall, promptInstall, onPwaChange } from '../core/pwa.js';
 
 const TOP_TABS = [
-  { id: 'feed', icon: 'home', href: '#/feed', label: 'Inicio' },
-  { id: 'friends', icon: 'users', href: '#/friends', label: 'Amigos' },
-  { id: 'groups', icon: 'groups', href: '#/groups', label: 'Grupos' },
-  { id: 'saved', icon: 'bookmark', href: '#/saved', label: 'Guardado' },
+  { id: 'feed', icon: 'home', href: '#/inicio', label: 'Inicio' },
+  { id: 'friends', icon: 'users', href: '#/seguidores', label: 'Seguidores' },
+  { id: 'groups', icon: 'groups', href: '#/grupos', label: 'Grupos' },
+  { id: 'saved', icon: 'bookmark', href: '#/guardados', label: 'Guardado' },
 ];
 
 function buildSearchResults(query) {
@@ -169,13 +170,22 @@ export function mountTopbar() {
     onclick: openSearchModal,
   }, icon('search', 22));
 
-  const menuBtn = iconBtn('grid', {
-    className: 'tb-btn menu-grid', label: 'Menú', size: 20,
-    onClick: () => openAccountMenu(menuBtn, true),
-  });
+  const menuBtn = el('a', {
+    class: 'tb-btn menu-grid', href: '#/menu', 'aria-label': 'Menú', title: 'Menú',
+  }, icon('grid', 20));
+
+  const installBtn = el('button', {
+    class: 'tb-btn install-btn hide', type: 'button',
+    'aria-label': 'Instalar NimbookGR', title: 'Instalar NimbookGR',
+    onclick: async () => {
+      const accepted = await promptInstall();
+      if (accepted) toast('¡Instalada! Ya podés abrirla desde tu inicio.', { type: 'success' });
+      installBtn.classList.add('hide');
+    },
+  }, icon('download', 20));
 
   const messagesBtn = el('a', {
-    class: 'tb-btn', href: '#/messages', 'aria-label': 'Mensajes', title: 'Mensajes',
+    class: 'tb-btn', href: '#/mensajes', 'aria-label': 'Mensajes', title: 'Mensajes',
   }, icon('message', 22));
   const messagesBadge = el('span', { class: 'badge-dot hide' });
   messagesBtn.appendChild(messagesBadge);
@@ -196,7 +206,7 @@ export function mountTopbar() {
     el('div', { class: 'topbar-left' }, brand, searchBox),
     searchMobile,
     nav,
-    el('div', { class: 'topbar-right' }, menuBtn, messagesBtn, notifBtn, avatarBtn));
+    el('div', { class: 'topbar-right' }, installBtn, menuBtn, messagesBtn, notifBtn, avatarBtn));
 
   function openAccountMenu(anchor, withExtras = false) {
     const me = state.me;
@@ -225,10 +235,10 @@ export function mountTopbar() {
         el('span', { class: 'dd-sub', text: 'Ver tu perfil' }))));
       menu.appendChild(el('div', { class: 'dd-sep' }));
     }
-    add('bookmark', 'Guardado', 'Publicaciones que guardaste', () => navigate('/saved'));
+    add('bookmark', 'Guardado', 'Publicaciones que guardaste', () => navigate('/guardados'));
     add('groups', 'Grupos', `${state.groups.filter((g) => g.memberIds?.includes(me?.id)).length} a los que perteneces`,
-      () => navigate('/groups'));
-    add('settings', 'Configuración y privacidad', 'Cuenta, tema y conexión', () => navigate('/settings'));
+      () => navigate('/grupos'));
+    add('settings', 'Configuración', 'Cuenta, apariencia y privacidad', () => navigate('/ajustes'));
     add(dark ? 'sun' : 'moon', dark ? 'Modo claro' : 'Modo oscuro', `Ahora: ${themeLabel()}`,
       () => { themeCycle(); refresh(); });
     menu.appendChild(el('div', { class: 'dd-sep' }));
@@ -276,7 +286,7 @@ export function mountTopbar() {
     }
     list.appendChild(el('div', { class: 'dd-sep' }));
     list.appendChild(el('a', {
-      class: 'dd-item', href: '#/notifications', onclick: () => closeDropdown(),
+      class: 'dd-item', href: '#/notificaciones', onclick: () => closeDropdown(),
     }, el('span', { class: 'dd-ic' }, icon('list', 18)),
     el('span', { class: 'dd-label', text: 'Ver todas las notificaciones' })));
 
@@ -285,6 +295,7 @@ export function mountTopbar() {
 
   function refresh() {
     const route = parseRoute();
+    installBtn.classList.toggle('hide', !canInstall());
     const active = route.name === 'profile' ? 'feed' : route.name;
     for (const [id, button] of tabButtons) {
       button.classList.toggle('active', id === active);
@@ -302,5 +313,6 @@ export function mountTopbar() {
   }
 
   refresh();
+  onPwaChange(refresh);
   return { el: root, refresh };
 }

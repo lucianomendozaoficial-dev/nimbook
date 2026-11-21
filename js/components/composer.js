@@ -26,7 +26,7 @@ export const FEELINGS = [
 
 const PRIVACY = {
   public: { label: 'Público', icon: 'globe', sub: 'Cualquier persona en NimbookGR' },
-  friends: { label: 'Amigos', icon: 'users', sub: 'Solo tus amigos' },
+  friends: { label: 'Seguidores', icon: 'users', sub: 'Solo las personas que te siguen' },
   private: { label: 'Solo yo', icon: 'lock', sub: 'Solo tú puedes verlo' },
 };
 

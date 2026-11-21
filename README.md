@@ -20,16 +20,17 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 
 **Red social**
 - Registro e inicio de sesión (contraseñas cifradas con PBKDF2-SHA256).
-- Publicaciones con texto, hasta 10 fotos, sentimiento, ubicación y privacidad (público / amigos / solo yo).
+- Publicaciones con texto, hasta 10 fotos, sentimiento, ubicación y privacidad (público / seguidores / solo yo).
+- Reacciones con un toque (me gusta) o manteniendo apretado (6 opciones), comentarios y respuestas, compartir y guardar.
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
 - Compartir publicaciones (con la original incrustada).
 - Historias de 24 h con visor automático.
-- Amigos: solicitudes, aceptar/rechazar, sugerencias con amigos en común, eliminar amistad.
+- Seguidores: seguir y dejar de seguir, sugerencias con seguidores en común, sin solicitudes.
 - Messenger: conversaciones, fotos, no leídos, envío optimista.
 - Grupos públicos y privados con publicaciones, miembros y administración.
 - Notificaciones con campana y contador.
-- Perfiles con portada, foto, biografía y pestañas (publicaciones, amigos, fotos, información).
+- Perfiles con portada, foto, biografía y pestañas (publicaciones, seguidores, fotos, información).
 - Guardados, búsqueda global (personas, publicaciones, grupos) y ajustes de cuenta.
 - Modo claro / oscuro / automático, toasts, menús, visor de imágenes.
 
@@ -49,10 +50,9 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 
 ```
 data/
-  usuarios.json          cuentas: nombre, usuario, contraseña cifrada, foto, portada, amigos
+  usuarios.json          cuentas: nombre, usuario, contraseña cifrada, foto, portada, seguidos
   feed.json              publicaciones (texto, fotos, reacciones, privacidad, grupo)
   comentarios.json       comentarios y respuestas
-  solicitudes.json       solicitudes de amistad pendientes
   conversaciones.json    lista de chats y último mensaje
   grupos.json            grupos y miembros
   historias.json         historias activas (se limpian solas a las 24 h)
@@ -194,19 +194,19 @@ NimbookGR.bat           lanzador local para Windows (modo prueba, sin publicar)
 Iniciar-Nimbook.ps1     servidor local sin dependencias
 css/base.css            tokens, reset, tipografía, utilidades
 css/app.css             barra superior, columnas, navegación, componentes
-css/pages.css           feed, perfil, mensajes, amigos, grupos, ajustes
+css/pages.css           feed, perfil, mensajes, seguidores, grupos, ajustes
 js/app.js               arranque, shell y rutas
 js/core/gh.js           cliente de la API de GitHub
 js/core/db.js           caché, ETag y mutaciones con reintento
 js/core/store.js        estado, índices y selectores
-js/core/actions.js      todas las escrituras (posts, amigos, chats…)
+js/core/actions.js      todas las escrituras (posts, seguidores, chats…)
 js/core/auth.js         registro, acceso y sesión
 js/core/crypto.js       PBKDF2
 js/core/media.js        compresión y subida de imágenes
 js/core/ui.js           modales, menús, toasts, visor de imágenes
 js/core/router.js       rutas por hash
 js/components/*         topbar, sidebars, compositor, tarjeta de post, historias
-js/pages/*              feed, perfil, amigos, mensajes, notificaciones, grupos…
+js/pages/*              feed, perfil, seguidores, mensajes, notificaciones, grupos, menú…
 assets/logo/            logo PNG en todos los tamaños + favicon
 tools/                  despliegue, emulador de GitHub, datos de ejemplo y pruebas
 ```

@@ -475,13 +475,21 @@ async function run() {
     /* reacciones: quitar, poner y persistir tras recargar */
     const reaction1 = await cdp.evaluate(`(async () => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const waitLiked = async (want, ms) => {
+        const until = Date.now() + ms;
+        while (Date.now() < until) {
+          if (document.querySelector('.post .post-act')?.classList.contains('liked') === want) return true;
+          await sleep(200);
+        }
+        return false;
+      };
       let btn = document.querySelector('.post .post-act');
-      if (btn.classList.contains('liked')) { btn.click(); await sleep(1400); }
+      if (btn.classList.contains('liked')) { btn.click(); await waitLiked(false, 4000); }
       btn = document.querySelector('.post .post-act');
       const before = btn.classList.contains('liked');
       btn.click();
-      await sleep(1600);
-      return { before, after: document.querySelector('.post .post-act').classList.contains('liked') };
+      const after = await waitLiked(true, 6000);
+      return { before, after };
     })()`);
     check('reacción se activa al hacer clic', reaction1.after === true && reaction1.before === false,
       JSON.stringify(reaction1));
@@ -493,21 +501,21 @@ async function run() {
       `document.querySelector('.post .post-act').classList.contains('liked')`);
     check('reacción persiste tras recargar', reaction2 === true, `liked=${reaction2}`);
 
-    /* selector de reacciones (hover) */
+    /* selector de reacciones (mantener apretado) */
     const pop = await cdp.evaluate(`(async () => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       const btn = document.querySelector('.post .post-act');
-      btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-      await sleep(500);
+      btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+      await sleep(520);
       const bar = document.querySelector('.react-pop');
       if (!bar) return { open: false };
-      const options = [...bar.querySelectorAll('button')].map(b => b.textContent);
-      bar.querySelectorAll('button')[1].click();
-      await sleep(1500);
+      const options = [...bar.querySelectorAll('.react-option')].map(b => b.getAttribute('aria-label'));
+      bar.querySelectorAll('.react-option')[1].click();
+      await sleep(1600);
       return { open: true, options,
-        label: document.querySelector('.post .post-act span:last-child')?.textContent || '' };
+        label: document.querySelector('.post .post-act .post-act-label')?.textContent || '' };
     })()`);
-    check('barra de reacciones y cambio de reacción',
+    check('mantener apretado abre las reacciones',
       pop.open === true && pop.options.length === 6 && /encanta/i.test(pop.label),
       `${(pop.options || []).join(' ')} -> ${pop.label}`);
 
@@ -626,36 +634,73 @@ async function run() {
       setter.call(ta, 'Mensaje de prueba');
       ta.dispatchEvent(new Event('input', { bubbles: true }));
       ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      await new Promise(r => setTimeout(r, 2000));
-      return { messages: document.querySelectorAll('.msg').length,
-               last: [...document.querySelectorAll('.msg .bubble')].pop()?.textContent || '' };
+      const until = Date.now() + 8000;
+      let last = '';
+      while (Date.now() < until) {
+        await new Promise(r => setTimeout(r, 250));
+        last = [...document.querySelectorAll('.msg .bubble')].pop()?.textContent || '';
+        if (last.includes('Mensaje de prueba')) break;
+      }
+      return { messages: document.querySelectorAll('.msg').length, last };
     })()`);
     check('chat envía mensajes', (chat.last || '').includes('Mensaje de prueba'),
       `${chat.messages} burbujas · "${(chat.last || '').slice(0, 30)}"`);
     await shot(cdp, '07-chat');
 
-    /* amigos / grupos / notificaciones / ajustes */
-    await cdp.evaluate(`location.hash = '/friends'`);
+    /* seguidores / grupos / notificaciones / ajustes */
+    await cdp.evaluate(`location.hash = '/seguidores'`);
     await new Promise((r) => setTimeout(r, 900));
     await waitImages(cdp, 6000);
-    await shot(cdp, '08-friends');
+    await shot(cdp, '08-seguidores');
+    const followersCount = await cdp.evaluate(`document.querySelectorAll('.friend-grid .user-tile').length`);
+    check('página de seguidores', followersCount >= 1, `${followersCount} personas`);
 
-    /* aceptar solicitud de amistad */
-    await cdp.evaluate(`location.hash = '/friends/requests'`);
-    await cdp.waitFor("document.querySelector('.friend-card')", 12000);
-    const beforeFriends = await cdp.evaluate(`document.querySelectorAll('.friend-card').length`);
-    await cdp.evaluate(`[...document.querySelectorAll('.friend-card .btn')].find(b => /Confirmar/.test(b.textContent))?.click()`);
-    await new Promise((r) => setTimeout(r, 2200));
-    const afterFriends = await cdp.evaluate(`document.querySelectorAll('.friend-card').length`);
-    check('aceptar solicitud de amistad', afterFriends < beforeFriends,
-      `${beforeFriends} -> ${afterFriends} tarjetas`);
-    await shot(cdp, '08b-friend-accepted');
-
-    await cdp.evaluate(`location.hash = '/friends/suggestions'`);
+    /* seguir a alguien desde sugerencias */
+    await cdp.evaluate(`location.hash = '/seguidores/sugerencias'`);
     await new Promise((r) => setTimeout(r, 900));
-    await shot(cdp, '08c-suggestions');
+    const followTest = await cdp.evaluate(`(async () => {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const btn = [...document.querySelectorAll('.user-tile .btn')]
+        .find(b => b.textContent.trim() === 'Seguir');
+      if (!btn) return { error: 'sin botón Seguir' };
+      btn.click();
+      await sleep(2200);
+      const labels = [...document.querySelectorAll('.user-tile .btn')].map(b => b.textContent.trim());
+      return { following: labels.filter(l => l === 'Siguiendo').length, total: labels.length };
+    })()`);
+    check('seguir a una persona', followTest.following >= 1,
+      `${followTest.following}/${followTest.total} siguiendo`);
+    await shot(cdp, '08b-sugerencias');
 
-    await cdp.evaluate(`location.hash = '/groups'`);
+    const pressTest = await cdp.evaluate(`(async () => {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      location.hash = '/inicio';
+      for (let i = 0; i < 40; i++) { if (document.querySelector('.post .post-act')) break; await sleep(150); }
+      await sleep(500);
+      const btn = document.querySelector('.post .post-act');
+      if (!btn) return { open: false, closed: false };
+      btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+      await sleep(450);
+      const open = !!document.querySelector('.react-pop');
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      await sleep(250);
+      return { open, closed: !document.querySelector('.react-pop') };
+    })()`);
+    check('reacciones se abren y cierran', pressTest.open && pressTest.closed, JSON.stringify(pressTest));
+
+    await cdp.evaluate(`location.hash = '/menu'`);
+    await new Promise((r) => setTimeout(r, 900));
+    await shot(cdp, '08c-menu');
+    check('menú como sección', await cdp.evaluate(`!!document.querySelector('.menu-profile')`),
+      'con accesos y personalización');
+
+    await cdp.evaluate(`location.hash = '/ajustes'`);
+    await new Promise((r) => setTimeout(r, 900));
+    await shot(cdp, '08d-cuenta');
+    check('mi cuenta renovada', await cdp.evaluate(`!!document.querySelector('.account-hero')`),
+      'portada, foto y datos');
+
+    await cdp.evaluate(`location.hash = '/grupos'`);
     await new Promise((r) => setTimeout(r, 900));
     await shot(cdp, '09-groups');
 
