@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "user": {
+    "id": "u_mwpqk76oi4mi4a",
+    "username": "pruebapqjlep",
+    "firstName": "Prueba",
+    "lastName": "Automatica",
+    "name": "Prueba Automatica",
+    "avatar": null,
+    "cover": null,
+    "bio": "",
+    "whatsapp": "",
+    "instagram": "",
+    "birthday": "",
+    "location": "",
+    "work": "",
+    "education": "",
+    "password": {
+      "algo": "PBKDF2-SHA256",
+      "iterations": 150000,
+      "salt": "Jlc9W0nvDnUmOxe9vCdFYw==",
+      "hash": "gM+j5Uqqo7h9cxljBU+bo2ySr0yBJURn3SvQ64ACScA="
+    },
+    "saved": [],
+    "createdAt": "2026-11-21T01:35:11.712Z"
+  }
+}
