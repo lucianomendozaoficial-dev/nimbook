@@ -1,4 +1,12 @@
 {
   "version": 1,
-  "users": []
+  "users": [
+    {
+      "id": "u_mwprvtuccxcjip",
+      "username": "lucianomdz",
+      "name": "Luciano Mendoza",
+      "avatar": null,
+      "createdAt": "2026-11-21T02:12:13.908Z"
+    }
+  ]
 }
