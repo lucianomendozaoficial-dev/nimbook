@@ -42,7 +42,7 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 
 **Sin servidor**
 - 100 % estático: GitHub Pages, Netlify, Vercel o el servidor local incluido.
-- **Lecturas por jsDelivr** (`cdn.jsdelivr.net/gh/usuario/repo@main/...`): no gastan la API de GitHub ni el límite de 5 000 por hora.
+- **Lecturas por `raw.githubusercontent.com`** (siempre frescas, sin token): no gastan la API de GitHub ni el límite de 5 000 por hora. Las imágenes van por **jsDelivr**, que sí cachea bien porque tienen nombre único.
 - **Escrituras solo por la API de GitHub**, con el token, en cola: se agrupan cada 2 s, se reintentan hasta 5 veces ante `409` con espera de 300 ms + aleatorio y siempre se hace *bajar → modificar → subir* con el `sha` recién leído.
 - Todo lo descargado se guarda en el navegador (localStorage) para no bajarlo dos veces; no hay sondeo cada 5 s: se actualiza al abrir o al tirar hacia abajo.
 
@@ -130,6 +130,16 @@ Ese archivo es lo único técnico que existe: los usuarios **nunca** ven reposit
 > El token queda dentro de `config.js` para que la web pueda guardar los datos. Cualquier visitante podría verlo, así que usa un token **limitado a ese repositorio** y con permiso solo de *Contents*. Si se filtra, revócalo, genera otro y vuelve a subir `config.js`.
 
 ---
+
+## Reparar los índices
+
+Si alguna vez un despliegue pisara `data/usuarios/index.json` o `data/feed/index.json`, se reconstruyen solos desde los archivos que ya existen:
+
+```bash
+node tools/repair.mjs --repo tuusuario/zuma --token github_pat_xxx
+```
+
+**El despliegue ya no toca los datos existentes**: solo crea los índices y carpetas que faltan. Para borrarlos a propósito hay que usar `--reset-data`.
 
 ## Probarlo en tu PC
 
