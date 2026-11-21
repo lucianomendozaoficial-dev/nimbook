@@ -3,7 +3,7 @@
    ========================================================================== */
 import { el, clear, timeAgo, linkify, formatCount, copyText } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { state, userById, displayName, reactionSummary } from '../core/store.js';
+import { state, userById, displayName, fullName, reactionSummary } from '../core/store.js';
 import {
   avatarEl, openModal, confirmDialog, toast, dropdown, lightbox,
 } from '../core/ui.js';
@@ -77,7 +77,10 @@ function renderShared(post, container) {
       avatarEl(author, 'sm'),
       el('div', null,
         el('div', { class: 'post-name', text: displayName(author) }),
-        el('div', { class: 'post-meta', text: timeAgo(original.createdAt) }))),
+        el('div', { class: 'post-meta' },
+          el('span', { class: 'post-fullname', text: fullName(author) }),
+          el('span', { class: 'dot' }),
+          el('span', { text: timeAgo(original.createdAt) })))),
     original.text ? el('div', {
       class: 'clamp-2',
       style: { padding: '0 12px 10px', fontSize: '14.5px', whiteSpace: 'pre-wrap' },
@@ -126,6 +129,8 @@ export function postCard(post, { onUpdate } = {}) {
       el('div', { class: 'who' },
         el('a', { href: authorLink, class: 'post-name', text: displayName(author) }),
         el('div', { class: 'post-meta' },
+          el('span', { class: 'post-fullname', text: fullName(author) }),
+          el('span', { class: 'dot' }),
           el('a', { href: `#/p/${current.id}`, text: timeAgo(current.createdAt) }),
           current.feeling ? el('span', { text: ` · ${current.feeling}` }) : null,
           current.location ? el('span', { text: ` · ${current.location}` }) : null,

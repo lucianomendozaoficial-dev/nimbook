@@ -1323,3 +1323,8 @@ select.input { appearance: none; background-image: none; cursor: pointer; }
 @media (max-width: 767px) {
   .profile-fullname { font-size: 13px; }
 }
+
+/* ---------- nombre completo debajo del usuario ---------- */
+.post-meta .post-fullname { color: var(--text-2); font-weight: 600; }
+.post-meta .post-fullname + .dot { opacity: .8; }
+.comment-name { color: var(--text); }
