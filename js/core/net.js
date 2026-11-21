@@ -23,7 +23,7 @@ export function hasToken() {
 /* ------------------------------- caché ---------------------------------- */
 
 const MEM = new Map(); // path -> { doc, at }
-const PREFIX = 'nb.doc.v4:';
+const PREFIX = 'nb.doc.v5:';
 const BUCKET = 30_000; // 30 s de caché en el CDN
 let version = 0;
 const listeners = new Set();
@@ -97,29 +97,43 @@ export function cdnUrl(path, { fresh = false } = {}) {
   return `https://cdn.jsdelivr.net/gh/${cfg.owner}/${cfg.repo}@${cfg.branch}/${path}?v=${stamp}`;
 }
 
+export function rawUrl(path) {
+  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${path}`;
+}
+
 export async function fetchDoc(path, { fresh = false, maxAge = BUCKET } = {}) {
   const memory = MEM.get(path);
   if (!fresh && memory && Date.now() - memory.at < maxAge) return memory.doc;
 
-  try {
-    const res = await fetch(cdnUrl(path, { fresh }), { cache: 'no-store' });
-    if (res.status === 404) {
-      cachePut(path, null);
-      return null;
+  const sources = [cdnUrl(path, { fresh }), rawUrl(path)];
+  let lastError = null;
+  let notFound = 0;
+
+  for (const url of sources) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (res.status === 404) { notFound += 1; continue; }
+      if (!res.ok) throw new Error(`${res.status}`);
+      const text = await res.text();
+      let doc = null;
+      if (text.trim()) {
+        try { doc = JSON.parse(text); } catch { doc = null; }
+      }
+      cachePut(path, doc);
+      return doc;
+    } catch (err) {
+      lastError = err;
     }
-    if (!res.ok) throw new Error(`CDN ${res.status}`);
-    const text = await res.text();
-    let doc = null;
-    if (text.trim()) {
-      try { doc = JSON.parse(text); } catch { doc = null; }
-    }
-    cachePut(path, doc);
-    return doc;
-  } catch (err) {
-    const cached = cachePeek(path);
-    if (cached !== undefined) return cached; // sin conexión: lo último guardado
-    throw err;
   }
+
+  if (notFound === sources.length) {
+    cachePut(path, null);
+    return null;
+  }
+
+  const cached = cachePeek(path);
+  if (cached !== undefined) return cached;
+  throw lastError || new Error('No se pudo leer ' + path);
 }
 
 export function fetchImageUrl(path) {

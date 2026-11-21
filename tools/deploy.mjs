@@ -7,6 +7,7 @@
      --branch main          rama destino
      --pages                intenta activar GitHub Pages
      --with-demo            sube también los datos de ejemplo de data/
+     --reset-data           borra los índices de datos (¡peligro!)
      --dry                  solo muestra qué se subiría
    ========================================================================== */
 import fs from 'node:fs/promises';
@@ -166,29 +167,7 @@ if (!info.permissions?.push && !info.permissions?.admin) {
 
 const files = await collectFiles();
 
-// estructura de datos
-for (const [rel, payload] of Object.entries(EMPTY_DATA)) {
-  if (!args['with-demo']) {
-    files.set(rel, Buffer.from(`${JSON.stringify(payload, null, 2)}\n`));
-  }
-}
-for (const rel of PLACEHOLDERS) {
-  if (!files.has(rel)) files.set(rel, Buffer.from(''));
-}
-
-if (args['with-demo']) {
-  for (const rel of ['data/usuarios/index.json', 'data/feed/index.json', 'data/grupos.json', 'data/historias.json']) {
-    try { files.set(rel, await fs.readFile(path.join(ROOT, rel))); } catch { /* noop */ }
-  }
-}
-
-console.log(`   archivos: ${files.size}`);
-
-if (args.dry) {
-  const sorted = [...files.keys()].sort();
-  console.log(sorted.map((f) => `     · ${f}`).join('\n'));
-  process.exit(0);
-}
+console.log(`   archivos de la app: ${files.size}`);
 
 // rama actual
 let parentSha = null;
@@ -216,6 +195,41 @@ try {
     baseTree = commit.tree.sha;
     files.delete('index.html');
   }
+}
+
+// --- estructura de datos: solo se crea lo que falta ------------------------
+let remotePaths = new Set();
+if (baseTree) {
+  try {
+    const tree = await api('GET', `/repos/${owner}/${repo}/git/trees/${baseTree}?recursive=1`);
+    remotePaths = new Set((tree.tree || []).map((entry) => entry.path));
+  } catch { /* sin árbol: seguimos */ }
+}
+
+const keepData = (rel) => remotePaths.has(rel) && !args['reset-data'];
+
+for (const [rel, payload] of Object.entries(EMPTY_DATA)) {
+  if (args['with-demo']) continue;
+  if (keepData(rel)) continue;             // ya existe: no se toca
+  files.set(rel, Buffer.from(`${JSON.stringify(payload, null, 2)}\n`));
+}
+for (const rel of PLACEHOLDERS) {
+  if (remotePaths.has(rel) || files.has(rel)) continue;
+  files.set(rel, Buffer.from(''));
+}
+if (args['with-demo']) {
+  for (const rel of ['data/usuarios/index.json', 'data/feed/index.json', 'data/grupos.json', 'data/historias.json']) {
+    try { files.set(rel, await fs.readFile(path.join(ROOT, rel))); } catch { /* noop */ }
+  }
+}
+
+const dataKept = [...remotePaths].filter((rel) => rel.startsWith('data/') && !files.has(rel)).length;
+console.log(`   archivos: ${files.size} · datos existentes protegidos: ${dataKept}`);
+
+if (args.dry) {
+  const sorted = [...files.keys()].sort();
+  console.log(sorted.map((f) => `     · ${f}`).join('\n'));
+  process.exit(0);
 }
 
 // blobs (en paralelo, 6 a la vez)

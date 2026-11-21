@@ -400,6 +400,8 @@ export function storiesGrouped(viewerId) {
   for (const [userId, list] of byUser) {
     const user = userById(userId);
     if (!user) continue;
+    // solo mis historias y las de las personas que sigo
+    if (userId !== viewerId && !isFollowing(viewerId, userId)) continue;
     list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     groups.push({ user, stories: list, latest: list[0] });
   }
@@ -470,7 +472,7 @@ export function rankedFeed(viewerId, seed = 1) {
 /* --------------------------------- arranque ------------------------------ */
 
 export async function bootData() {
-  await Promise.all([loadUserIndex(), loadFeedIndex()]);
+  await Promise.all([loadUserIndex({ fresh: true }), loadFeedIndex({ fresh: true })]);
   if (state.me) {
     await Promise.all([
       loadLikes(state.me.id),
