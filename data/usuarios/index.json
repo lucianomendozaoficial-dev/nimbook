@@ -2,6 +2,15 @@
   "version": 1,
   "users": [
     {
+      "id": "u_mwpt1rm3zmm27q",
+      "username": "qwpt19pa",
+      "firstName": "Prueba",
+      "lastName": "Usuario",
+      "name": "Prueba Usuario",
+      "avatar": null,
+      "createdAt": "2026-11-21T02:44:50.571Z"
+    },
+    {
       "id": "u_mwpqp95w628hkn",
       "username": "lucianomdz.ok",
       "firstName": "Luciano",
