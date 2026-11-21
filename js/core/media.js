@@ -2,7 +2,7 @@
    media.js — compresión, subida (API con token) y lectura (CDN)
    ========================================================================== */
 import { el, uid } from './util.js';
-import { fetchImageUrl, putBinary, deleteDoc } from './net.js';
+import { fetchImageUrl, fetchImageFallback, putBinary, deleteDoc } from './net.js';
 
 export const MAX_INPUT = 25 * 1024 * 1024;
 export const MAX_OUTPUT = 1.4 * 1024 * 1024;
@@ -92,9 +92,15 @@ export function mediaImg(path, { alt = '', onClick, className = '', style = {}, 
   });
   if (!eager && src) observeImage(img);
   img.addEventListener('error', () => {
+    const backup = fetchImageFallback(path);
+    if (backup && img.dataset.backup !== '1') {
+      img.dataset.backup = '1';
+      img.src = backup;
+      return;
+    }
     img.classList.add('img-error');
     img.removeAttribute('src');
-  }, { once: true });
+  });
   return img;
 }
 

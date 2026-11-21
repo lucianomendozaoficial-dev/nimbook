@@ -23,7 +23,7 @@ export function hasToken() {
 /* ------------------------------- caché ---------------------------------- */
 
 const MEM = new Map(); // path -> { doc, at }
-const PREFIX = 'nb.doc.v5:';
+const PREFIX = 'nb.doc.v6:';
 const BUCKET = 30_000; // 30 s de caché en el CDN
 let version = 0;
 const listeners = new Set();
@@ -85,27 +85,32 @@ export function cachePut(path, doc) {
 
 /* ------------------------------- lectura -------------------------------- */
 
-export function cdnUrl(path, { fresh = false } = {}) {
+function stampFor(fresh) {
   const bucket = Math.floor(Date.now() / BUCKET);
-  const stamp = fresh
-    ? `${bucket}-${version}-${Math.random().toString(36).slice(2, 8)}`
-    : String(bucket);
-  if (cfg.readBase) {
-    const base = cfg.readBase.replace(/\/$/, '');
-    return `${base}/${path}?v=${stamp}`;
-  }
-  return `https://cdn.jsdelivr.net/gh/${cfg.owner}/${cfg.repo}@${cfg.branch}/${path}?v=${stamp}`;
+  if (fresh) return `${bucket}-${version}-${Math.random().toString(36).slice(2, 8)}`;
+  return String(bucket);
 }
 
-export function rawUrl(path) {
-  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${path}`;
+/** URL de lectura de datos: raw de GitHub (sin caché de rama). */
+export function cdnUrl(path, { fresh = false } = {}) {
+  if (cfg.readBase) {
+    const base = cfg.readBase.replace(/\/$/, '');
+    return `${base}/${path}?v=${stampFor(fresh)}`;
+  }
+  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${path}?v=${stampFor(fresh)}`;
+}
+
+/** Respaldo por si raw falla: jsDelivr (puede estar algo atrasado). */
+function fallbackUrl(path) {
+  if (cfg.readBase) return null;
+  return `https://cdn.jsdelivr.net/gh/${cfg.owner}/${cfg.repo}@${cfg.branch}/${path}`;
 }
 
 export async function fetchDoc(path, { fresh = false, maxAge = BUCKET } = {}) {
   const memory = MEM.get(path);
   if (!fresh && memory && Date.now() - memory.at < maxAge) return memory.doc;
 
-  const sources = [cdnUrl(path, { fresh }), rawUrl(path)];
+  const sources = [cdnUrl(path, { fresh }), fallbackUrl(path)].filter(Boolean);
   let lastError = null;
   let notFound = 0;
 
@@ -143,6 +148,12 @@ export function fetchImageUrl(path) {
     return `${base}/${path}`;
   }
   return `https://cdn.jsdelivr.net/gh/${cfg.owner}/${cfg.repo}@${cfg.branch}/${path}`;
+}
+
+/** Respaldo directo para una imagen (si el CDN falla). */
+export function fetchImageFallback(path) {
+  if (!path || cfg.readBase) return '';
+  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${path}`;
 }
 
 /* ------------------------------- escritura ------------------------------- */
