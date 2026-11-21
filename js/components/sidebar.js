@@ -50,7 +50,7 @@ export function mountSidebar() {
       active: route.name === 'friends' && route.params.tab === 'siguiendo',
     }));
     root.appendChild(item({
-      iconName: 'groups', color: 'orange', label: 'Grupos',
+      iconName: 'groups', color: 'orange', label: 'Grupos y canales',
       href: '#/grupos', active: route.name === 'groups' || route.name === 'group',
     }));
     root.appendChild(item({
@@ -69,7 +69,7 @@ export function mountSidebar() {
 
     const myGroups = state.groups.filter((group) => group.memberIds?.includes(me.id)).slice(0, 6);
     if (myGroups.length) {
-      root.appendChild(el('div', { class: 'side-title' }, 'Tus grupos'));
+      root.appendChild(el('div', { class: 'side-title' }, 'Tus grupos y canales'));
       for (const group of myGroups) {
         root.appendChild(item({
           avatar: el('span', { class: 'avatar sm', style: { borderRadius: '10px', overflow: 'hidden' } },
@@ -78,7 +78,7 @@ export function mountSidebar() {
               : el('span', {
                 class: 'center',
                 style: { width: '100%', height: '100%', background: 'var(--card-2)' },
-              }, icon('groups', 18))),
+              }, icon((group.type || 'group') === 'channel' ? 'radio' : 'groups', 18))),
           label: group.name,
           href: `#/grupos/${group.id}`,
           active: route.name === 'group' && route.params.id === group.id,

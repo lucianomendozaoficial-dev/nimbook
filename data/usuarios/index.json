@@ -1,19 +1,4 @@
 {
   "version": 1,
-  "users": [
-    {
-      "id": "u_mwpsb9lbbclb4v",
-      "username": "eltuty",
-      "name": "Tuty Mendoza",
-      "avatar": null,
-      "createdAt": "2026-11-21T02:24:14.160Z"
-    },
-    {
-      "id": "u_mwprvtuccxcjip",
-      "username": "lucianomdz",
-      "name": "Luciano Mendoza",
-      "avatar": "media/perfiles/mwprwz7u-wprwz7.jpg",
-      "createdAt": "2026-11-21T02:12:13.908Z"
-    }
-  ]
+  "users": []
 }

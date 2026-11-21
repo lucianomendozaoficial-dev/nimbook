@@ -4,7 +4,7 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, feedPosts, displayName, loadFeedPage, refreshAll,
+  state, rankedFeed, displayName, loadFeedPage, refreshAll,
 } from '../core/store.js';
 import { avatarEl, emptyState, toast } from '../core/ui.js';
 import { emptyFeedIllustration } from '../core/illustrations.js';
@@ -21,6 +21,8 @@ export function feedPage() {
   const moreWrap = el('div', { class: 'center', style: { padding: '8px 0 24px' } });
   const loading = el('div', { class: 'center', style: { padding: '20px' } }, el('span', { class: 'spinner' }));
   let cards = [];
+  let seed = Number(sessionStorage.getItem('zuma.feedSeed') || 0) || Math.floor(Math.random() * 9999) + 1;
+  sessionStorage.setItem('zuma.feedSeed', String(seed));
 
   root.append(stories.el, composer, list, moreWrap);
 
@@ -44,7 +46,7 @@ export function feedPage() {
     cards.forEach((card) => card.destroy?.());
     cards = [];
     clear(list);
-    const posts = feedPosts(state.me?.id);
+    const posts = rankedFeed(state.me?.id, seed);
 
     if (!posts.length) {
       list.appendChild(el('div', { class: 'card' },
@@ -100,6 +102,8 @@ export function feedPage() {
     list.appendChild(loading);
     try {
       await refreshAll();
+      seed = Math.floor(Math.random() * 9999) + 1;
+      sessionStorage.setItem('zuma.feedSeed', String(seed));
     } catch {
       toast('No pudimos actualizar. Revisá tu conexión.', { type: 'error' });
     } finally {

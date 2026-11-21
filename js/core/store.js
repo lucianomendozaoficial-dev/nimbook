@@ -36,6 +36,19 @@ export const state = {
 };
 
 const listeners = new Set();
+const followingCache = new Map(); // userId -> { list, at }
+
+/** A quién sigue alguien (sirve para cualquier usuario, no solo para mí). */
+export async function followingIdsOf(userId) {
+  if (!userId) return [];
+  if (userId === state.me?.id) return [...state.following];
+  const cached = followingCache.get(userId);
+  if (cached && Date.now() - cached.at < 60000) return cached.list;
+  const doc = await docJson(P.following(userId));
+  const list = doc?.following || [];
+  followingCache.set(userId, { list, at: Date.now() });
+  return list;
+}
 
 export function subscribe(fn) {
   listeners.add(fn);
@@ -397,22 +410,63 @@ export function storiesGrouped(viewerId) {
   return groups;
 }
 
-export function searchEverything(query) {
+export function searchPeople(query, limit = 20) {
   const q = String(query || '').trim().toLowerCase();
-  if (!q) return { users: [], posts: [], groups: [] };
-  return {
-    users: state.userIndex
-      .filter((user) => user.name?.toLowerCase().includes(q) || user.username?.toLowerCase().includes(q))
-      .slice(0, 20),
-    posts: [...state.posts.values()]
-      .filter((post) => post.text?.toLowerCase().includes(q))
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 20),
-    groups: state.groups.filter((group) =>
-      group.name?.toLowerCase().includes(q) || group.description?.toLowerCase().includes(q)).slice(0, 20),
-  };
+  if (!q) return [];
+  const norm = (value) => String(value || '').toLowerCase();
+  return state.userIndex
+    .filter((user) => norm(user.username).includes(q)
+      || norm(user.firstName).includes(q)
+      || norm(user.lastName).includes(q)
+      || norm(user.name).includes(q))
+    .slice(0, limit)
+    .map((user) => state.users.get(user.id) || user);
 }
 
+/* --------------------------- orden del muro ------------------------------ */
+
+const hashSeed = (text) => {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash);
+};
+
+/**
+ * Mezcla tipo Facebook: lo nuevo pesa más, lo de las personas que seguís tiene
+ * prioridad y lo que tiene más movimiento sube un poco. Un azar estable por
+ * sesión evita que el orden quede siempre igual.
+ */
+export function rankedFeed(viewerId, seed = 1) {
+  const now = Date.now();
+  const scored = [...state.posts.values()]
+    .filter((post) => canSeePost(post, viewerId))
+    .map((post) => {
+      const hours = Math.max(0, (now - new Date(post.createdAt).getTime()) / 3600000);
+      const recency = 1 / (1 + hours / 7);
+      const followed = isFollowing(viewerId, post.authorId) ? 1.45 : 1;
+      const mine = post.authorId === viewerId ? 1.2 : 1;
+      const reactions = Object.values(post.reactions || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+      const engagement = 1 + Math.log1p(reactions + (post.commentsCount || 0) * 2) * 0.16;
+      const jitter = 0.82 + (hashSeed(post.id + ':' + seed) % 100) / 260;
+      return { post, score: recency * followed * mine * engagement * jitter };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const newest = scored.reduce((best, item) => (
+    !best || new Date(item.post.createdAt) > new Date(best.post.createdAt) ? item : best), null);
+  if (newest) {
+    const index = scored.indexOf(newest);
+    const target = Math.min(2, Math.floor(scored.length / 3));
+    if (index > target) {
+      scored.splice(index, 1);
+      scored.splice(target, 0, newest);
+    }
+  }
+  return scored.map((item) => item.post);
+}
 /* --------------------------------- arranque ------------------------------ */
 
 export async function bootData() {

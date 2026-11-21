@@ -58,7 +58,7 @@ export function menuPage() {
         row({ iconName: 'bookmark', title: 'Guardado', sub: 'Lo que guardaste', href: '#/guardados' })),
       el('div', { class: 'page-card' },
         el('div', { class: 'menu-section' }, 'Comunidad'),
-        row({ iconName: 'groups', title: 'Grupos', sub: 'Tus comunidades', href: '#/grupos' }),
+        row({ iconName: 'groups', title: 'Grupos y canales', sub: 'Tus comunidades y canales', href: '#/grupos' }),
         row({ iconName: 'bell', title: 'Notificaciones', sub: 'Lo último que pasó', href: '#/notificaciones' }),
         row({ iconName: 'search', title: 'Buscar', sub: 'Personas, publicaciones y grupos', href: '#/buscar' })),
       el('div', { class: 'page-card' },

@@ -186,7 +186,7 @@ function pageFor(route) {
     case 'myprofile': return profilePage(null, { preview: true });
     case 'friends': return friendsPage(route.params.tab);
     case 'notifications': return notificationsPage();
-    case 'groups': return groupsPage();
+    case 'groups': return groupsPage(route.params.tab || 'grupos');
     case 'group': return groupPage(route.params.id);
     case 'saved': return savedPage();
     case 'search': return searchPage(route.query.q || '');

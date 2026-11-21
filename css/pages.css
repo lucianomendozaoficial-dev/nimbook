@@ -1297,3 +1297,14 @@ html[data-theme="dark"] .mobile-nav { background: rgba(18, 18, 20, .9); }
 .auth-card .btn.success { background: var(--brand-soft); color: var(--brand); }
 .auth-card .btn.success:hover { background: var(--brand-soft-2); }
 .auth-panel { padding-left: 4px; }
+
+/* ---------- Zuma: estado civil, usuario disponible y canales ---------- */
+select.input { appearance: none; background-image: none; cursor: pointer; }
+.field-hint.ok { color: var(--success); font-weight: 600; }
+.field-hint.bad { color: var(--danger); font-weight: 600; }
+.notif-welcome {
+  width: 44px; height: 44px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--brand), #7c3aed); color: #fff;
+}
+.group-card .chip { font-size: 11px; }

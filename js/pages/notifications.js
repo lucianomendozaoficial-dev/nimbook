@@ -15,6 +15,7 @@ const ICONS = {
 };
 
 function textFor(item) {
+  if (item.type === 'welcome') return item.text || '¡Bienvenido a Zuma!';
   const actor = displayName(userById(item.actorId));
   switch (item.type) {
     case 'reaction': return `${actor} reaccionó a tu publicación.`;
@@ -71,7 +72,9 @@ export function notificationsPage() {
 
     const wrap = el('div', { class: 'notif-list' });
     for (const item of items) {
-      const avatar = avatarEl(userById(item.actorId), 'md');
+      const avatar = item.type === 'welcome'
+        ? el('span', { class: 'notif-welcome' }, icon('sparkles', 20))
+        : avatarEl(userById(item.actorId), 'md');
       const badge = el('span', { class: 'notif-badge' }, icon(ICONS[item.type] || 'bell', 12));
       const body = el('div', { class: 'n-body' },
         el('div', { class: 'n-text', text: textFor(item) }),

@@ -28,9 +28,11 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 - Historias de 24 h con visor automático.
 - Seguidores: seguir y dejar de seguir, sugerencias con seguidores en común, sin solicitudes.
 - Grupos públicos y privados con publicaciones, miembros y administración.
+- Canales: solo el creador publica; el resto los sigue y lee.
+- Estado civil y datos personales editables desde «Mi perfil».
 - Notificaciones con campana y contador.
 - Perfiles con portada, foto, biografía y pestañas (publicaciones, seguidores, fotos, información).
-- Guardados, búsqueda global (personas, publicaciones, grupos) y ajustes de cuenta.
+- Guardados, buscador de personas (por nombre, apellido o usuario) y configuración.
 - Modo claro / oscuro / automático, toasts, menús, visor de imágenes.
 
 **Diseño**
@@ -62,7 +64,7 @@ data/
   siguiendo/<usuario>.json     a quién sigue
   seguidores/<usuario>.json    quién lo sigue
   notificaciones/<usuario>.json    bandeja de cada persona
-  grupos.json                  grupos y miembros
+  grupos.json                  grupos y canales (tipo, dueño y miembros)
   historias.json               historias activas (se limpian a las 24 h)
 media/
   perfiles/  portadas/  publicaciones/  historias/  grupos/
@@ -139,7 +141,7 @@ Haz doble clic en **`Zuma.bat`**. Abre el navegador en `http://localhost:4173/` 
 
 **Ver la web publicada desde el local** (con tus datos reales): abre `config.js` y listo; el modo local solo se activa con el lanzador.
 
-**Datos de ejemplo con 6 personas, fotos, grupos y chats**
+**Datos de ejemplo con 6 personas, fotos, grupos y canales**
 
 ```bash
 python tools/seed_demo.py

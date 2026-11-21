@@ -4,6 +4,7 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { login, register, ValidationError, validateUsername } from '../core/auth.js';
+import { isUsernameAvailable } from '../core/actions.js';
 import { welcomeIllustration } from '../core/illustrations.js';
 import { playSound } from '../core/sounds.js';
 
@@ -81,13 +82,37 @@ export function authScreen({ onAuthenticated }) {
       class: 'input', type: 'password', placeholder: 'Contraseña (6 o más)', autocomplete: 'new-password',
     });
     const error = el('div', { class: 'field-error hide' });
+    const hint = el('span', { class: 'field-hint' });
     const submit = el('button', { class: 'btn primary block lg', type: 'submit', text: 'Crear mi cuenta' });
+
+    let checkTimer = null;
+    username.addEventListener('input', () => {
+      clearTimeout(checkTimer);
+      hint.className = 'field-hint';
+      hint.textContent = 'Así te van a encontrar tus amigos.';
+      const value = username.value.trim();
+      if (value.length < 3) return;
+      checkTimer = setTimeout(async () => {
+        const result = await isUsernameAvailable(value);
+        if (username.value.trim() !== value) return;
+        if (result.ok) {
+          hint.className = 'field-hint ok';
+          hint.textContent = '¡Está disponible!';
+        } else if (result.reason === 'taken') {
+          hint.className = 'field-hint bad';
+          hint.textContent = 'Ese usuario ya está en uso.';
+        }
+      }, 420);
+    });
 
     const form = el('form', { class: 'col gap-12' },
       el('div', { class: 'row gap-8' },
         el('div', { class: 'field grow' }, el('label', { text: 'Nombre' }), firstName),
         el('div', { class: 'field grow' }, el('label', { text: 'Apellido' }), lastName)),
-      field('Usuario', username, 'Así te van a encontrar tus amigos.'),
+      el('div', { class: 'field' },
+        el('label', { text: 'Usuario' }),
+        username,
+        hint),
       field('Contraseña', password, 'Después podés cambiarla cuando quieras.'),
       error,
       submit,

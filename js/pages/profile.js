@@ -48,6 +48,10 @@ export function editProfileModal(user, onSaved) {
   const location = el('input', { class: 'input', value: user.location || '', maxlength: '60' });
   const work = el('input', { class: 'input', value: user.work || '', maxlength: '80' });
   const education = el('input', { class: 'input', value: user.education || '', maxlength: '80' });
+  const MARITAL = ['', 'Soltero/a', 'En pareja', 'Casado/a', 'Divorciado/a', 'Viudo/a', 'Prefiero no decirlo'];
+  const marital = el('select', { class: 'input' },
+    ...MARITAL.map((option) => el('option', { value: option, text: option || 'Sin especificar' })));
+  marital.value = user.maritalStatus || '';
   const error = el('div', { class: 'field-error hide' });
 
   const saveBtn = el('button', { class: 'btn primary block', type: 'button', text: 'Guardar cambios' });
@@ -96,6 +100,9 @@ export function editProfileModal(user, onSaved) {
       el('div', { class: 'row gap-8' },
         el('div', { class: 'field grow' }, el('label', { text: 'Trabajo' }), work),
         el('div', { class: 'field grow' }, el('label', { text: 'Estudios' }), education)),
+      el('div', { class: 'row gap-8' },
+        el('div', { class: 'field grow' }, el('label', { text: 'Estado civil' }), marital),
+        el('div', { class: 'field grow' })),
       error),
     footer: saveBtn,
     size: 'lg',
@@ -117,6 +124,7 @@ export function editProfileModal(user, onSaved) {
         location: location.value,
         work: work.value,
         education: education.value,
+        maritalStatus: marital.value,
       });
       api.close();
       toast('Perfil actualizado', { type: 'success' });
@@ -308,6 +316,7 @@ export function profilePage(username, { preview = false } = {}) {
       ['Estudios', user.education || '—'],
       ['Ciudad', user.location || '—'],
       ['Nacimiento', user.birthday ? longDate(user.birthday) : '—'],
+      ['Estado civil', user.maritalStatus || '—'],
       ['WhatsApp', user.whatsapp ? `+${user.whatsapp}` : '—'],
       ['Instagram', user.instagram ? `@${user.instagram}` : '—'],
       ['Miembro desde', monthYear(user.createdAt)],

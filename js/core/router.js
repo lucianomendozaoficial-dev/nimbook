@@ -28,9 +28,12 @@ export function parseRoute(hash = window.location.hash) {
       return { name: 'notifications', params: {}, query };
     case 'groups':
     case 'grupos':
+      if (second === 'canales' || second === 'channels') {
+        return { name: 'groups', params: { tab: 'canales' }, query };
+      }
       return second
         ? { name: 'group', params: { id: second }, query }
-        : { name: 'groups', params: {}, query };
+        : { name: 'groups', params: { tab: 'grupos' }, query };
     case 'saved':
     case 'guardados':
       return { name: 'saved', params: {}, query };

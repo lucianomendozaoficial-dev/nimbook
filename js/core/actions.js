@@ -5,7 +5,7 @@ import { queueDoc, writeNow, deleteDoc, newId, nowISO, forget } from './net.js';
 import { P } from './paths.js';
 import {
   state, notify, loadUserIndex, loadUser, loadPost, loadComments,
-  isFollowing,
+  isFollowing, followingIdsOf,
 } from './store.js';
 import { hashPassword, verifyPassword } from './crypto.js';
 import { ValidationError } from './auth.js';
@@ -17,8 +17,18 @@ function requireMe() {
 
 const norm = (value) => String(value || '').trim().replace(/\s+/g, ' ');
 
-function notifySoon(userId, payload) {
+async function notifySoon(userId, payload) {
   if (!userId || userId === state.me?.id) return;
+  // Solo avisamos de personas que la otra persona sigue (las de "nuevo
+  // seguidor" siempre llegan, para que sepa quién lo empezó a seguir).
+  if (payload.type !== 'follow') {
+    try {
+      const following = await followingIdsOf(userId);
+      if (!following.includes(state.me.id)) return;
+    } catch {
+      return;
+    }
+  }
   queueDoc(P.notifications(userId), (doc) => {
     const data = doc || { version: 1, items: [] };
     data.items = [
@@ -31,6 +41,19 @@ function notifySoon(userId, payload) {
 }
 
 /* --------------------------------- cuenta -------------------------------- */
+
+/** ¿Se puede usar este nombre de usuario? (para avisar mientras escribe). */
+export async function isUsernameAvailable(username) {
+  const handle = String(username || '').trim().toLowerCase();
+  if (handle.length < 3) return { ok: false, reason: 'short' };
+  if (!/^[a-z0-9._]{3,30}$/.test(handle)) return { ok: false, reason: 'format' };
+  try {
+    const index = await loadUserIndex();
+    return { ok: !index.some((user) => user.username?.toLowerCase() === handle), reason: 'taken' };
+  } catch {
+    return { ok: false, reason: 'offline' };
+  }
+}
 
 export async function register({ firstName, lastName, username, password }) {
   const first = norm(firstName);
@@ -73,21 +96,49 @@ export async function register({ firstName, lastName, username, password }) {
     createdAt: nowISO(),
   };
 
+  const entry = {
+    id,
+    username: handle,
+    firstName: first,
+    lastName: last,
+    name: user.name,
+    avatar: null,
+    createdAt: user.createdAt,
+  };
+
   await writeNow(P.user(id), () => ({ version: 1, user }), { message: 'Zuma: nueva cuenta' });
   await queueDoc(P.userIndex, (doc) => {
     const data = doc || { version: 1, users: [] };
-    data.users = [
-      { id, username: handle, name: user.name, avatar: null, createdAt: user.createdAt },
-      ...(data.users || []).filter((item) => item.id !== id),
-    ].slice(0, 5000);
+    const taken = (data.users || []).some(
+      (item) => item.username?.toLowerCase() === handle && item.id !== id,
+    );
+    if (taken) return { ...data, __clash: true };
+    data.users = [entry, ...(data.users || []).filter((item) => item.id !== id)].slice(0, 5000);
     return data;
   }, { delay: 0, message: 'Zuma: nueva cuenta' });
 
+  // control final: otro pudo registrarse con el mismo usuario en el medio
+  const verified = await loadUserIndex({ fresh: true });
+  const clash = verified.find((item) => item.username?.toLowerCase() === handle && item.id !== id);
+  if (clash) {
+    await deleteDoc(P.user(id), 'Zuma: usuario duplicado').catch(() => {});
+    throw new ValidationError('Ese usuario se acaba de ocupar. Probá con otro.');
+  }
+
+  // bienvenida en la bandeja
+  await queueDoc(P.notifications(id), () => ({
+    version: 1,
+    items: [{
+      id: newId('n'),
+      type: 'welcome',
+      createdAt: nowISO(),
+      read: false,
+      text: '¡Bienvenido a Zuma! Completá tu perfil, seguí a tus amigos y publicá tu primer momento.',
+    }],
+  }), { delay: 0, message: 'Zuma: bienvenida' }).catch(() => {});
+
   state.users.set(id, user);
-  state.userIndex = [
-    { id, username: handle, name: user.name, avatar: null, createdAt: user.createdAt },
-    ...state.userIndex.filter((item) => item.id !== id),
-  ];
+  state.userIndex = [entry, ...state.userIndex.filter((item) => item.id !== id)];
   state.me = user;
   return user;
 }
@@ -131,7 +182,7 @@ export async function updateProfile(patch = {}) {
       changes.username = handle;
     }
   }
-  for (const key of ['bio', 'whatsapp', 'instagram', 'birthday', 'location', 'work', 'education', 'avatar', 'cover']) {
+  for (const key of ['bio', 'whatsapp', 'instagram', 'birthday', 'maritalStatus', 'location', 'work', 'education', 'avatar', 'cover']) {
     if (key in patch) changes[key] = typeof patch[key] === 'string' ? patch[key].trim() : patch[key];
   }
 
@@ -147,7 +198,14 @@ export async function updateProfile(patch = {}) {
     await queueDoc(P.userIndex, (doc) => {
       const data = doc || { version: 1, users: [] };
       data.users = (data.users || []).map((user) => (user.id === me.id
-        ? { ...user, username: next.username, name: next.name, avatar: next.avatar }
+        ? {
+          ...user,
+          username: next.username,
+          name: next.name,
+          firstName: next.firstName,
+          lastName: next.lastName,
+          avatar: next.avatar,
+        }
         : user));
       return data;
     }, { delay: 0, message: 'Zuma: perfil actualizado' });
@@ -181,6 +239,12 @@ export async function createPost({
   const me = requireMe();
   const clean = String(text || '').trim();
   if (!clean && !media.length && !shareOf) throw new ValidationError('Escribí algo o agregá una foto.');
+  if (groupId) {
+    const group = state.groups.find((item) => item.id === groupId);
+    if (group && (group.type || 'group') === 'channel' && group.ownerId !== me.id) {
+      throw new ValidationError('Solo quien creó el canal puede publicar en él.');
+    }
+  }
 
   const post = {
     id: newId('p'),
@@ -431,12 +495,13 @@ export async function markAllNotificationsRead() {
 
 /* --------------------------------- grupos -------------------------------- */
 
-export async function createGroup({ name, description = '', privacy = 'public', cover = null } = {}) {
+export async function createGroup({ name, description = '', privacy = 'public', cover = null, type = 'group' } = {}) {
   const me = requireMe();
   const clean = norm(name);
   if (clean.length < 3) throw new ValidationError('El grupo necesita un nombre.');
   const group = {
     id: newId('g'),
+    type: type === 'channel' ? 'channel' : 'group',
     name: clean,
     description: norm(description),
     privacy,
