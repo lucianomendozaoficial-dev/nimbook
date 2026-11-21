@@ -27,7 +27,7 @@ function notifySoon(userId, payload) {
         !(item.actorId === payload.actorId && item.type === payload.type && item.postId === payload.postId)),
     ].slice(0, 50);
     return data;
-  }, { delay: 1200, message: 'NimbookGR: notificación' }).catch(() => {});
+  }, { delay: 1200, message: 'Zuma: notificación' }).catch(() => {});
 }
 
 /* --------------------------------- cuenta -------------------------------- */
@@ -73,7 +73,7 @@ export async function register({ firstName, lastName, username, password }) {
     createdAt: nowISO(),
   };
 
-  await writeNow(P.user(id), () => ({ version: 1, user }), { message: 'NimbookGR: nueva cuenta' });
+  await writeNow(P.user(id), () => ({ version: 1, user }), { message: 'Zuma: nueva cuenta' });
   await queueDoc(P.userIndex, (doc) => {
     const data = doc || { version: 1, users: [] };
     data.users = [
@@ -81,7 +81,7 @@ export async function register({ firstName, lastName, username, password }) {
       ...(data.users || []).filter((item) => item.id !== id),
     ].slice(0, 5000);
     return data;
-  }, { delay: 0, message: 'NimbookGR: nueva cuenta' });
+  }, { delay: 0, message: 'Zuma: nueva cuenta' });
 
   state.users.set(id, user);
   state.userIndex = [
@@ -140,7 +140,7 @@ export async function updateProfile(patch = {}) {
   state.users.set(me.id, next);
 
   await writeNow(P.user(me.id), () => ({ version: 1, user: next }), {
-    message: 'NimbookGR: perfil actualizado',
+    message: 'Zuma: perfil actualizado',
   });
 
   if (changes.name || changes.username || 'avatar' in changes) {
@@ -150,7 +150,7 @@ export async function updateProfile(patch = {}) {
         ? { ...user, username: next.username, name: next.name, avatar: next.avatar }
         : user));
       return data;
-    }, { delay: 0, message: 'NimbookGR: perfil actualizado' });
+    }, { delay: 0, message: 'Zuma: perfil actualizado' });
   }
 
   notify('me');
@@ -167,7 +167,7 @@ export async function changePassword(current, next) {
   state.me = updated;
   state.users.set(me.id, updated);
   await writeNow(P.user(me.id), () => ({ version: 1, user: updated }), {
-    message: 'NimbookGR: contraseña actualizada',
+    message: 'Zuma: contraseña actualizada',
   });
   notify('me');
 }
@@ -198,7 +198,7 @@ export async function createPost({
   };
 
   await queueDoc(P.post(post.id), () => ({ version: 1, post }), {
-    delay: 0, message: 'NimbookGR: nueva publicación',
+    delay: 0, message: 'Zuma: nueva publicación',
   });
 
   const entry = { id: post.id, authorId: me.id, createdAt: post.createdAt };
@@ -206,7 +206,7 @@ export async function createPost({
     const data = doc || { version: 1, posts: [] };
     data.posts = [entry, ...(data.posts || []).filter((item) => item.id !== entry.id)].slice(0, 200);
     return data;
-  }, { delay: 0, message: 'NimbookGR: actualizar inicio' });
+  }, { delay: 0, message: 'Zuma: actualizar inicio' });
 
   state.posts.set(post.id, post);
   state.feedIndex = [entry, ...state.feedIndex.filter((item) => item.id !== entry.id)].slice(0, 200);
@@ -222,12 +222,12 @@ export async function deletePost(postId) {
   await queueDoc(P.feedIndex, (doc) => {
     if (!doc?.posts) return undefined;
     return { ...doc, posts: doc.posts.filter((item) => item.id !== postId) };
-  }, { delay: 0, message: 'NimbookGR: borrar publicación' });
+  }, { delay: 0, message: 'Zuma: borrar publicación' });
 
   state.feedIndex = state.feedIndex.filter((item) => item.id !== postId);
   state.posts.delete(postId);
   forget(P.post(postId));
-  await deleteDoc(P.post(postId), 'NimbookGR: borrar publicación').catch(() => {});
+  await deleteDoc(P.post(postId), 'Zuma: borrar publicación').catch(() => {});
   notify('feed');
 }
 
@@ -238,7 +238,7 @@ export async function updatePost(postId, patch = {}) {
   const next = { ...post, ...patch, updatedAt: nowISO() };
   state.posts.set(postId, next);
   await queueDoc(P.post(postId), () => ({ version: 1, post: next }), {
-    delay: 300, message: 'NimbookGR: editar publicación',
+    delay: 300, message: 'Zuma: editar publicación',
   });
   notify('post', { id: postId });
   return next;
@@ -255,7 +255,7 @@ export async function setReaction(postId, type) {
 
   const snapshot = { ...state.likes };
   await queueDoc(P.likes(me.id), () => ({ version: 1, likes: snapshot }), {
-    delay: 1500, message: 'NimbookGR: reacciones',
+    delay: 1500, message: 'Zuma: reacciones',
   });
 
   if (post) {
@@ -267,7 +267,7 @@ export async function setReaction(postId, type) {
     queueDoc(P.post(postId), (doc) => {
       if (!doc?.post) return undefined;
       return { ...doc, post: { ...doc.post, reactions } };
-    }, { delay: 1500, message: 'NimbookGR: reacciones' }).catch(() => {});
+    }, { delay: 1500, message: 'Zuma: reacciones' }).catch(() => {});
 
     if (type && post.authorId !== me.id) {
       notifySoon(post.authorId, { type: 'reaction', actorId: me.id, postId, reaction: type });
@@ -285,7 +285,7 @@ export async function toggleSavePost(postId) {
   state.me = updated;
   state.users.set(me.id, updated);
   await queueDoc(P.user(me.id), () => ({ version: 1, user: updated }), {
-    delay: 800, message: 'NimbookGR: guardados',
+    delay: 800, message: 'Zuma: guardados',
   });
   notify('me');
   return nowSaved;
@@ -310,7 +310,7 @@ export async function addComment(postId, text, { parentId = null, media = [] } =
   };
 
   await queueDoc(P.comment(postId, comment.id), () => ({ version: 1, comment }), {
-    delay: 0, message: 'NimbookGR: comentario',
+    delay: 0, message: 'Zuma: comentario',
   });
   await queueDoc(P.commentsIndex(postId), (doc) => {
     const data = doc || { version: 1, comments: [] };
@@ -319,7 +319,7 @@ export async function addComment(postId, text, { parentId = null, media = [] } =
       ...(data.comments || []).filter((item) => item.id !== comment.id),
     ];
     return data;
-  }, { delay: 0, message: 'NimbookGR: comentario' });
+  }, { delay: 0, message: 'Zuma: comentario' });
 
   const entry = state.comments.get(postId);
   if (entry) {
@@ -336,7 +336,7 @@ export async function addComment(postId, text, { parentId = null, media = [] } =
     queueDoc(P.post(postId), (doc) => {
       if (!doc?.post) return undefined;
       return { ...doc, post: { ...doc.post, commentsCount: (doc.post.commentsCount || 0) + 1 } };
-    }, { delay: 1500, message: 'NimbookGR: comentario' }).catch(() => {});
+    }, { delay: 1500, message: 'Zuma: comentario' }).catch(() => {});
     if (post.authorId !== me.id) {
       notifySoon(post.authorId, { type: parentId ? 'reply' : 'comment', actorId: me.id, postId });
     }
@@ -355,13 +355,13 @@ export async function deleteComment(commentId, postId) {
   await queueDoc(P.commentsIndex(postId), (doc) => {
     if (!doc?.comments) return undefined;
     return { ...doc, comments: doc.comments.filter((item) => item.id !== commentId) };
-  }, { delay: 0, message: 'NimbookGR: borrar comentario' });
+  }, { delay: 0, message: 'Zuma: borrar comentario' });
 
   if (entry) {
     entry.items.delete(commentId);
     entry.index = entry.index.filter((item) => item.id !== commentId);
   }
-  await deleteDoc(P.comment(postId, commentId), 'NimbookGR: borrar comentario').catch(() => {});
+  await deleteDoc(P.comment(postId, commentId), 'Zuma: borrar comentario').catch(() => {});
   notify('comments', { postId });
 }
 
@@ -375,14 +375,14 @@ export async function followUser(userId) {
   const mine = [...state.following];
 
   await queueDoc(P.following(me.id), () => ({ version: 1, following: mine }), {
-    delay: 1200, message: 'NimbookGR: seguidos',
+    delay: 1200, message: 'Zuma: seguidos',
   });
 
   await queueDoc(P.followers(userId), (doc) => {
     const data = doc || { version: 1, followers: [] };
     data.followers = [me.id, ...(data.followers || []).filter((id) => id !== me.id)];
     return data;
-  }, { delay: 1200, message: 'NimbookGR: seguidores' }).catch(() => {});
+  }, { delay: 1200, message: 'Zuma: seguidores' }).catch(() => {});
 
   notifySoon(userId, { type: 'follow', actorId: me.id });
   notify('follow');
@@ -396,12 +396,12 @@ export async function unfollowUser(userId) {
   const mine = [...state.following];
 
   await queueDoc(P.following(me.id), () => ({ version: 1, following: mine }), {
-    delay: 1200, message: 'NimbookGR: seguidos',
+    delay: 1200, message: 'Zuma: seguidos',
   });
   await queueDoc(P.followers(userId), (doc) => {
     if (!doc) return undefined;
     return { ...doc, followers: (doc.followers || []).filter((id) => id !== me.id) };
-  }, { delay: 1200, message: 'NimbookGR: seguidores' }).catch(() => {});
+  }, { delay: 1200, message: 'Zuma: seguidores' }).catch(() => {});
 
   notify('follow');
 }
@@ -424,7 +424,7 @@ export async function markAllNotificationsRead() {
   state.ui.unreadNotifs = 0;
   const items = state.notifications;
   await queueDoc(P.notifications(me.id), () => ({ version: 1, items }), {
-    delay: 300, message: 'NimbookGR: notificaciones leídas',
+    delay: 300, message: 'Zuma: notificaciones leídas',
   });
   notify('notifications');
 }
@@ -450,7 +450,7 @@ export async function createGroup({ name, description = '', privacy = 'public', 
     const data = doc || { version: 1, groups: [] };
     data.groups = [group, ...(data.groups || []).filter((item) => item.id !== group.id)];
     return data;
-  }, { delay: 0, message: 'NimbookGR: nuevo grupo' });
+  }, { delay: 0, message: 'Zuma: nuevo grupo' });
   notify('groups');
   return group;
 }
@@ -464,7 +464,7 @@ export async function joinGroup(groupId) {
   await queueDoc(P.groups, (doc) => {
     if (!doc?.groups) return undefined;
     return { ...doc, groups: doc.groups.map((item) => (item.id === groupId ? { ...item, memberIds } : item)) };
-  }, { delay: 800, message: 'NimbookGR: unirse al grupo' });
+  }, { delay: 800, message: 'Zuma: unirse al grupo' });
   notify('groups');
 }
 
@@ -477,7 +477,7 @@ export async function leaveGroup(groupId) {
   await queueDoc(P.groups, (doc) => {
     if (!doc?.groups) return undefined;
     return { ...doc, groups: doc.groups.map((item) => (item.id === groupId ? { ...item, memberIds } : item)) };
-  }, { delay: 800, message: 'NimbookGR: salir del grupo' });
+  }, { delay: 800, message: 'Zuma: salir del grupo' });
   notify('groups');
 }
 
@@ -500,7 +500,7 @@ export async function createStory({ image, text = '' } = {}) {
       Date.now() - new Date(item.createdAt).getTime() < 24 * 3600 * 1000);
     data.stories = [story, ...alive].slice(0, 300);
     return data;
-  }, { delay: 400, message: 'NimbookGR: nueva historia' });
+  }, { delay: 400, message: 'Zuma: nueva historia' });
   notify('stories');
   return story;
 }
@@ -512,7 +512,7 @@ export async function deleteStory(storyId) {
     const data = doc || { version: 1, stories: [] };
     data.stories = (data.stories || []).filter((item) => item.id !== storyId || item.userId !== me.id);
     return data;
-  }, { delay: 0, message: 'NimbookGR: borrar historia' });
+  }, { delay: 0, message: 'Zuma: borrar historia' });
   notify('stories');
 }
 

@@ -102,7 +102,7 @@ export function friendsPage(tab = 'seguidores') {
       const people = followSuggestions(me.id, 60).filter(filter);
       content.appendChild(grid(people, (person) => {
         const mutual = mutualFollowers(me.id, person.id).length;
-        return mutual ? `${mutual} seguidor${mutual === 1 ? '' : 'es'} en común` : 'Nueva en NimbookGR';
+        return mutual ? `${mutual} seguidor${mutual === 1 ? '' : 'es'} en común` : 'Nueva en Zuma';
       }) || el('div', { class: 'card' },
       emptyState({ iconName: 'sparkles', title: 'No hay sugerencias por ahora' })));
       return;

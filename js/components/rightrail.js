@@ -80,7 +80,7 @@ export function mountRightRail() {
     root.appendChild(el('div', {
       class: 'rail-item',
       style: { color: 'var(--text-3)', fontSize: '12.5px', lineHeight: '1.6' },
-    }, 'NimbookGR · hecho para compartir con tus amigos'));
+    }, 'Zuma · hecho para compartir con tus amigos'));
   }
 
   render();

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   icons.js — set de iconos SVG (trazo y relleno) al estilo Nimbook/Facebook
+   icons.js — set de iconos SVG (trazo y relleno) al estilo Zuma/Facebook
    ========================================================================== */
 const NS = 'http://www.w3.org/2000/svg';
 

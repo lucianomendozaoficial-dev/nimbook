@@ -35,7 +35,7 @@ export function notificationLabel(notification) {
     case 'friend_accept': return `${name} aceptó tu solicitud de amistad.`;
     case 'share': return `${name} compartió tu publicación.`;
     case 'group_post': return `${name} publicó en un grupo al que perteneces.`;
-    case 'welcome': return notification.text || '¡Bienvenido a NimbookGR!';
+    case 'welcome': return notification.text || '¡Bienvenido a Zuma!';
     default: return notification.text || `${name} hizo algo nuevo.`;
   }
 }
@@ -62,7 +62,7 @@ export function notificationItem(notification, { compact = false } = {}) {
   el('span', { class: 'n-avatar' },
     actor
       ? avatarEl(actor, compact ? 'sm' : 'lg')
-      : avatarEl({ name: 'Nimbook' }, compact ? 'sm' : 'lg'),
+      : avatarEl({ name: 'Zuma' }, compact ? 'sm' : 'lg'),
     el('span', { class: `n-icon ${meta.cls}` }, icon(meta.name, 11))),
   el('span', { class: 'n-body' },
     el('span', { text: notificationLabel(notification) }),

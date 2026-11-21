@@ -67,7 +67,17 @@ const shot = async (name) => {
   if (data) await fs.writeFile(path.join(OUT, `${name}.png`), Buffer.from(data, 'base64'));
   console.log('  shot', name);
 };
-const readJson = async (rel) => JSON.parse(await fs.readFile(path.join(ROOT, rel), 'utf8'));
+const readJson = async (rel) => {
+  let last = null;
+  for (let i = 0; i < 6; i++) {
+    try {
+      const text = await fs.readFile(path.join(ROOT, rel), 'utf8');
+      if (text.trim()) return JSON.parse(text);
+    } catch (err) { last = err; }
+    await new Promise((r) => setTimeout(r, 180));
+  }
+  throw last || new Error('JSON vacío: ' + rel);
+};
 const exists = async (rel) => { try { await fs.access(path.join(ROOT, rel)); return true; } catch { return false; } };
 
 const checks = [];

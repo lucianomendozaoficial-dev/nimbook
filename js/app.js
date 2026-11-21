@@ -299,19 +299,19 @@ async function boot() {
   initTheme();
   applyReduced();
   initPwa();
-  setSplashMessage('Iniciando NimbookGR…');
+  setSplashMessage('Iniciando Zuma…');
 
   const unlock = () => { unlockSounds(); document.removeEventListener('pointerdown', unlock); };
   document.addEventListener('pointerdown', unlock, { once: true });
 
   if (window.location.protocol === 'file:') {
-    showBootError('Para usar NimbookGR ábrelo desde su dirección web (o desde el acceso directo incluido).');
+    showBootError('Para usar Zuma ábrelo desde su dirección web (o desde el acceso directo incluido).');
     return;
   }
 
   const cfg = window.NIMBOOK_DEV_CONFIG || window.NIMBOOK_CONFIG || null;
   if (!cfg?.owner || !cfg?.repo) {
-    showBootError('NimbookGR no está disponible en este momento. Volvé a intentarlo en unos minutos.');
+    showBootError('Zuma no está disponible en este momento. Volvé a intentarlo en unos minutos.');
     return;
   }
 

@@ -65,13 +65,13 @@ export async function uploadImage(file, folderKey = 'posts', { maxSize = 1600 } 
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const name = `${Date.now().toString(36)}-${uid('').slice(1, 7)}.jpg`;
   const path = `${folder}/${name}`;
-  await putBinary(path, bytes, 'NimbookGR: imagen', null);
+  await putBinary(path, bytes, 'Zuma: imagen', null);
   return { path, type: 'image/jpeg', width, height, size: bytes.length };
 }
 
 export async function deleteMedia(path) {
   if (!path) return;
-  await deleteDoc(path, 'NimbookGR: borrar imagen').catch(() => {});
+  await deleteDoc(path, 'Zuma: borrar imagen').catch(() => {});
 }
 
 /* --------------------------- imágenes visibles --------------------------- */

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   illustrations.js — ilustraciones vectoriales de NimbookGR
+   illustrations.js — ilustraciones vectoriales de Zuma
    ========================================================================== */
 
 const HEART = 'M12 21s-8-5.1-8-10.2A4.8 4.8 0 0 1 12 7a4.8 4.8 0 0 1 8 3.8C20 15.9 12 21 12 21z';

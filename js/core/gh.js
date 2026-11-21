@@ -247,7 +247,7 @@ export class GhClient {
     return { exists: true, sha: data.sha, text, etag: newEtag, size: data.size };
   }
 
-  async putFile(path, contentB64, { sha = null, message = 'NimbookGR: actualizar datos' } = {}) {
+  async putFile(path, contentB64, { sha = null, message = 'Zuma: actualizar datos' } = {}) {
     const encoded = path.split('/').map(encodeURIComponent).join('/');
     const body = { message, content: contentB64, branch: this.branch };
     if (sha) body.sha = sha;
@@ -261,7 +261,7 @@ export class GhClient {
     return this.putFile(path, b64EncodeText(text), opts);
   }
 
-  async deleteFile(path, { sha, message = 'NimbookGR: eliminar archivo' } = {}) {
+  async deleteFile(path, { sha, message = 'Zuma: eliminar archivo' } = {}) {
     const encoded = path.split('/').map(encodeURIComponent).join('/');
     const { data } = await this.request(
       `/repos/${this.owner}/${this.repo}/contents/${encoded}`,

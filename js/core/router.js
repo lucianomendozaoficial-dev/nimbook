@@ -47,7 +47,7 @@ export function parseRoute(hash = window.location.hash) {
     case 'compose':
       return { name: 'compose', params: {}, query };
     case 'mi-perfil':
-      return { name: 'myprofile', params: {}, query };
+      return { name: 'myprofile', params: { tab: second || 'posts' }, query };
     case 'u':
     case 'perfil':
       return {

@@ -227,7 +227,7 @@ export class Db {
   async mutate(path, fn, options = {}) {
     const empty = options.empty || EMPTY_OBJECT;
     const retries = options.retries ?? 7;
-    const message = options.message || `NimbookGR: actualizar ${path}`;
+    const message = options.message || `Zuma: actualizar ${path}`;
 
     return this.enqueue(path, async () => {
       let lastError = null;
@@ -298,7 +298,7 @@ export class Db {
       const current = this.mem.get(path);
       const res = await this.client.putFile(path, b64EncodeText(serialized), {
         sha: current?.sha || null,
-        message: message || `NimbookGR: crear ${path}`,
+        message: message || `Zuma: crear ${path}`,
       });
       this.stats.writes += 1;
       const entry = {
@@ -318,7 +318,7 @@ export class Db {
     const sha = entry?.sha;
     if (!sha) return false;
     try {
-      await this.client.deleteFile(path, { sha, message: `NimbookGR: eliminar ${path}` });
+      await this.client.deleteFile(path, { sha, message: `Zuma: eliminar ${path}` });
       this.mem.delete(path);
       try { localStorage.removeItem(snapshotKey(this.client, path)); } catch { /* noop */ }
       return true;

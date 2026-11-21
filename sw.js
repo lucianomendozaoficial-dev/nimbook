@@ -1,5 +1,5 @@
 /* ==========================================================================
-   sw.js — permite instalar NimbookGR y usarla sin conexión.
+   sw.js — permite instalar Zuma y usarla sin conexión.
    Estrategia: primero la red (para recibir siempre los cambios) y, si no
    hay conexión, lo último guardado en caché.
    ========================================================================== */
@@ -13,8 +13,8 @@ const SHELL = [
   './css/app.css',
   './css/pages.css',
   './js/app.js',
-  './assets/logo/nimbook-logo-192.png',
-  './assets/logo/nimbook-logo-512.png',
+  './assets/logo/zuma-logo-192.png',
+  './assets/logo/zuma-logo-512.png',
 ];
 
 self.addEventListener('install', (event) => {

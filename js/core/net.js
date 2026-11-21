@@ -1,5 +1,5 @@
 /* ==========================================================================
-   net.js — capa de datos de NimbookGR
+   net.js — capa de datos de Zuma
 
    LECTURA: por jsDelivr (CDN de GitHub), sin token y sin gastar la API.
    ESCRITURA: solo con la API de GitHub y el token, en cola, con reintentos
@@ -181,7 +181,7 @@ export async function readRemote(path) {
 
 export async function putRemote(path, doc, sha, message) {
   const body = {
-    message: message || 'NimbookGR: cambios',
+    message: message || 'Zuma: cambios',
     content: b64EncodeText(`${JSON.stringify(doc, null, 2)}\n`),
     branch: cfg.branch,
   };
@@ -193,18 +193,18 @@ export async function putRemote(path, doc, sha, message) {
 export async function deleteRemote(path, sha, message) {
   return api(path, {
     method: 'DELETE',
-    body: { message: message || 'NimbookGR: borrar', sha, branch: cfg.branch },
+    body: { message: message || 'Zuma: borrar', sha, branch: cfg.branch },
   });
 }
 
 export async function putBinary(path, bytes, message, sha = null) {
-  const body = { message: message || 'NimbookGR: imagen', content: b64Encode(bytes), branch: cfg.branch };
+  const body = { message: message || 'Zuma: imagen', content: b64Encode(bytes), branch: cfg.branch };
   if (sha) body.sha = sha;
   const data = await api(path, { method: 'PUT', body });
   return data?.content?.sha || null;
 }
 
-export async function deleteDoc(path, message = 'NimbookGR: borrar') {
+export async function deleteDoc(path, message = 'Zuma: borrar') {
   const { sha } = await readRemote(path);
   if (!sha) return false;
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -248,7 +248,7 @@ function applyOps(doc, ops) {
  * `updater` recibe el documento actual (o null) y devuelve el nuevo (o undefined
  * para no tocarlo). Las actualizaciones se agrupan y se suben juntas.
  */
-export function queueDoc(path, updater, { message = 'NimbookGR: cambios', delay = 2000 } = {}) {
+export function queueDoc(path, updater, { message = 'Zuma: cambios', delay = 2000 } = {}) {
   return new Promise((resolve, reject) => {
     let queue = queues.get(path);
     if (!queue) {
@@ -275,7 +275,7 @@ export function queueDoc(path, updater, { message = 'NimbookGR: cambios', delay 
 }
 
 /** Escritura inmediata (sin agrupar) para operaciones que necesitan confirmación. */
-export async function writeNow(path, updater, { message = 'NimbookGR: cambios' } = {}) {
+export async function writeNow(path, updater, { message = 'Zuma: cambios' } = {}) {
   await queueDoc(path, updater, { message, delay: 0 });
   return cachePeek(path);
 }

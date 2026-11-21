@@ -1,5 +1,5 @@
 /* ==========================================================================
-   config.js — conexión de NimbookGR con su almacenamiento.
+   config.js — conexión de Zuma con su almacenamiento.
 
    La web necesita este acceso para que cualquiera pueda registrarse y
    publicar sin configurar nada. Está repartido en partes para que GitHub

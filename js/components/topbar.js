@@ -20,12 +20,14 @@ const TABS = [
 export function mountTopbar() {
   const root = el('header', { class: 'topbar' });
 
-  const brand = el('a', { class: 'brand', href: '#/inicio', 'aria-label': 'NimbookGR' },
-    el('img', { src: 'assets/logo/nimbook-logo-128.png', alt: 'NimbookGR', width: '40', height: '40' }),
-    el('span', { class: 'brand-word', text: 'NimbookGR' }));
+  const brand = el('a', { class: 'brand', href: '#/inicio', 'aria-label': 'Zuma' },
+    el('img', { src: 'assets/logo/zuma-logo-128.png', alt: 'Zuma', width: '40', height: '40' }),
+    el('span', { class: 'brand-text' },
+      el('span', { class: 'brand-word', text: 'Zuma' }),
+      el('span', { class: 'brand-sub', text: 'General Rodriguez' })));
 
   const searchInput = el('input', {
-    type: 'search', placeholder: 'Buscar en NimbookGR', 'aria-label': 'Buscar',
+    type: 'search', placeholder: 'Buscar en Zuma', 'aria-label': 'Buscar',
   });
   const goSearch = () => {
     const q = searchInput.value.trim();
@@ -55,7 +57,7 @@ export function mountTopbar() {
 
   const installBtn = el('button', {
     class: 'tb-btn install-btn hide', type: 'button',
-    'aria-label': 'Instalar NimbookGR', title: 'Instalar NimbookGR',
+    'aria-label': 'Instalar Zuma', title: 'Instalar Zuma',
     onclick: async () => {
       const accepted = await promptInstall();
       if (accepted) toast('¡Instalada! Ya podés abrirla desde tu inicio.', { type: 'success' });

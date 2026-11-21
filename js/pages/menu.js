@@ -69,7 +69,7 @@ export function menuPage() {
         }),
         canInstall()
           ? row({
-            iconName: 'download', title: 'Instalar NimbookGR',
+            iconName: 'download', title: 'Instalar Zuma',
             sub: 'Agregala a tu pantalla de inicio',
             onClick: async () => {
               playSound('open');
@@ -79,7 +79,7 @@ export function menuPage() {
           })
           : (isStandalone()
             ? row({
-              iconName: 'check', title: 'NimbookGR instalada',
+              iconName: 'check', title: 'Zuma instalada',
               sub: 'Ya la estás usando como aplicación',
               control: el('span', { class: 'chip green', text: 'Activa' }),
             })

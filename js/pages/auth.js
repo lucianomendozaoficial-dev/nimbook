@@ -44,7 +44,7 @@ export function authScreen({ onAuthenticated }) {
           onclick: () => { mode = 'register'; render(); },
         }),
         el('p', { class: 'auth-legal' },
-          'Al entrar aceptás compartir con respeto. NimbookGR es para tus amigos.'));
+          'Al entrar aceptás compartir con respeto. Zuma es para tus amigos.'));
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -139,10 +139,10 @@ export function authScreen({ onAuthenticated }) {
   root.append(
     el('div', { class: 'auth-panel' },
       el('div', { class: 'auth-logo' },
-        el('img', { src: 'assets/logo/nimbook-logo-128.png', alt: 'NimbookGR', width: '60', height: '60' }),
-        el('span', { text: 'NimbookGR' })),
+        el('img', { src: 'assets/logo/zuma-logo-128.png', alt: 'Zuma', width: '60', height: '60' }),
+        el('span', { text: 'Zuma' })),
       el('p', { class: 'auth-tagline', text: 'Comparte tus momentos con la gente que querés.' }),
-      el('div', { class: 'auth-illustration' }, welcomeIllustration()),
+      el('div', { class: 'auth-illustration', html: welcomeIllustration() }),
       el('div', { class: 'auth-points' },
         el('div', { class: 'auth-point' }, icon('users', 18), 'Seguí a tus amigos'),
         el('div', { class: 'auth-point' }, icon('heart', 18), 'Reaccioná a sus momentos'),

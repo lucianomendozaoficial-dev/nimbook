@@ -65,7 +65,7 @@ export function searchPage(initial = '') {
       results.appendChild(el('div', { class: 'card' },
         emptyState({
           iconName: 'search',
-          title: 'Buscá en NimbookGR',
+          title: 'Buscá en Zuma',
           description: 'Personas, publicaciones y grupos de la comunidad.',
         })));
       return;

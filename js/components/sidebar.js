@@ -100,7 +100,7 @@ export function mountSidebar() {
 
     root.appendChild(el('div', { class: 'side-foot' },
       el('div', { text: 'Privacidad · Condiciones · Publicidad · Cookies' }),
-      el('div', { text: 'NimbookGR © 2026 · Hecho para compartir' })));
+      el('div', { text: 'Zuma © 2026 · Hecho para compartir' })));
   }
 
   render();

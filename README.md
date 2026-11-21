@@ -1,4 +1,4 @@
-# NimbookGR
+# Zuma
 
 Red social completa inspirada en Facebook, hecha con **JavaScript puro** (sin frameworks, sin build) y con **tu repositorio de GitHub como base de datos**.
 
@@ -6,7 +6,7 @@ Red social completa inspirada en Facebook, hecha con **JavaScript puro** (sin fr
 
 Los usuarios, las publicaciones, las historias, los chats y las imágenes viven en archivos JSON y carpetas dentro del repositorio. La aplicación los lee y los escribe directamente con la API de GitHub desde el navegador, así que se puede publicar gratis en GitHub Pages.
 
-![Feed de NimbookGR](docs/preview-feed.jpg)
+![Feed de Zuma](docs/preview-feed.jpg)
 
 | Modo oscuro | Móvil |
 | --- | --- |
@@ -89,7 +89,7 @@ El «me gusta» escribe primero en `likes/<usuario>.json` y después, si se pued
 ### 1. Crea el token de GitHub
 
 1. **GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens**.
-2. *Repository access*: **Only select repositories** → tu repositorio de NimbookGR.
+2. *Repository access*: **Only select repositories** → tu repositorio de Zuma.
 3. *Repository permissions*: **Contents: Read and write** (Metadata se activa solo).
 4. Copia el token (`github_pat_…`).
 
@@ -131,7 +131,7 @@ Ese archivo es lo único técnico que existe: los usuarios **nunca** ven reposit
 
 ## Probarlo en tu PC
 
-Haz doble clic en **`NimbookGR.bat`**. Abre el navegador en `http://localhost:4173/` con un servidor local y **datos de prueba guardados en tu PC**: los cambios que hagas ahí no los ve nadie hasta que publiques.
+Haz doble clic en **`Zuma.bat`**. Abre el navegador en `http://localhost:4173/` con un servidor local y **datos de prueba guardados en tu PC**: los cambios que hagas ahí no los ve nadie hasta que publiques.
 
 - Los archivos `js` y `css` se **recargan solos** al guardarlos (no hace falta refrescar).
 - Los usuarios y publicaciones de prueba viven en `data/` y `media/` de tu carpeta.
@@ -189,8 +189,8 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 index.html              punto de entrada (SPA)
 config.js               conexión con el almacenamiento (repo + token)
 manifest.webmanifest    PWA instalable
-NimbookGR.bat           lanzador local para Windows (modo prueba, sin publicar)
-Iniciar-Nimbook.ps1     servidor local sin dependencias
+Zuma.bat           lanzador local para Windows (modo prueba, sin publicar)
+Iniciar-Zuma.ps1     servidor local sin dependencias
 css/base.css            tokens, reset, tipografía, utilidades
 css/app.css             barra superior, columnas, navegación, componentes
 css/pages.css           feed, perfil, mensajes, seguidores, grupos, ajustes
