@@ -154,7 +154,7 @@ Las cuentas de ejemplo usan la contraseña `demo1234`.
 node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpias
 ```
 
-**Pruebas automáticas** (Edge headless): `node tools/shots.mjs` → 24 comprobaciones y capturas en `.tmp/`.
+**Pruebas automáticas** (Edge headless): `node tools/flow.mjs` publica, reacciona, comenta, sigue y edita el perfil contra el servidor local.
 
 > Abrir `index.html` con doble clic **no funciona**: los navegadores bloquean el JavaScript en `file://`. Si lo haces, verás un aviso explicándolo.
 
