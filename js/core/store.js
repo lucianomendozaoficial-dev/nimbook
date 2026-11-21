@@ -1,291 +1,291 @@
 /* ==========================================================================
-   store.js — estado global, carga de datos, índices y selectores
+   store.js — estado en memoria y lecturas (todo por CDN, sin token)
    ========================================================================== */
-import { Db, asList } from './db.js';
-import { makeClient } from './gh.js';
-import { parseTicks } from './util.js';
+import {
+  configure, fetchDoc, cachePeek, cachePut, onWrite, bumpVersion,
+} from './net.js';
+import { P } from './paths.js';
 
-export const PATHS = {
-  users: 'data/usuarios.json',
-  posts: 'data/feed.json',
-  comments: 'data/comentarios.json',
-  conversations: 'data/conversaciones.json',
-  groups: 'data/grupos.json',
-  stories: 'data/historias.json',
-};
-
-export const notifPath = (userId) => `data/notificaciones/${userId}.json`;
-export const chatPath = (conversationId) => `data/mensajes/${conversationId}.json`;
-
-export const SCHEMA = {
-  users: { key: 'users', empty: () => ({ version: 1, users: [] }) },
-  posts: { key: 'posts', empty: () => ({ version: 1, posts: [] }) },
-  comments: { key: 'comments', empty: () => ({ version: 1, comments: [] }) },
-  conversations: { key: 'conversations', empty: () => ({ version: 1, conversations: [] }) },
-  groups: { key: 'groups', empty: () => ({ version: 1, groups: [] }) },
-  stories: { key: 'stories', empty: () => ({ version: 1, stories: [] }) },
-};
+const PAGE = 30;
 
 export const state = {
-  cfg: null,
-  gh: null,
-  db: null,
+  ready: false,
   me: null,
-  users: [],
-  posts: [],
-  comments: [],
-  conversations: [],
+  cfg: null,
+
+  users: new Map(),        // id -> usuario completo
+  userIndex: [],           // lista liviana para buscar y listar
+  following: new Set(),    // ids que sigo
+  followers: new Set(),    // ids que me siguen
+  likes: {},               // postId -> tipo de reacción
+
+  feedIndex: [],           // [{ id, authorId, createdAt }]
+  posts: new Map(),        // id -> publicación completa
+  feedLoaded: 0,
+
+  comments: new Map(),     // postId -> { index, items: Map, loaded }
   groups: [],
   stories: [],
   notifications: [],
-  chats: new Map(),
-  indexes: {
-    usersById: new Map(),
-    usersByName: new Map(),
-    commentsByPost: new Map(),
-    followingOf: new Map(),
-    followersOf: new Map(),
-    postsByAuthor: new Map(),
-  },
-  status: {
-    booting: true,
-    ready: false,
-    error: null,
+
+  ui: {
+    unreadNotifs: 0,
     lastSync: 0,
-    offline: false,
-    syncing: false,
+    online: true,
   },
-  theme: 'light',
-  route: { name: 'feed', params: {} },
-  ui: { unreadNotifs: 0, unreadChats: 0, reactionOverrides: new Map(), sending: false },
 };
 
-/* ------------------------------ pub/sub --------------------------------- */
-
-const subscribers = new Set();
+const listeners = new Set();
 
 export function subscribe(fn) {
-  subscribers.add(fn);
-  return () => subscribers.delete(fn);
+  listeners.add(fn);
+  return () => listeners.delete(fn);
 }
 
 export function notify(topic = 'data', detail = {}) {
-  for (const fn of subscribers) {
-    try { fn(topic, detail); } catch (err) { console.error('[store] subscriber', err); }
+  state.ui.lastSync = Date.now();
+  for (const fn of listeners) {
+    try { fn(topic, detail); } catch (err) { console.error('[store]', err); }
   }
 }
-
-/* ------------------------------ arranque -------------------------------- */
 
 export function attach(cfg) {
-  state.cfg = cfg;
-  state.gh = makeClient(cfg);
-  state.db = new Db(state.gh);
-  state.db.on('change', ({ path, data }) => {
-    if (path.startsWith('data/notificaciones/')) {
-      if (state.me && path === notifPath(state.me.id)) {
-        state.notifications = asList(data, 'items');
-        updateUnread();
-      }
-    } else if (path.startsWith('data/mensajes/')) {
-      const cid = path.split('/').pop().replace('.json', '');
-      state.chats.set(cid, asList(data, 'messages'));
+  state.cfg = configure(cfg);
+  onWrite((path) => {
+    if (path === P.userIndex) {
+      const doc = cachePeek(path);
+      state.userIndex = doc?.users || [];
     }
-    syncFromDb();
-    notify('change', { path });
+    if (state.me && path === P.likes(state.me.id)) {
+      const doc = cachePeek(path);
+      state.likes = doc?.likes || {};
+    }
+    if (state.me && path === P.following(state.me.id)) {
+      const doc = cachePeek(path);
+      state.following = new Set(doc?.following || []);
+    }
+    if (state.me && path === P.followers(state.me.id)) {
+      const doc = cachePeek(path);
+      state.followers = new Set(doc?.followers || []);
+    }
+    notify('write', { path });
   });
-  state.db.on('error', ({ error }) => {
-    if (error?.code === 'network') {
-      state.status.offline = true;
-      notify('offline', { error });
-    }
-  });
-  return state.db;
+  return state;
 }
 
-export function hydrateCache() {
-  if (!state.db) return false;
-  let any = false;
-  for (const path of Object.values(PATHS)) {
-    if (state.db.hydrate(path)) any = true;
-  }
-  if (state.me) {
-    state.db.hydrate(notifPath(state.me.id));
-  }
-  if (any) {
-    syncFromDb();
-    return true;
-  }
-  return false;
-}
+/* ------------------------------ documentos ------------------------------- */
 
-function buildIndexes() {
-  const idx = state.indexes;
-  idx.usersById = new Map();
-  idx.usersByName = new Map();
-  idx.commentsByPost = new Map();
-  idx.followingOf = new Map();
-  idx.followersOf = new Map();
-  idx.postsByAuthor = new Map();
-
-  for (const user of state.users) {
-    idx.usersById.set(user.id, user);
-    if (user.username) idx.usersByName.set(user.username.toLowerCase(), user);
-    // `friendIds` se conserva por compatibilidad con cuentas viejas.
-    idx.followingOf.set(user.id, new Set(user.following || user.friendIds || []));
-    idx.followersOf.set(user.id, new Set());
-  }
-  for (const user of state.users) {
-    for (const target of idx.followingOf.get(user.id)) {
-      idx.followersOf.get(target)?.add(user.id);
-    }
-  }
-  for (const comment of state.comments) {
-    if (!idx.commentsByPost.has(comment.postId)) idx.commentsByPost.set(comment.postId, []);
-    idx.commentsByPost.get(comment.postId).push(comment);
-  }
-  for (const post of state.posts) {
-    if (!idx.postsByAuthor.has(post.authorId)) idx.postsByAuthor.set(post.authorId, []);
-    idx.postsByAuthor.get(post.authorId).push(post);
-  }
-  for (const list of idx.commentsByPost.values()) {
-    list.sort((a, b) => parseTicks(a.createdAt) - parseTicks(b.createdAt));
-  }
-}
-
-export function syncFromDb() {
-  if (!state.db) return;
-  const usersDoc = state.db.peek(PATHS.users);
-  const postsDoc = state.db.peek(PATHS.posts);
-  const commentsDoc = state.db.peek(PATHS.comments);
-  const convDoc = state.db.peek(PATHS.conversations);
-  const groupsDoc = state.db.peek(PATHS.groups);
-  const storiesDoc = state.db.peek(PATHS.stories);
-
-  state.users = asList(usersDoc, 'users');
-  state.posts = asList(postsDoc, 'posts');
-  state.comments = asList(commentsDoc, 'comments');
-  state.conversations = asList(convDoc, 'conversations');
-  state.groups = asList(groupsDoc, 'groups');
-  state.stories = asList(storiesDoc, 'stories').filter(isStoryAlive);
-
-  if (state.me) {
-    const fresh = state.users.find((u) => u.id === state.me.id);
-    if (fresh) state.me = fresh;
-    else state.me = null;
-    if (state.me) {
-      const notifDoc = state.db.peek(notifPath(state.me.id));
-      state.notifications = asList(notifDoc, 'items');
-    }
-  }
-
-  state.status.lastSync = Date.now();
-  buildIndexes();
-  updateUnread();
-}
-
-function isStoryAlive(story) {
-  if (!story?.createdAt) return false;
-  return Date.now() - parseTicks(story.createdAt) < 24 * 3600 * 1000;
-}
-
-function updateUnread() {
-  if (!state.me) {
-    state.ui.unreadNotifs = 0;
-    state.ui.unreadChats = 0;
-    return;
-  }
-  state.ui.unreadNotifs = state.notifications.filter((n) => !n.read).length;
-  let chats = 0;
-  for (const conv of state.conversations) {
-    if (!conv.memberIds?.includes(state.me.id)) continue;
-    const reads = conv.reads?.[state.me.id] || 0;
-    if ((conv.lastMessage?.at || 0) > reads && conv.lastMessage?.senderId !== state.me.id) chats += 1;
-  }
-  state.ui.unreadChats = chats;
-}
-
-/* ------------------------------ carga ----------------------------------- */
-
-export async function loadCore({ revalidate = true } = {}) {
-  if (!state.db) return;
-  const paths = Object.values(PATHS);
-  if (state.me) paths.push(notifPath(state.me.id));
-  state.status.syncing = true;
+async function docJson(path, opts) {
   try {
-    // Con `revalidate` se usa el ETag: si nada cambió, GitHub responde 304 y no gasta cuota.
-    await state.db.loadMany(paths, revalidate ? { revalidate: true } : {});
-    syncFromDb();
-    state.status.ready = true;
-    state.status.booting = false;
-    state.status.error = null;
-    notify('data');
+    return (await fetchDoc(path, opts)) || null;
   } catch (err) {
-    state.status.error = err.message;
-    notify('error', { error: err });
-  } finally {
-    state.status.syncing = false;
-    state.status.offline = Boolean(state.db?.offline);
+    console.warn('[store] no se pudo leer', path, err?.message);
+    return null;
   }
 }
 
-export async function refreshUserData() {
-  if (!state.db || !state.me) return;
-  await state.db.loadMany([notifPath(state.me.id), PATHS.conversations, PATHS.users], { revalidate: true });
-  syncFromDb();
-  notify('data');
+export async function loadUser(id) {
+  if (!id) return null;
+  if (state.users.has(id)) return state.users.get(id);
+  const doc = await docJson(P.user(id));
+  if (doc?.user) {
+    state.users.set(id, doc.user);
+    return doc.user;
+  }
+  const light = state.userIndex.find((item) => item.id === id);
+  if (light) {
+    state.users.set(id, { ...light });
+    return light;
+  }
+  return null;
 }
 
-export async function refreshFeed() {
-  if (!state.db) return;
-  await state.db.loadMany([PATHS.posts, PATHS.comments, PATHS.users], { revalidate: true });
-  syncFromDb();
-  notify('data');
+export async function ensureUsers(ids) {
+  const missing = [...new Set(ids)].filter((id) => id && !state.users.has(id));
+  if (!missing.length) return;
+  await Promise.all(missing.slice(0, 30).map((id) => loadUser(id)));
 }
 
-/* ------------------------------ selectores ------------------------------ */
+export async function loadUserIndex({ fresh = false } = {}) {
+  const doc = await docJson(P.userIndex, { fresh });
+  state.userIndex = doc?.users || [];
+  return state.userIndex;
+}
 
-export const userById = (id) => state.indexes.usersById.get(id) || null;
+export async function loadFeedIndex({ fresh = false } = {}) {
+  const doc = await docJson(P.feedIndex, { fresh });
+  state.feedIndex = doc?.posts || [];
+  return state.feedIndex;
+}
+
+export async function loadPost(id) {
+  if (state.posts.has(id)) return state.posts.get(id);
+  const doc = await docJson(P.post(id));
+  if (doc?.post) {
+    state.posts.set(id, doc.post);
+    return doc.post;
+  }
+  return null;
+}
+
+export async function loadFeedPage({ reset = false } = {}) {
+  if (reset) {
+    state.feedLoaded = 0;
+    state.posts.clear();
+  }
+  const slice = state.feedIndex.slice(state.feedLoaded, state.feedLoaded + PAGE);
+  if (!slice.length) return 0;
+  state.feedLoaded += slice.length;
+
+  const posts = [];
+  const chunk = 6;
+  for (let i = 0; i < slice.length; i += chunk) {
+    const batch = await Promise.all(slice.slice(i, i + chunk).map((entry) => loadPost(entry.id)));
+    posts.push(...batch.filter(Boolean));
+  }
+  await ensureUsers(posts.map((post) => post.authorId));
+  notify('feed');
+  return posts.length;
+}
+
+export async function loadLikes(userId) {
+  const doc = await docJson(P.likes(userId));
+  const likes = doc?.likes || {};
+  if (userId === state.me?.id) state.likes = likes;
+  return likes;
+}
+
+export async function loadFollowing(userId) {
+  const doc = await docJson(P.following(userId));
+  const list = doc?.following || [];
+  if (userId === state.me?.id) state.following = new Set(list);
+  const user = state.users.get(userId);
+  if (user) user.following = list;
+  await ensureUsers(list);
+  return list;
+}
+
+export async function loadFollowers(userId) {
+  const doc = await docJson(P.followers(userId));
+  const list = doc?.followers || [];
+  if (userId === state.me?.id) state.followers = new Set(list);
+  const user = state.users.get(userId);
+  if (user) user.followers = list;
+  await ensureUsers(list);
+  return list;
+}
+
+export async function loadNotifications(userId) {
+  const doc = await docJson(P.notifications(userId));
+  state.notifications = (doc?.items || []).slice(0, 60);
+  state.ui.unreadNotifs = state.notifications.filter((item) => !item.read).length;
+  return state.notifications;
+}
+
+export async function loadGroups() {
+  const doc = await docJson(P.groups);
+  state.groups = doc?.groups || [];
+  return state.groups;
+}
+
+export async function loadStories() {
+  const doc = await docJson(P.stories);
+  const now = Date.now();
+  state.stories = (doc?.stories || []).filter((story) =>
+    story.createdAt && now - new Date(story.createdAt).getTime() < 24 * 3600 * 1000);
+  return state.stories;
+}
+
+export async function loadComments(postId, { force = false } = {}) {
+  if (!postId) return [];
+  let entry = state.comments.get(postId);
+  if (entry?.loaded && !force) return [...entry.items.values()];
+
+  const indexDoc = await docJson(P.commentsIndex(postId), { fresh: force });
+  const index = (indexDoc?.comments || []).sort(
+    (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+  );
+
+  entry = entry || { index: [], items: new Map(), loaded: false };
+  entry.index = index;
+  const missing = index.filter((item) => !entry.items.has(item.id)).slice(0, 40);
+  for (let i = 0; i < missing.length; i += 6) {
+    const batch = await Promise.all(missing.slice(i, i + 6).map(async (item) => {
+      const doc = await docJson(P.comment(postId, item.id));
+      return doc?.comment || null;
+    }));
+    batch.filter(Boolean).forEach((comment) => entry.items.set(comment.id, comment));
+  }
+  await ensureUsers([...entry.items.values()].map((comment) => comment.authorId));
+  entry.loaded = true;
+  state.comments.set(postId, entry);
+  notify('comments', { postId });
+  return [...entry.items.values()];
+}
+
+export function commentsFor(postId) {
+  const entry = state.comments.get(postId);
+  if (!entry?.loaded) return [];
+  return entry.index
+    .map((item) => entry.items.get(item.id))
+    .filter(Boolean);
+}
+
+/* ------------------------------- selectores ------------------------------ */
+
+export const userById = (id) => state.users.get(id) || null;
+
+export function updateProfileCache(user) {
+  if (!user?.id) return;
+  state.users.set(user.id, user);
+  if (state.me?.id === user.id) state.me = user;
+}
+
 export const userByUsername = (username) =>
-  state.indexes.usersByName.get(String(username || '').toLowerCase()) || null;
+  state.users.get(
+    state.userIndex.find((user) => user.username?.toLowerCase() === String(username || '').toLowerCase())?.id,
+  ) || null;
 
 export function displayName(user) {
-  return user?.name || user?.username || 'Usuario';
+  if (!user) return 'Usuario';
+  return user.name || [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || 'Usuario';
 }
 
 export function initialsOf(user) {
-  const name = displayName(user);
-  const parts = name.trim().split(/\s+/);
+  const name = displayName(user).trim();
+  const parts = name.split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export const isFollowing = (followerId, targetId) =>
-  Boolean(state.indexes.followingOf.get(followerId)?.has(targetId));
+export const isFollowing = (followerId, targetId) => {
+  if (followerId === state.me?.id) return state.following.has(targetId);
+  const user = state.users.get(followerId);
+  return Boolean(user?.following?.includes(targetId));
+};
 
 export function followingOf(userId) {
-  const ids = state.indexes.followingOf.get(userId);
-  if (!ids) return [];
-  return [...ids].map(userById).filter(Boolean);
+  if (userId === state.me?.id) return [...state.following].map(userById).filter(Boolean);
+  return (state.users.get(userId)?.following || []).map(userById).filter(Boolean);
 }
 
 export function followersOf(userId) {
-  const ids = state.indexes.followersOf.get(userId);
-  if (!ids) return [];
-  return [...ids].map(userById).filter(Boolean);
+  if (userId === state.me?.id) {
+    return [...state.followers].map(userById).filter(Boolean);
+  }
+  return (state.users.get(userId)?.followers || []).map(userById).filter(Boolean);
 }
 
-/** Personas que siguen a ambos (para las sugerencias). */
-export function mutualFollowers(a, b) {
-  const sa = state.indexes.followersOf.get(a);
-  const sb = state.indexes.followersOf.get(b);
-  if (!sa || !sb) return [];
-  const out = [];
-  for (const id of sa) if (sb.has(id)) out.push(userById(id));
-  return out.filter(Boolean);
+export function countFollowers(userId) {
+  if (userId === state.me?.id) return state.followers.size;
+  return state.users.get(userId)?.followers?.length || 0;
 }
 
-/** Relación del usuario `me` con `other`. */
+export function countFollowing(userId) {
+  if (userId === state.me?.id) return state.following.size;
+  return state.users.get(userId)?.following?.length || 0;
+}
+
 export function relationWith(meId, otherId) {
   if (!meId || !otherId) return 'none';
   if (meId === otherId) return 'self';
@@ -294,28 +294,30 @@ export function relationWith(meId, otherId) {
   return 'none';
 }
 
-export function countFollowers(userId) {
-  return state.indexes.followersOf.get(userId)?.size || 0;
+export function mutualFollowers(a, b) {
+  const target = new Set(followersOf(b).map((user) => user.id));
+  return followersOf(a).filter((user) => target.has(user.id));
 }
 
-export function countFollowing(userId) {
-  return state.indexes.followingOf.get(userId)?.size || 0;
-}
-
-export function isMutual(a, b) {
-  return isFollowing(a, b) && isFollowing(b, a);
+export function followSuggestions(viewerId, limit = 12) {
+  if (!viewerId) return [];
+  return state.userIndex
+    .filter((user) => user.id !== viewerId && !isFollowing(viewerId, user.id))
+    .slice(0, limit)
+    .map((user) => state.users.get(user.id) || user);
 }
 
 export function postsByAuthor(userId) {
-  return (state.indexes.postsByAuthor.get(userId) || [])
-    .slice()
-    .sort((a, b) => parseTicks(b.createdAt) - parseTicks(a.createdAt));
+  const ids = new Set(state.feedIndex.filter((entry) => entry.authorId === userId).map((entry) => entry.id));
+  return [...state.posts.values()]
+    .filter((post) => post.authorId === userId || ids.has(post.id))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
 export function canSeePost(post, viewerId) {
   if (!post) return false;
   if (post.groupId) {
-    const group = state.groups.find((g) => g.id === post.groupId);
+    const group = state.groups.find((item) => item.id === post.groupId);
     if (!group) return false;
     if (group.privacy === 'public') return true;
     return Boolean(viewerId && (group.memberIds || []).includes(viewerId));
@@ -323,67 +325,43 @@ export function canSeePost(post, viewerId) {
   if (post.authorId === viewerId) return true;
   const privacy = post.privacy || 'public';
   if (privacy === 'public') return true;
-  if (privacy === 'friends' || privacy === 'followers') {
+  if (privacy === 'followers' || privacy === 'friends') {
     return Boolean(viewerId) && isFollowing(viewerId, post.authorId);
   }
   return false;
 }
 
 export function feedPosts(viewerId) {
-  return state.posts
+  const order = new Map(state.feedIndex.map((entry, index) => [entry.id, index]));
+  return [...state.posts.values()]
     .filter((post) => canSeePost(post, viewerId))
-    .sort((a, b) => parseTicks(b.createdAt) - parseTicks(a.createdAt));
-}
-
-export function commentsFor(postId) {
-  return state.indexes.commentsByPost.get(postId) || [];
-}
-
-export function rootComments(postId) {
-  return commentsFor(postId).filter((c) => !c.parentId);
-}
-
-export function repliesTo(commentId) {
-  return state.comments
-    .filter((c) => c.parentId === commentId)
-    .sort((a, b) => parseTicks(a.createdAt) - parseTicks(b.createdAt));
+    .sort((a, b) => {
+      const ai = order.has(a.id) ? order.get(a.id) : 9999;
+      const bi = order.has(b.id) ? order.get(b.id) : 9999;
+      if (ai !== bi) return ai - bi;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
 }
 
 export function reactionSummary(post) {
-  const reactions = { ...(post?.reactions || {}) };
-  const me = state.me?.id;
-  const override = me ? state.ui.reactionOverrides.get(post.id) : undefined;
-  if (me && override !== undefined) {
-    if (override) reactions[me] = override;
-    else delete reactions[me];
-  }
-  const entries = Object.entries(reactions);
-  const counts = {};
-  for (const [, type] of entries) counts[type] = (counts[type] || 0) + 1;
-  const order = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
-  const types = order.filter((t) => counts[t]).sort((a, b) => counts[b] - counts[a]);
-  return { total: entries.length, counts, types, mine: me ? reactions[me] || null : null };
+  const counts = post?.reactions || {};
+  const total = Object.values(counts).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const types = Object.entries(counts)
+    .filter(([, value]) => value > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([type]) => type);
+  return { total, types, mine: state.likes[post.id] || null };
 }
 
-export function conversationFor(userA, userB) {
-  return state.conversations.find((c) =>
-    c.memberIds?.length === 2 && c.memberIds.includes(userA) && c.memberIds.includes(userB)) || null;
+export function rootComments(postId) {
+  return commentsFor(postId).filter((comment) => !comment.parentId);
 }
 
-export function conversationsFor(userId) {
-  return state.conversations
-    .filter((c) => c.memberIds?.includes(userId))
-    .map((c) => ({
-      ...c,
-      other: state.users.find((u) => c.memberIds.includes(u.id) && u.id !== userId) || null,
-    }))
-    .sort((a, b) => parseTicks(b.updatedAt || b.lastMessage?.at) - parseTicks(a.updatedAt || a.lastMessage?.at));
-}
-
-export function unreadCountIn(conv, userId) {
-  const reads = conv.reads?.[userId] || 0;
-  if (!conv.lastMessage || conv.lastMessage.senderId === userId) return 0;
-  return (conv.lastMessage.at || 0) > reads ? 1 : 0;
+export function repliesTo(commentId) {
+  return [...state.comments.values()]
+    .flatMap((entry) => [...entry.items.values()])
+    .filter((comment) => comment.parentId === commentId)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 }
 
 export function userPhotos(userId) {
@@ -394,15 +372,9 @@ export function userPhotos(userId) {
   return photos;
 }
 
-export function allPhotos(viewerId) {
-  const photos = [];
-  const posts = viewerId
-    ? state.posts.filter((p) => canSeePost(p, viewerId))
-    : state.posts;
-  for (const post of posts) {
-    for (const media of post.media || []) photos.push({ ...media, postId: post.id });
-  }
-  return photos.sort((a, b) => 0);
+export function allPhotos() {
+  return [...state.posts.values()].flatMap((post) =>
+    (post.media || []).map((media) => ({ ...media, postId: post.id })));
 }
 
 export function storiesGrouped(viewerId) {
@@ -415,40 +387,67 @@ export function storiesGrouped(viewerId) {
   for (const [userId, list] of byUser) {
     const user = userById(userId);
     if (!user) continue;
-    list.sort((a, b) => parseTicks(b.createdAt) - parseTicks(a.createdAt));
+    list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     groups.push({ user, stories: list, latest: list[0] });
   }
-  // primero las personas que seguís (y vos), después el resto
   groups.sort((a, b) => {
     const score = (group) => (group.user.id === viewerId ? 2 : (isFollowing(viewerId, group.user.id) ? 1 : 0));
-    const diff = score(b) - score(a);
-    if (diff !== 0) return diff;
-    return parseTicks(b.latest.createdAt) - parseTicks(a.latest.createdAt);
+    return score(b) - score(a) || new Date(b.latest.createdAt) - new Date(a.latest.createdAt);
   });
   return groups;
 }
 
-export function followSuggestions(viewerId, limit = 12) {
-  if (!viewerId) return [];
-  const mine = state.indexes.followingOf.get(viewerId) || new Set();
-  return state.users
-    .filter((u) => u.id !== viewerId && !mine.has(u.id))
-    .sort((a, b) =>
-      (state.indexes.followersOf.get(b.id)?.size || 0) - (state.indexes.followersOf.get(a.id)?.size || 0))
-    .slice(0, limit);
-}
-
-export function searchEverything(query, viewerId) {
+export function searchEverything(query) {
   const q = String(query || '').trim().toLowerCase();
   if (!q) return { users: [], posts: [], groups: [] };
   return {
-    users: state.users.filter((u) =>
-      u.name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q)).slice(0, 20),
-    posts: state.posts
-      .filter((p) => canSeePost(p, viewerId) && p.text?.toLowerCase().includes(q))
-      .sort((a, b) => parseTicks(b.createdAt) - parseTicks(a.createdAt))
+    users: state.userIndex
+      .filter((user) => user.name?.toLowerCase().includes(q) || user.username?.toLowerCase().includes(q))
       .slice(0, 20),
-    groups: state.groups.filter((g) =>
-      g.name?.toLowerCase().includes(q) || g.description?.toLowerCase().includes(q)).slice(0, 20),
+    posts: [...state.posts.values()]
+      .filter((post) => post.text?.toLowerCase().includes(q))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 20),
+    groups: state.groups.filter((group) =>
+      group.name?.toLowerCase().includes(q) || group.description?.toLowerCase().includes(q)).slice(0, 20),
   };
+}
+
+/* --------------------------------- arranque ------------------------------ */
+
+export async function bootData() {
+  await Promise.all([loadUserIndex(), loadFeedIndex()]);
+  if (state.me) {
+    await Promise.all([
+      loadLikes(state.me.id),
+      loadFollowing(state.me.id),
+      loadFollowers(state.me.id),
+      loadNotifications(state.me.id),
+      loadGroups(),
+      loadStories(),
+    ]);
+  }
+  await loadFeedPage({ reset: true });
+  state.ready = true;
+  notify('ready');
+}
+
+export async function refreshAll() {
+  bumpVersion();
+  await Promise.all([
+    loadUserIndex({ fresh: true }),
+    loadFeedIndex({ fresh: true }),
+    loadGroups(),
+    loadStories(),
+  ]);
+  if (state.me) {
+    await Promise.all([
+      loadLikes(state.me.id),
+      loadFollowing(state.me.id),
+      loadFollowers(state.me.id),
+      loadNotifications(state.me.id),
+    ]);
+  }
+  await loadFeedPage({ reset: true });
+  notify('refresh');
 }

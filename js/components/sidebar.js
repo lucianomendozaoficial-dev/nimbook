@@ -1,5 +1,5 @@
 /* ==========================================================================
-   sidebar.js — columna izquierda con accesos, grupos y personas que seguís
+   sidebar.js — accesos rápidos
    ========================================================================== */
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
@@ -10,13 +10,11 @@ import { avatarEl } from '../core/ui.js';
 import { parseRoute } from '../core/router.js';
 import { mediaImg } from '../core/media.js';
 
-function navItem({ iconName, color = '', label, count, href, active, onClick, avatar = null }) {
-  return el(onClick || !href ? 'button' : 'a', {
+function item({ iconName, color = '', label, count, href, active, avatar = null }) {
+  return el('a', {
     class: `side-item ${active ? 'active' : ''}`.trim(),
-    type: onClick || !href ? 'button' : null,
-    href: href || null,
+    href,
     title: label,
-    onclick: onClick ? (event) => { event.preventDefault(); onClick(); } : null,
   },
   avatar || el('span', { class: `side-ic ${color}`.trim() }, icon(iconName, 20)),
   el('span', { class: 'side-label', text: label }),
@@ -32,58 +30,55 @@ export function mountSidebar() {
     const me = state.me;
     if (!me) return;
 
-    root.appendChild(navItem({
+    root.appendChild(item({
       avatar: avatarEl(me, 'sm'),
       label: displayName(me),
-      href: `#/u/${me.username}`,
-      active: route.name === 'profile' && route.params.username === me.username,
+      href: '#/mi-perfil',
+      active: route.name === 'myprofile',
     }));
 
-    root.appendChild(navItem({
+    root.appendChild(item({
       iconName: 'users', color: 'green', label: 'Seguidores',
       count: countFollowers(me.id) || null,
-      href: '#/seguidores', active: route.name === 'friends' && !route.params.tab,
+      href: '#/seguidores',
+      active: route.name === 'friends' && route.params.tab === 'seguidores',
     }));
-    root.appendChild(navItem({
+    root.appendChild(item({
       iconName: 'user-plus', color: 'purple', label: 'Siguiendo',
       count: countFollowing(me.id) || null,
       href: '#/seguidores/siguiendo',
       active: route.name === 'friends' && route.params.tab === 'siguiendo',
     }));
-    root.appendChild(navItem({
+    root.appendChild(item({
       iconName: 'groups', color: 'orange', label: 'Grupos',
       href: '#/grupos', active: route.name === 'groups' || route.name === 'group',
     }));
-    root.appendChild(navItem({
+    root.appendChild(item({
       iconName: 'bookmark', color: 'purple', label: 'Guardado',
       href: '#/guardados', active: route.name === 'saved',
     }));
-    root.appendChild(navItem({
-      iconName: 'message', color: 'teal', label: 'Mensajes',
-      count: state.ui.unreadChats || null,
-      href: '#/mensajes', active: route.name === 'messages',
-    }));
-    root.appendChild(navItem({
+    root.appendChild(item({
       iconName: 'bell', color: 'red', label: 'Notificaciones',
       count: state.ui.unreadNotifs || null,
       href: '#/notificaciones', active: route.name === 'notifications',
     }));
-    root.appendChild(navItem({
+    root.appendChild(item({
       iconName: 'grid', color: 'teal', label: 'Menú',
-      href: '#/menu', active: route.name === 'menu',
+      href: '#/menu', active: route.name === 'menu' || route.name === 'settings',
     }));
 
-    const myGroups = state.groups.filter((g) => g.memberIds?.includes(me.id)).slice(0, 6);
+    const myGroups = state.groups.filter((group) => group.memberIds?.includes(me.id)).slice(0, 6);
     if (myGroups.length) {
       root.appendChild(el('div', { class: 'side-title' }, 'Tus grupos'));
       for (const group of myGroups) {
-        root.appendChild(navItem({
-          avatar: el('span', {
-            class: 'avatar sm',
-            style: { borderRadius: '10px', overflow: 'hidden' },
-          }, group.cover
-            ? mediaImg(group.cover, { alt: group.name })
-            : el('span', { class: 'center', style: { width: '100%', height: '100%', background: 'var(--card-2)' } }, icon('groups', 18))),
+        root.appendChild(item({
+          avatar: el('span', { class: 'avatar sm', style: { borderRadius: '10px', overflow: 'hidden' } },
+            group.cover
+              ? mediaImg(group.cover, { alt: group.name })
+              : el('span', {
+                class: 'center',
+                style: { width: '100%', height: '100%', background: 'var(--card-2)' },
+              }, icon('groups', 18))),
           label: group.name,
           href: `#/grupos/${group.id}`,
           active: route.name === 'group' && route.params.id === group.id,
@@ -95,10 +90,8 @@ export function mountSidebar() {
     if (following.length) {
       root.appendChild(el('div', { class: 'side-title' }, 'Siguiendo'));
       for (const person of following) {
-        root.appendChild(navItem({
-          avatar: el('span', { class: 'presence' },
-            avatarEl(person, 'sm'),
-            el('span', { class: 'dot' })),
+        root.appendChild(item({
+          avatar: avatarEl(person, 'sm'),
           label: displayName(person),
           href: `#/u/${person.username}`,
         }));

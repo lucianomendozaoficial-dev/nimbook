@@ -1,71 +1,80 @@
 /* ==========================================================================
-   reset.mjs — deja el repositorio con los datos vacíos (sin cuentas ni posts)
-   Uso: node tools/reset.mjs [--wipe-media]
+   reset.mjs — deja la base de datos vacía con la estructura nueva
    ========================================================================== */
-import fs from 'node:fs/promises';
+import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = process.cwd();
 const wipeMedia = process.argv.includes('--wipe-media');
 
-const SCHEMA = {
-  'data/usuarios.json': { version: 1, users: [] },
-  'data/feed.json': { version: 1, posts: [] },
-  'data/comentarios.json': { version: 1, comments: [] },
-  'data/conversaciones.json': { version: 1, conversations: [] },
+const FILES = {
+  'data/usuarios/index.json': { version: 1, users: [] },
+  'data/feed/index.json': { version: 1, posts: [] },
   'data/grupos.json': { version: 1, groups: [] },
   'data/historias.json': { version: 1, stories: [] },
-  'data/notificaciones/.gitkeep': '',
-  'data/mensajes/.gitkeep': '',
-  'media/perfiles/.gitkeep': '',
-  'media/portadas/.gitkeep': '',
-  'media/publicaciones/.gitkeep': '',
-  'media/historias/.gitkeep': '',
-  'media/grupos/.gitkeep': '',
-  'media/chat/.gitkeep': '',
 };
 
-const OLD = [
-  'data/users.json', 'data/posts.json', 'data/comments.json', 'data/friends.json',
-  'data/conversations.json', 'data/groups.json', 'data/stories.json',
-  'data/notifications', 'data/messages',
-  'media/avatars', 'media/covers', 'media/posts', 'media/stories', 'media/groups',
+const FOLDERS = [
+  'data/usuarios',
+  'data/feed',
+  'data/likes',
+  'data/comentarios',
+  'data/siguiendo',
+  'data/seguidores',
+  'data/notificaciones',
+  'media/perfiles',
+  'media/portadas',
+  'media/publicaciones',
+  'media/historias',
+  'media/grupos',
 ];
 
-async function main() {
-  for (const dir of ['data', 'media']) {
-    await fs.mkdir(path.join(ROOT, dir), { recursive: true });
-  }
+const LEGACY = [
+  'data/usuarios.json',
+  'data/feed.json',
+  'data/comentarios.json',
+  'data/conversaciones.json',
+  'data/solicitudes.json',
+  'data/mensajes',
+  'media/chat',
+];
 
-  for (const rel of OLD) {
-    await fs.rm(path.join(ROOT, rel), { recursive: true, force: true }).catch(() => {});
-  }
-
-  for (const [rel, payload] of Object.entries(SCHEMA)) {
-    const target = path.join(ROOT, rel);
-    await fs.mkdir(path.dirname(target), { recursive: true });
-    const content = typeof payload === 'string' ? payload : `${JSON.stringify(payload, null, 2)}\n`;
-    await fs.writeFile(target, content, 'utf8');
-  }
-
-  if (wipeMedia) {
-    for (const folder of ['perfiles', 'portadas', 'publicaciones', 'historias', 'grupos', 'chat']) {
-      const dir = path.join(ROOT, 'media', folder);
-      const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
-      for (const entry of entries) {
-        if (entry.name === '.gitkeep') continue;
-        await fs.rm(path.join(dir, entry.name), { recursive: true, force: true });
-      }
-    }
-  }
-
-  console.log('✅ Datos vacíos: 7 archivos JSON y 6 carpetas de imágenes listas.');
-  console.log('   Ahora la app arranca sin cuentas: hay que registrarse y publicar.');
-  if (wipeMedia) console.log('   Imágenes existentes eliminadas.');
+function ensureDir(dir) {
+  fs.mkdirSync(path.join(ROOT, dir), { recursive: true });
+  const keep = path.join(ROOT, dir, '.gitkeep');
+  if (!fs.existsSync(keep)) fs.writeFileSync(keep, '');
 }
 
-main().catch((err) => {
-  console.error('❌', err);
-  process.exit(1);
-});
+function cleanDir(dir) {
+  const full = path.join(ROOT, dir);
+  if (!fs.existsSync(full)) return;
+  for (const entry of fs.readdirSync(full, { withFileTypes: true })) {
+    if (entry.name === '.gitkeep') continue;
+    fs.rmSync(path.join(full, entry.name), { recursive: true, force: true });
+  }
+}
+
+for (const [rel, data] of Object.entries(FILES)) {
+  const file = path.join(ROOT, rel);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+}
+
+for (const folder of FOLDERS) ensureDir(folder);
+
+for (const rel of LEGACY) {
+  const full = path.join(ROOT, rel);
+  if (fs.existsSync(full)) fs.rmSync(full, { recursive: true, force: true });
+}
+
+for (const dir of ['data/likes', 'data/siguiendo', 'data/seguidores', 'data/notificaciones', 'data/comentarios']) {
+  cleanDir(dir);
+}
+
+if (wipeMedia) {
+  for (const dir of ['media/perfiles', 'media/portadas', 'media/publicaciones', 'media/historias', 'media/grupos']) {
+    cleanDir(dir);
+  }
+}
+
+console.log(`✅ Base vacía: ${Object.keys(FILES).length} índices y ${FOLDERS.length} carpetas listas.`);

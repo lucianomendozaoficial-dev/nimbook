@@ -1,148 +1,126 @@
 /* ==========================================================================
-   pages/feed.js — inicio: historias, compositor y muro de publicaciones
+   pages/feed.js — muro con carga por páginas
    ========================================================================== */
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { state, feedPosts } from '../core/store.js';
-import { mountStories } from '../components/stories.js';
-import { mountComposer } from '../components/composer.js';
-import { postCard } from '../components/postcard.js';
-import { emptyState, toast } from '../core/ui.js';
+import {
+  state, feedPosts, displayName, loadFeedPage, refreshAll,
+} from '../core/store.js';
+import { avatarEl, emptyState, toast } from '../core/ui.js';
 import { emptyFeedIllustration } from '../core/illustrations.js';
-
-function endOfFeed() {
-  return el('div', { class: 'empty', style: { padding: '24px 16px 40px' } },
-    icon('check', 22, { cls: 'dim' }),
-    el('p', { class: 'muted small', text: 'Ya viste todo por ahora. Vuelve más tarde para ver novedades.' }));
-}
+import { mountStories } from '../components/stories.js';
+import { postCard } from '../components/postcard.js';
+import { navigate } from '../core/router.js';
+import { playSound } from '../core/sounds.js';
 
 export function feedPage() {
   const root = el('div');
   const stories = mountStories();
-  const composer = mountComposer();
-  const list = el('div');
-  const footer = el('div');
-
-  let limit = 8;
+  const composer = el('div', { class: 'card composer-open-row' });
+  const list = el('div', { class: 'col gap-16' });
+  const moreWrap = el('div', { class: 'center', style: { padding: '8px 0 24px' } });
+  const loading = el('div', { class: 'center', style: { padding: '20px' } }, el('span', { class: 'spinner' }));
   let cards = [];
-  let observer = null;
 
-  root.append(stories.el, composer, list, footer);
+  root.append(stories.el, composer, list, moreWrap);
 
-  function feedIds() {
-    return feedPosts(state.me?.id).map((p) => p.id);
+  function renderComposer() {
+    clear(composer);
+    const me = state.me;
+    composer.append(
+      el('a', { href: `#/u/${me.username}` }, avatarEl(me, 'md')),
+      el('button', {
+        class: 'composer-fake', type: 'button',
+        text: `¿Qué estás pensando, ${me.firstName || displayName(me)}?`,
+        onclick: () => navigate('/publicar'),
+      }),
+      el('button', {
+        class: 'btn primary', type: 'button', onclick: () => navigate('/publicar'),
+      }, icon('edit', 16), 'Publicar'),
+    );
   }
 
   function renderList() {
-    const posts = feedPosts(state.me?.id).slice(0, limit);
-    clear(list);
-    clear(footer);
+    cards.forEach((card) => card.destroy?.());
     cards = [];
+    clear(list);
+    const posts = feedPosts(state.me?.id);
 
     if (!posts.length) {
       list.appendChild(el('div', { class: 'card' },
         emptyState({
           illustration: emptyFeedIllustration(),
           title: 'Tu muro está esperando',
-          description: 'Publica tu primer momento o agrega amigos para empezar a llenar el inicio.',
-          action: el('div', { class: 'row gap-8' },
+          description: 'Seguí a personas o publicá tu primer momento.',
+          action: el('div', { class: 'row gap-8 center' },
             el('button', {
               class: 'btn primary', type: 'button', text: 'Publicar algo',
-              onclick: () => import('../components/composer.js').then(({ openComposer }) => openComposer()),
+              onclick: () => navigate('/publicar'),
             }),
             el('button', {
-              class: 'btn soft', type: 'button', text: 'Buscar amigos',
-              onclick: () => { window.location.hash = '/friends/suggestions'; },
+              class: 'btn', type: 'button', text: 'Buscar personas',
+              onclick: () => navigate('/seguidores/sugerencias'),
             })),
         })));
-      return;
-    }
-
-    for (const post of posts) {
-      const card = postCard(post);
-      cards.push({ id: post.id, card });
-      list.appendChild(card.el);
-    }
-
-    const total = feedPosts(state.me?.id).length;
-    if (total > posts.length) {
-      const sentinel = el('div', { style: { height: '1px' } });
-      footer.appendChild(el('div', { class: 'loading-row' }, el('span', { class: 'spinner' })));
-      footer.appendChild(sentinel);
-      observer?.disconnect();
-      observer = new IntersectionObserver((entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          limit += 8;
-          observer.disconnect();
-          renderList();
-        }
-      }, { rootMargin: '400px' });
-      observer.observe(sentinel);
     } else {
-      footer.appendChild(endOfFeed());
+      for (const post of posts) {
+        const card = postCard(post);
+        cards.push(card);
+        list.appendChild(card.el);
+      }
+    }
+    renderMore();
+  }
+
+  function renderMore() {
+    clear(moreWrap);
+    const remaining = state.feedIndex.length - state.feedLoaded;
+    if (remaining > 0) {
+      moreWrap.appendChild(el('button', {
+        class: 'btn soft', type: 'button', text: 'Cargar más publicaciones',
+        onclick: async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          button.textContent = 'Cargando…';
+          try {
+            await loadFeedPage();
+            renderList();
+          } catch {
+            toast('No pudimos cargar más. Revisá tu conexión.', { type: 'error' });
+            button.disabled = false;
+            button.textContent = 'Cargar más publicaciones';
+          }
+        },
+      }));
     }
   }
 
-  function sync() {
-    const ids = feedIds();
-    const renderedIds = cards.map((c) => c.id);
-    const same = ids.length >= renderedIds.length
-      && renderedIds.every((id, index) => ids[index] === id);
-    if (same) {
-      for (const { card } of cards) card.update();
-      return;
+  async function refresh() {
+    clear(list);
+    list.appendChild(loading);
+    try {
+      await refreshAll();
+    } catch {
+      toast('No pudimos actualizar. Revisá tu conexión.', { type: 'error' });
+    } finally {
+      loading.remove();
+      renderComposer();
+      renderList();
     }
-    renderList();
   }
 
+  renderComposer();
   renderList();
 
   return {
     el: root,
     onData(topic) {
-      if (topic === 'offline') {
-        toast('Se perdió la conexión. Estás viendo lo último que cargaste.', { type: 'error' });
-        return;
-      }
-      stories.render();
-      sync();
+      if (topic === 'feed' || topic === 'me' || topic === 'post') renderList();
+      if (topic === 'follow' || topic === 'ready') renderList();
     },
     destroy() {
-      observer?.disconnect();
-      cards.forEach(({ card }) => card.destroy?.());
+      cards.forEach((card) => card.destroy?.());
     },
-  };
-}
-
-/* ------------------------- publicación individual ------------------------ */
-
-export function postPage(postId) {
-  const root = el('div');
-  const post = state.posts.find((p) => p.id === postId);
-  const back = el('button', {
-    class: 'btn ghost', type: 'button',
-    onclick: () => history.length > 1 ? history.back() : (window.location.hash = '/feed'),
-  }, icon('arrow-left', 18), 'Volver');
-
-  if (!post) {
-    root.append(el('div', { class: 'card' },
-      emptyState({
-        iconName: 'alert',
-        title: 'Publicación no disponible',
-        description: 'Puede que se haya eliminado o no tengas permiso para verla.',
-        action: el('a', { class: 'btn soft', href: '#/feed', text: 'Ir al inicio' }),
-      })));
-    return { el: root, onData() {}, destroy() {} };
-  }
-
-  const card = postCard(post);
-  const cardWrap = el('div');
-  cardWrap.appendChild(card.el);
-  root.append(el('div', { style: { padding: '0 0 8px' } }, back), cardWrap);
-
-  return {
-    el: root,
-    onData: () => card.update(),
-    destroy: () => card.destroy?.(),
+    refresh,
   };
 }

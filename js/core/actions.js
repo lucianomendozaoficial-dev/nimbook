@@ -1,314 +1,409 @@
 /* ==========================================================================
-   actions.js — todas las operaciones de escritura sobre el repositorio
+   actions.js — todas las escrituras (con cola, agrupadas y con reintentos)
    ========================================================================== */
-import { ensureDoc, SKIP } from './db.js';
+import { queueDoc, writeNow, deleteDoc, newId, nowISO, forget } from './net.js';
+import { P } from './paths.js';
 import {
-  state, PATHS, notifPath, chatPath, syncFromDb, notify,
-  userById, conversationFor, isFollowing,
+  state, notify, loadUserIndex, loadUser, loadPost, loadComments,
+  isFollowing,
 } from './store.js';
 import { hashPassword, verifyPassword } from './crypto.js';
 import { ValidationError } from './auth.js';
-import { uid, nowISO } from './util.js';
-import { deleteMedia } from './media.js';
-
-const EMPTY = (key) => () => ({ version: 1, [key]: [] });
 
 function requireMe() {
-  if (!state.me) throw new Error('Necesitas iniciar sesión.');
-  if (!state.db) throw new Error('No pudimos guardar los cambios. Revisa tu conexión.');
+  if (!state.me) throw new ValidationError('Primero tenés que iniciar sesión.');
   return state.me;
 }
 
-/* ---------------------------- notificaciones ----------------------------- */
+const norm = (value) => String(value || '').trim().replace(/\s+/g, ' ');
 
-export async function pushNotification(userId, entry) {
-  if (!userId || !state.db) return;
-  if (userId === state.me?.id) return;
-  const at = entry.at || nowISO();
-  try {
-    await state.db.mutate(notifPath(userId), (doc) => {
-      ensureDoc(doc, 'items');
-      const dup = doc.items.some((n) =>
-        !n.read && n.type === entry.type && n.actorId === entry.actorId
-        && (n.postId || '') === (entry.postId || '')
-        && Date.now() - Date.parse(n.at || 0) < 3_600_000);
-      if (dup) return doc;
-      doc.items.unshift({ id: uid('n_'), read: false, at, ...entry });
-      doc.items = doc.items.slice(0, 150);
-      return doc;
-    }, { empty: EMPTY('items'), message: 'NimbookGR: notificación' });
-  } catch (err) {
-    console.warn('[actions] notificación falló', err.message);
+function notifySoon(userId, payload) {
+  if (!userId || userId === state.me?.id) return;
+  queueDoc(P.notifications(userId), (doc) => {
+    const data = doc || { version: 1, items: [] };
+    data.items = [
+      { id: newId('n'), ...payload, createdAt: nowISO(), read: false },
+      ...(data.items || []).filter((item) =>
+        !(item.actorId === payload.actorId && item.type === payload.type && item.postId === payload.postId)),
+    ].slice(0, 50);
+    return data;
+  }, { delay: 1200, message: 'NimbookGR: notificación' }).catch(() => {});
+}
+
+/* --------------------------------- cuenta -------------------------------- */
+
+export async function register({ firstName, lastName, username, password }) {
+  const first = norm(firstName);
+  const last = norm(lastName);
+  const handle = String(username || '').trim().toLowerCase();
+
+  if (first.length < 2) throw new ValidationError('Escribí tu nombre.');
+  if (last.length < 2) throw new ValidationError('Escribí tu apellido.');
+  if (!/^[a-z0-9._]{3,30}$/.test(handle)) {
+    throw new ValidationError('El usuario debe tener 3 a 30 letras, números, puntos o guiones bajos.');
   }
-}
+  if (String(password || '').length < 6) {
+    throw new ValidationError('La contraseña debe tener al menos 6 caracteres.');
+  }
 
-export async function markAllNotificationsRead() {
-  const me = requireMe();
-  if (!state.notifications.some((n) => !n.read)) return;
-  await state.db.mutate(notifPath(me.id), (doc) => {
-    ensureDoc(doc, 'items');
-    let changed = false;
-    for (const item of doc.items) {
-      if (!item.read) { item.read = true; changed = true; }
-    }
-    return changed ? doc : SKIP;
-  }, { empty: EMPTY('items'), message: 'NimbookGR: marcar notificaciones' });
-}
+  const index = await loadUserIndex({ fresh: true });
+  if (index.some((user) => user.username?.toLowerCase() === handle)) {
+    throw new ValidationError('Ese usuario ya está en uso. Probá con otro.');
+  }
 
-export async function clearNotifications() {
-  const me = requireMe();
-  await state.db.mutate(notifPath(me.id), (doc) => {
-    ensureDoc(doc, 'items');
-    doc.items = [];
-    return doc;
-  }, { empty: EMPTY('items'), message: 'NimbookGR: borrar notificaciones' });
-}
-
-/* -------------------------------- posts ---------------------------------- */
-
-export async function createPost({
-  text = '', media = [], privacy = 'public', groupId = null, shareOf = null,
-  feeling = '', location = '',
-}) {
-  const me = requireMe();
-  const clean = String(text || '').trim();
-  if (!clean && !media.length) throw new ValidationError('Escribe algo o añade una foto.');
-  if (clean.length > 8000) throw new ValidationError('La publicación es demasiado larga.');
-
-  const post = {
-    id: uid('p_'),
-    authorId: me.id,
-    text: clean,
-    media: Array.isArray(media) ? media : [],
-    privacy: groupId ? 'group' : privacy,
-    groupId: groupId || null,
-    shareOf: shareOf || null,
-    feeling: feeling || '',
-    location: location || '',
-    reactions: {},
+  const record = await hashPassword(password);
+  const id = newId('u');
+  const user = {
+    id,
+    username: handle,
+    firstName: first,
+    lastName: last,
+    name: `${first} ${last}`.trim(),
+    avatar: null,
+    cover: null,
+    bio: '',
+    whatsapp: '',
+    instagram: '',
+    birthday: '',
+    location: '',
+    work: '',
+    education: '',
+    password: record,
+    saved: [],
     createdAt: nowISO(),
-    updatedAt: nowISO(),
   };
 
-  await state.db.mutate(PATHS.posts, (doc) => {
-    ensureDoc(doc, 'posts');
-    doc.posts.push(post);
-    return doc;
-  }, { empty: EMPTY('posts'), message: 'NimbookGR: nueva publicación' });
+  await writeNow(P.user(id), () => ({ version: 1, user }), { message: 'NimbookGR: nueva cuenta' });
+  await queueDoc(P.userIndex, (doc) => {
+    const data = doc || { version: 1, users: [] };
+    data.users = [
+      { id, username: handle, name: user.name, avatar: null, createdAt: user.createdAt },
+      ...(data.users || []).filter((item) => item.id !== id),
+    ].slice(0, 5000);
+    return data;
+  }, { delay: 0, message: 'NimbookGR: nueva cuenta' });
 
-  if (shareOf) {
-    const original = state.posts.find((p) => p.id === shareOf);
-    if (original) {
-      await pushNotification(original.authorId, {
-        type: 'share', actorId: me.id, postId: original.id,
-      });
-    }
-  }
-
-  if (groupId) {
-    const group = state.groups.find((g) => g.id === groupId);
-    for (const memberId of group?.memberIds || []) {
-      if (memberId !== me.id) {
-        await pushNotification(memberId, {
-          type: 'group_post', actorId: me.id, postId: post.id, groupId,
-        });
-      }
-    }
-  }
-
-  return post;
+  state.users.set(id, user);
+  state.userIndex = [
+    { id, username: handle, name: user.name, avatar: null, createdAt: user.createdAt },
+    ...state.userIndex.filter((item) => item.id !== id),
+  ];
+  state.me = user;
+  return user;
 }
 
-export async function updatePost(postId, patch) {
-  const me = requireMe();
-  const post = state.posts.find((p) => p.id === postId);
-  if (!post) throw new Error('La publicación ya no existe.');
-  if (post.authorId !== me.id) throw new Error('Solo puedes editar tus publicaciones.');
+export async function login(username, password) {
+  const handle = String(username || '').trim().toLowerCase();
+  if (!handle || !password) throw new ValidationError('Completá usuario y contraseña.');
 
-  await state.db.mutate(PATHS.posts, (doc) => {
-    const target = doc.posts?.find((p) => p.id === postId);
-    if (!target) return SKIP;
-    Object.assign(target, patch, { updatedAt: nowISO() });
-    return doc;
-  }, { empty: EMPTY('posts'), message: 'NimbookGR: editar publicación' });
+  const index = await loadUserIndex({ fresh: true });
+  const entry = index.find((user) => user.username?.toLowerCase() === handle);
+  if (!entry) throw new ValidationError('Usuario o contraseña incorrectos.');
+
+  const user = await loadUser(entry.id);
+  if (!user?.password) throw new ValidationError('Usuario o contraseña incorrectos.');
+  const ok = await verifyPassword(password, user.password);
+  if (!ok) throw new ValidationError('Usuario o contraseña incorrectos.');
+  return user;
+}
+
+export async function updateProfile(patch = {}) {
+  const me = requireMe();
+  const changes = {};
+  if ('name' in patch || 'firstName' in patch || 'lastName' in patch) {
+    const first = norm(patch.firstName ?? me.firstName);
+    const last = norm(patch.lastName ?? me.lastName);
+    if (first.length < 2 || last.length < 2) throw new ValidationError('Nombre y apellido son obligatorios.');
+    changes.firstName = first;
+    changes.lastName = last;
+    changes.name = `${first} ${last}`.trim();
+  }
+  if ('username' in patch) {
+    const handle = String(patch.username || '').trim().toLowerCase();
+    if (handle !== me.username) {
+      if (!/^[a-z0-9._]{3,30}$/.test(handle)) {
+        throw new ValidationError('El usuario debe tener 3 a 30 letras, números, puntos o guiones bajos.');
+      }
+      const index = await loadUserIndex({ fresh: true });
+      if (index.some((user) => user.username?.toLowerCase() === handle && user.id !== me.id)) {
+        throw new ValidationError('Ese usuario ya está en uso.');
+      }
+      changes.username = handle;
+    }
+  }
+  for (const key of ['bio', 'whatsapp', 'instagram', 'birthday', 'location', 'work', 'education', 'avatar', 'cover']) {
+    if (key in patch) changes[key] = typeof patch[key] === 'string' ? patch[key].trim() : patch[key];
+  }
+
+  const next = { ...me, ...changes };
+  state.me = next;
+  state.users.set(me.id, next);
+
+  await writeNow(P.user(me.id), () => ({ version: 1, user: next }), {
+    message: 'NimbookGR: perfil actualizado',
+  });
+
+  if (changes.name || changes.username || 'avatar' in changes) {
+    await queueDoc(P.userIndex, (doc) => {
+      const data = doc || { version: 1, users: [] };
+      data.users = (data.users || []).map((user) => (user.id === me.id
+        ? { ...user, username: next.username, name: next.name, avatar: next.avatar }
+        : user));
+      return data;
+    }, { delay: 0, message: 'NimbookGR: perfil actualizado' });
+  }
+
+  notify('me');
+  return next;
+}
+
+export async function changePassword(current, next) {
+  const me = requireMe();
+  if (String(next || '').length < 6) throw new ValidationError('La nueva contraseña es muy corta.');
+  const ok = await verifyPassword(current, me.password);
+  if (!ok) throw new ValidationError('La contraseña actual no es correcta.');
+  const record = await hashPassword(next);
+  const updated = { ...me, password: record };
+  state.me = updated;
+  state.users.set(me.id, updated);
+  await writeNow(P.user(me.id), () => ({ version: 1, user: updated }), {
+    message: 'NimbookGR: contraseña actualizada',
+  });
+  notify('me');
+}
+
+/* ----------------------------- publicaciones ----------------------------- */
+
+export async function createPost({
+  text = '', media = [], privacy = 'public', feeling = null, location = null,
+  shareOf = null, groupId = null,
+} = {}) {
+  const me = requireMe();
+  const clean = String(text || '').trim();
+  if (!clean && !media.length && !shareOf) throw new ValidationError('Escribí algo o agregá una foto.');
+
+  const post = {
+    id: newId('p'),
+    authorId: me.id,
+    text: clean,
+    media: media.slice(0, 10),
+    privacy: groupId ? 'public' : privacy,
+    feeling: feeling || null,
+    location: location || null,
+    shareOf: shareOf || null,
+    groupId: groupId || null,
+    createdAt: nowISO(),
+    reactions: {},
+    commentsCount: 0,
+  };
+
+  await queueDoc(P.post(post.id), () => ({ version: 1, post }), {
+    delay: 0, message: 'NimbookGR: nueva publicación',
+  });
+
+  const entry = { id: post.id, authorId: me.id, createdAt: post.createdAt };
+  await queueDoc(P.feedIndex, (doc) => {
+    const data = doc || { version: 1, posts: [] };
+    data.posts = [entry, ...(data.posts || []).filter((item) => item.id !== entry.id)].slice(0, 200);
+    return data;
+  }, { delay: 0, message: 'NimbookGR: actualizar inicio' });
+
+  state.posts.set(post.id, post);
+  state.feedIndex = [entry, ...state.feedIndex.filter((item) => item.id !== entry.id)].slice(0, 200);
+  notify('feed');
+  return post;
 }
 
 export async function deletePost(postId) {
   const me = requireMe();
-  const post = state.posts.find((p) => p.id === postId);
-  if (!post) return;
-  if (post.authorId !== me.id) throw new Error('Solo puedes borrar tus publicaciones.');
+  const post = state.posts.get(postId) || await loadPost(postId);
+  if (post && post.authorId !== me.id) throw new ValidationError('Esa publicación no es tuya.');
 
-  const mediaPaths = (post.media || []).map((m) => m.path).filter(Boolean);
+  await queueDoc(P.feedIndex, (doc) => {
+    if (!doc?.posts) return undefined;
+    return { ...doc, posts: doc.posts.filter((item) => item.id !== postId) };
+  }, { delay: 0, message: 'NimbookGR: borrar publicación' });
 
-  await state.db.mutate(PATHS.posts, (doc) => {
-    ensureDoc(doc, 'posts');
-    doc.posts = doc.posts.filter((p) => p.id !== postId);
-    return doc;
-  }, { empty: EMPTY('posts'), message: 'NimbookGR: borrar publicación' });
+  state.feedIndex = state.feedIndex.filter((item) => item.id !== postId);
+  state.posts.delete(postId);
+  forget(P.post(postId));
+  await deleteDoc(P.post(postId), 'NimbookGR: borrar publicación').catch(() => {});
+  notify('feed');
+}
 
-  const hasComments = state.comments.some((c) => c.postId === postId);
-  if (hasComments) {
-    await state.db.mutate(PATHS.comments, (doc) => {
-      ensureDoc(doc, 'comments');
-      doc.comments = doc.comments.filter((c) => c.postId !== postId);
-      return doc;
-    }, { empty: EMPTY('comments'), message: 'NimbookGR: borrar comentarios' }).catch(() => {});
-  }
-
-  for (const path of mediaPaths) await deleteMedia(path).catch(() => {});
+export async function updatePost(postId, patch = {}) {
+  const me = requireMe();
+  const post = state.posts.get(postId) || await loadPost(postId);
+  if (!post || post.authorId !== me.id) throw new ValidationError('Esa publicación no es tuya.');
+  const next = { ...post, ...patch, updatedAt: nowISO() };
+  state.posts.set(postId, next);
+  await queueDoc(P.post(postId), () => ({ version: 1, post: next }), {
+    delay: 300, message: 'NimbookGR: editar publicación',
+  });
+  notify('post', { id: postId });
+  return next;
 }
 
 export async function setReaction(postId, type) {
   const me = requireMe();
-  const post = state.posts.find((p) => p.id === postId);
-  if (!post) return;
+  const post = state.posts.get(postId) || await loadPost(postId);
+  const previous = state.likes[postId] || null;
+  if (previous === type) return;
 
-  // actualización optimista para que el clic se sienta inmediato
-  state.ui.reactionOverrides.set(postId, type);
-  notify('data');
+  if (type) state.likes[postId] = type;
+  else delete state.likes[postId];
 
-  try {
-    await state.db.mutate(PATHS.posts, (doc) => {
-      const target = doc.posts?.find((p) => p.id === postId);
-      if (!target) return SKIP;
-      target.reactions = target.reactions || {};
-      const previous = target.reactions[me.id];
-      if (!type) delete target.reactions[me.id];
-      else target.reactions[me.id] = type;
-      if (previous === type && type) return SKIP;
-      return doc;
-    }, { empty: EMPTY('posts'), message: 'NimbookGR: reacción' });
+  const snapshot = { ...state.likes };
+  await queueDoc(P.likes(me.id), () => ({ version: 1, likes: snapshot }), {
+    delay: 1500, message: 'NimbookGR: reacciones',
+  });
 
-    if (type) {
-      await pushNotification(post.authorId, {
-        type: 'reaction', actorId: me.id, postId, reaction: type,
-      });
+  if (post) {
+    const reactions = { ...(post.reactions || {}) };
+    if (previous) reactions[previous] = Math.max(0, (reactions[previous] || 0) - 1);
+    if (type) reactions[type] = (reactions[type] || 0) + 1;
+    state.posts.set(postId, { ...post, reactions });
+
+    queueDoc(P.post(postId), (doc) => {
+      if (!doc?.post) return undefined;
+      return { ...doc, post: { ...doc.post, reactions } };
+    }, { delay: 1500, message: 'NimbookGR: reacciones' }).catch(() => {});
+
+    if (type && post.authorId !== me.id) {
+      notifySoon(post.authorId, { type: 'reaction', actorId: me.id, postId, reaction: type });
     }
-  } catch (err) {
-    state.ui.reactionOverrides.delete(postId);
-    notify('data');
-    throw err;
-  } finally {
-    state.ui.reactionOverrides.delete(postId);
-    notify('data');
   }
+  notify('post', { id: postId });
 }
 
 export async function toggleSavePost(postId) {
   const me = requireMe();
-  const post = state.posts.find((p) => p.id === postId);
-  if (!post) return false;
-  const saved = me.savedPostIds || [];
-  const isSaved = saved.includes(postId);
-
-  await state.db.mutate(PATHS.users, (doc) => {
-    const target = doc.users?.find((u) => u.id === me.id);
-    if (!target) return SKIP;
-    target.savedPostIds = target.savedPostIds || [];
-    if (isSaved) target.savedPostIds = target.savedPostIds.filter((id) => id !== postId);
-    else target.savedPostIds.push(postId);
-    return doc;
-  }, { empty: EMPTY('users'), message: 'NimbookGR: guardar publicación' });
-
-  return !isSaved;
+  const saved = new Set(me.saved || []);
+  const nowSaved = !saved.has(postId);
+  if (nowSaved) saved.add(postId); else saved.delete(postId);
+  const updated = { ...me, saved: [...saved] };
+  state.me = updated;
+  state.users.set(me.id, updated);
+  await queueDoc(P.user(me.id), () => ({ version: 1, user: updated }), {
+    delay: 800, message: 'NimbookGR: guardados',
+  });
+  notify('me');
+  return nowSaved;
 }
 
 /* ------------------------------- comentarios ----------------------------- */
 
 export async function addComment(postId, text, { parentId = null, media = [] } = {}) {
   const me = requireMe();
-  const post = state.posts.find((p) => p.id === postId);
-  if (!post) throw new Error('La publicación ya no existe.');
   const clean = String(text || '').trim();
-  if (!clean && !media.length) return null;
-  if (clean.length > 3000) throw new ValidationError('El comentario es demasiado largo.');
+  if (!clean && !media.length) throw new ValidationError('Escribí un comentario.');
 
   const comment = {
-    id: uid('c_'),
+    id: newId('c'),
     postId,
-    parentId: parentId || null,
     authorId: me.id,
+    parentId: parentId || null,
     text: clean,
-    media: Array.isArray(media) ? media : [],
-    reactions: {},
+    media: media.slice(0, 4),
     createdAt: nowISO(),
+    likes: 0,
   };
 
-  await state.db.mutate(PATHS.comments, (doc) => {
-    ensureDoc(doc, 'comments');
-    if (doc.comments.some((c) => c.id === comment.id)) return SKIP;
-    doc.comments.push(comment);
-    return doc;
-  }, { empty: EMPTY('comments'), message: 'NimbookGR: nuevo comentario' });
-
-  await pushNotification(post.authorId, {
-    type: parentId ? 'reply' : 'comment', actorId: me.id, postId, commentId: comment.id,
+  await queueDoc(P.comment(postId, comment.id), () => ({ version: 1, comment }), {
+    delay: 0, message: 'NimbookGR: comentario',
   });
+  await queueDoc(P.commentsIndex(postId), (doc) => {
+    const data = doc || { version: 1, comments: [] };
+    data.comments = [
+      { id: comment.id, authorId: me.id, parentId: comment.parentId, createdAt: comment.createdAt },
+      ...(data.comments || []).filter((item) => item.id !== comment.id),
+    ];
+    return data;
+  }, { delay: 0, message: 'NimbookGR: comentario' });
 
-  if (parentId) {
-    const parent = state.comments.find((c) => c.id === parentId);
-    if (parent && parent.authorId !== post.authorId) {
-      await pushNotification(parent.authorId, {
-        type: 'reply', actorId: me.id, postId, commentId: comment.id,
-      });
+  const entry = state.comments.get(postId);
+  if (entry) {
+    entry.items.set(comment.id, comment);
+    entry.index = [
+      { id: comment.id, authorId: me.id, parentId: comment.parentId, createdAt: comment.createdAt },
+      ...entry.index,
+    ];
+  }
+
+  const post = state.posts.get(postId);
+  if (post) {
+    state.posts.set(postId, { ...post, commentsCount: (post.commentsCount || 0) + 1 });
+    queueDoc(P.post(postId), (doc) => {
+      if (!doc?.post) return undefined;
+      return { ...doc, post: { ...doc.post, commentsCount: (doc.post.commentsCount || 0) + 1 } };
+    }, { delay: 1500, message: 'NimbookGR: comentario' }).catch(() => {});
+    if (post.authorId !== me.id) {
+      notifySoon(post.authorId, { type: parentId ? 'reply' : 'comment', actorId: me.id, postId });
     }
   }
 
+  notify('comments', { postId });
   return comment;
 }
 
-export async function deleteComment(commentId) {
+export async function deleteComment(commentId, postId) {
   const me = requireMe();
-  const comment = state.comments.find((c) => c.id === commentId);
-  if (!comment) return;
-  if (comment.authorId !== me.id) throw new Error('Solo puedes borrar tus comentarios.');
+  const entry = state.comments.get(postId);
+  const comment = entry?.items.get(commentId);
+  if (comment && comment.authorId !== me.id) throw new ValidationError('Ese comentario no es tuyo.');
 
-  await state.db.mutate(PATHS.comments, (doc) => {
-    ensureDoc(doc, 'comments');
-    doc.comments = doc.comments.filter((c) => c.id !== commentId && c.parentId !== commentId);
-    return doc;
-  }, { empty: EMPTY('comments'), message: 'NimbookGR: borrar comentario' });
+  await queueDoc(P.commentsIndex(postId), (doc) => {
+    if (!doc?.comments) return undefined;
+    return { ...doc, comments: doc.comments.filter((item) => item.id !== commentId) };
+  }, { delay: 0, message: 'NimbookGR: borrar comentario' });
+
+  if (entry) {
+    entry.items.delete(commentId);
+    entry.index = entry.index.filter((item) => item.id !== commentId);
+  }
+  await deleteDoc(P.comment(postId, commentId), 'NimbookGR: borrar comentario').catch(() => {});
+  notify('comments', { postId });
 }
 
-export async function setCommentReaction(commentId, type) {
-  const me = requireMe();
-  await state.db.mutate(PATHS.comments, (doc) => {
-    const target = doc.comments?.find((c) => c.id === commentId);
-    if (!target) return SKIP;
-    target.reactions = target.reactions || {};
-    if (!type) delete target.reactions[me.id];
-    else target.reactions[me.id] = type;
-    return doc;
-  }, { empty: EMPTY('comments'), message: 'NimbookGR: reacción en comentario' });
-}
-
-/* ------------------------------ seguidores -------------------------------- */
+/* -------------------------------- seguir --------------------------------- */
 
 export async function followUser(userId) {
   const me = requireMe();
-  if (userId === me.id) return;
-  if (isFollowing(me.id, userId)) return;
+  if (!userId || userId === me.id || state.following.has(userId)) return;
 
-  await state.db.mutate(PATHS.users, (doc) => {
-    const target = doc.users?.find((u) => u.id === me.id);
-    if (!target) return SKIP;
-    target.following = Array.from(new Set([...(target.following || []), userId]));
-    delete target.friendIds;
-    return doc;
-  }, { empty: EMPTY('users'), message: 'NimbookGR: nuevo seguidor' });
+  state.following.add(userId);
+  const mine = [...state.following];
 
-  await pushNotification(userId, { type: 'follow', actorId: me.id });
+  await queueDoc(P.following(me.id), () => ({ version: 1, following: mine }), {
+    delay: 1200, message: 'NimbookGR: seguidos',
+  });
+
+  await queueDoc(P.followers(userId), (doc) => {
+    const data = doc || { version: 1, followers: [] };
+    data.followers = [me.id, ...(data.followers || []).filter((id) => id !== me.id)];
+    return data;
+  }, { delay: 1200, message: 'NimbookGR: seguidores' }).catch(() => {});
+
+  notifySoon(userId, { type: 'follow', actorId: me.id });
+  notify('follow');
 }
 
 export async function unfollowUser(userId) {
   const me = requireMe();
-  await state.db.mutate(PATHS.users, (doc) => {
-    const target = doc.users?.find((u) => u.id === me.id);
-    if (!target) return SKIP;
-    target.following = (target.following || []).filter((id) => id !== userId);
-    return doc;
-  }, { empty: EMPTY('users'), message: 'NimbookGR: dejar de seguir' });
+  if (!userId || !state.following.has(userId)) return;
+
+  state.following.delete(userId);
+  const mine = [...state.following];
+
+  await queueDoc(P.following(me.id), () => ({ version: 1, following: mine }), {
+    delay: 1200, message: 'NimbookGR: seguidos',
+  });
+  await queueDoc(P.followers(userId), (doc) => {
+    if (!doc) return undefined;
+    return { ...doc, followers: (doc.followers || []).filter((id) => id !== me.id) };
+  }, { delay: 1200, message: 'NimbookGR: seguidores' }).catch(() => {});
+
+  notify('follow');
 }
 
 export async function toggleFollow(userId) {
@@ -320,278 +415,107 @@ export async function toggleFollow(userId) {
   return true;
 }
 
-/* -------------------------------- perfil --------------------------------- */
+/* ------------------------------ notificaciones --------------------------- */
 
-export async function updateProfile(patch) {
+export async function markAllNotificationsRead() {
   const me = requireMe();
-  const allowed = ['name', 'bio', 'birthday', 'gender', 'location', 'work', 'education',
-    'avatar', 'cover', 'username', 'whatsapp', 'instagram'];
-  const clean = {};
-  for (const key of allowed) {
-    if (patch[key] !== undefined) clean[key] = patch[key];
-  }
-  if (clean.name !== undefined) {
-    clean.name = String(clean.name).trim().replace(/\s+/g, ' ');
-    if (clean.name.length < 2) throw new ValidationError('El nombre es demasiado corto.', 'name');
-    if (clean.name.length > 60) throw new ValidationError('El nombre es demasiado largo.', 'name');
-  }
-  if (clean.username !== undefined) {
-    const username = String(clean.username).trim().toLowerCase();
-    if (!/^[a-z0-9._]{3,30}$/.test(username)) {
-      throw new ValidationError('Usuario inválido (3-30, sin espacios).', 'username');
-    }
-    if (state.users.some((u) => u.username === username && u.id !== me.id)) {
-      throw new ValidationError('Ese usuario ya está ocupado.', 'username');
-    }
-    clean.username = username;
-  }
-  if (clean.bio !== undefined) clean.bio = String(clean.bio).slice(0, 500);
-  if (clean.whatsapp !== undefined) {
-    const digits = String(clean.whatsapp).replace(/[^\d]/g, '');
-    if (digits && (digits.length < 6 || digits.length > 15)) {
-      throw new ValidationError('Escribe un número de WhatsApp válido.', 'whatsapp');
-    }
-    clean.whatsapp = digits;
-  }
-  if (clean.instagram !== undefined) {
-    const handle = String(clean.instagram).trim()
-      .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
-      .replace(/^@+/, '')
-      .replace(/[/?#].*$/, '')
-      .trim();
-    if (handle && !/^[a-zA-Z0-9._]{1,30}$/.test(handle)) {
-      throw new ValidationError('El usuario de Instagram no es válido.', 'instagram');
-    }
-    clean.instagram = handle;
-  }
-
-  await state.db.mutate(PATHS.users, (doc) => {
-    const target = doc.users?.find((u) => u.id === me.id);
-    if (!target) return SKIP;
-    Object.assign(target, clean);
-    return doc;
-  }, { empty: EMPTY('users'), message: 'NimbookGR: actualizar perfil' });
+  if (!state.notifications.some((item) => !item.read)) return;
+  state.notifications = state.notifications.map((item) => ({ ...item, read: true }));
+  state.ui.unreadNotifs = 0;
+  const items = state.notifications;
+  await queueDoc(P.notifications(me.id), () => ({ version: 1, items }), {
+    delay: 300, message: 'NimbookGR: notificaciones leídas',
+  });
+  notify('notifications');
 }
 
-export async function changePassword(currentPassword, newPassword) {
+/* --------------------------------- grupos -------------------------------- */
+
+export async function createGroup({ name, description = '', privacy = 'public', cover = null } = {}) {
   const me = requireMe();
-  if (String(newPassword || '').length < 6) {
-    throw new ValidationError('La nueva contraseña necesita 6 caracteres como mínimo.', 'newPassword');
-  }
-  const ok = await verifyPassword(currentPassword, me.password);
-  if (!ok) throw new ValidationError('La contraseña actual no es correcta.', 'currentPassword');
-  const record = await hashPassword(newPassword);
-  await state.db.mutate(PATHS.users, (doc) => {
-    const target = doc.users?.find((u) => u.id === me.id);
-    if (!target) return SKIP;
-    target.password = record;
-    return doc;
-  }, { empty: EMPTY('users'), message: 'NimbookGR: cambiar contraseña' });
-  state.me = { ...state.me, password: record };
-}
-
-/* -------------------------------- mensajes ------------------------------- */
-
-export async function ensureConversation(otherUserId) {
-  const me = requireMe();
-  if (otherUserId === me.id) throw new Error('No puedes escribirte a ti mismo.');
-
-  const existing = conversationFor(me.id, otherUserId);
-  if (existing) return existing;
-
-  const conversation = {
-    id: uid('cv_'),
-    memberIds: [me.id, otherUserId],
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-    lastMessage: null,
-    reads: {},
-  };
-
-  await state.db.mutate(PATHS.conversations, (doc) => {
-    ensureDoc(doc, 'conversations');
-    const found = doc.conversations.find((c) =>
-      c.memberIds?.length === 2 && c.memberIds.includes(me.id) && c.memberIds.includes(otherUserId));
-    if (found) return SKIP;
-    doc.conversations.push(conversation);
-    return doc;
-  }, { empty: EMPTY('conversations'), message: 'NimbookGR: nueva conversación' });
-
-  return conversationFor(me.id, otherUserId) || conversation;
-}
-
-export async function loadChat(conversationId, { revalidate = false } = {}) {
-  if (!state.db || !conversationId) return [];
-  const doc = await state.db.load(chatPath(conversationId), revalidate ? { revalidate: true } : {});
-  const messages = doc?.messages || [];
-  state.chats.set(conversationId, messages);
-  return messages;
-}
-
-export async function sendMessage(conversationId, { text = '', media = [] } = {}) {
-  const me = requireMe();
-  const clean = String(text || '').trim();
-  if (!clean && !media.length) return null;
-  if (clean.length > 5000) throw new ValidationError('El mensaje es demasiado largo.');
-
-  const message = {
-    id: uid('m_'),
-    senderId: me.id,
-    text: clean,
-    media: Array.isArray(media) ? media : [],
-    createdAt: nowISO(),
-  };
-
-  await state.db.mutate(chatPath(conversationId), (doc) => {
-    ensureDoc(doc, 'messages');
-    if (doc.messages.some((m) => m.id === message.id)) return SKIP;
-    doc.messages.push(message);
-    return doc;
-  }, { empty: EMPTY('messages'), message: 'NimbookGR: enviar mensaje' });
-
-  const preview = clean || '📷 Foto';
-  await state.db.mutate(PATHS.conversations, (doc) => {
-    const conv = doc.conversations?.find((c) => c.id === conversationId);
-    if (!conv) return SKIP;
-    conv.lastMessage = { text: preview.slice(0, 120), senderId: me.id, at: Date.now() };
-    conv.updatedAt = nowISO();
-    conv.reads = conv.reads || {};
-    conv.reads[me.id] = Date.now();
-    return doc;
-  }, { empty: EMPTY('conversations'), message: 'NimbookGR: actualizar conversación' });
-
-  return message;
-}
-
-export async function markConversationRead(conversationId) {
-  const me = state.me;
-  if (!me || !state.db) return;
-  const conv = state.conversations.find((c) => c.id === conversationId);
-  if (!conv) return;
-  const reads = conv.reads?.[me.id] || 0;
-  const last = conv.lastMessage?.at || 0;
-  if (last <= reads || conv.lastMessage?.senderId === me.id) return;
-
-  await state.db.mutate(PATHS.conversations, (doc) => {
-    const target = doc.conversations?.find((c) => c.id === conversationId);
-    if (!target) return SKIP;
-    target.reads = target.reads || {};
-    if ((target.lastMessage?.at || 0) <= (target.reads[me.id] || 0)) return SKIP;
-    target.reads[me.id] = Date.now();
-    return doc;
-  }, { empty: EMPTY('conversations'), message: 'NimbookGR: leer conversación' }).catch(() => {});
-}
-
-/* -------------------------------- grupos --------------------------------- */
-
-export async function createGroup({ name, description = '', privacy = 'public', cover = null }) {
-  const me = requireMe();
-  const cleanName = String(name || '').trim();
-  if (cleanName.length < 3) throw new ValidationError('El nombre del grupo es muy corto.', 'name');
-  if (cleanName.length > 60) throw new ValidationError('El nombre del grupo es muy largo.', 'name');
-
+  const clean = norm(name);
+  if (clean.length < 3) throw new ValidationError('El grupo necesita un nombre.');
   const group = {
-    id: uid('g_'),
-    name: cleanName,
-    description: String(description || '').slice(0, 500),
+    id: newId('g'),
+    name: clean,
+    description: norm(description),
     privacy,
-    cover: cover || null,
+    cover,
     ownerId: me.id,
     memberIds: [me.id],
     createdAt: nowISO(),
   };
-
-  await state.db.mutate(PATHS.groups, (doc) => {
-    ensureDoc(doc, 'groups');
-    doc.groups.push(group);
-    return doc;
-  }, { empty: EMPTY('groups'), message: 'NimbookGR: nuevo grupo' });
-
+  state.groups = [group, ...state.groups];
+  await queueDoc(P.groups, (doc) => {
+    const data = doc || { version: 1, groups: [] };
+    data.groups = [group, ...(data.groups || []).filter((item) => item.id !== group.id)];
+    return data;
+  }, { delay: 0, message: 'NimbookGR: nuevo grupo' });
+  notify('groups');
   return group;
 }
 
 export async function joinGroup(groupId) {
   const me = requireMe();
-  await state.db.mutate(PATHS.groups, (doc) => {
-    const group = doc.groups?.find((g) => g.id === groupId);
-    if (!group) return SKIP;
-    group.memberIds = Array.from(new Set([...(group.memberIds || []), me.id]));
-    return doc;
-  }, { empty: EMPTY('groups'), message: 'NimbookGR: unirse a grupo' });
+  const group = state.groups.find((item) => item.id === groupId);
+  if (!group || group.memberIds?.includes(me.id)) return;
+  const memberIds = [...(group.memberIds || []), me.id];
+  state.groups = state.groups.map((item) => (item.id === groupId ? { ...item, memberIds } : item));
+  await queueDoc(P.groups, (doc) => {
+    if (!doc?.groups) return undefined;
+    return { ...doc, groups: doc.groups.map((item) => (item.id === groupId ? { ...item, memberIds } : item)) };
+  }, { delay: 800, message: 'NimbookGR: unirse al grupo' });
+  notify('groups');
 }
 
 export async function leaveGroup(groupId) {
   const me = requireMe();
-  await state.db.mutate(PATHS.groups, (doc) => {
-    const group = doc.groups?.find((g) => g.id === groupId);
-    if (!group) return SKIP;
-    group.memberIds = (group.memberIds || []).filter((id) => id !== me.id);
-    return doc;
-  }, { empty: EMPTY('groups'), message: 'NimbookGR: salir del grupo' });
-}
-
-export async function updateGroup(groupId, patch) {
-  const me = requireMe();
-  await state.db.mutate(PATHS.groups, (doc) => {
-    const group = doc.groups?.find((g) => g.id === groupId);
-    if (!group || group.ownerId !== me.id) return SKIP;
-    Object.assign(group, patch);
-    return doc;
-  }, { empty: EMPTY('groups'), message: 'NimbookGR: editar grupo' });
+  const group = state.groups.find((item) => item.id === groupId);
+  if (!group) return;
+  const memberIds = (group.memberIds || []).filter((id) => id !== me.id);
+  state.groups = state.groups.map((item) => (item.id === groupId ? { ...item, memberIds } : item));
+  await queueDoc(P.groups, (doc) => {
+    if (!doc?.groups) return undefined;
+    return { ...doc, groups: doc.groups.map((item) => (item.id === groupId ? { ...item, memberIds } : item)) };
+  }, { delay: 800, message: 'NimbookGR: salir del grupo' });
+  notify('groups');
 }
 
 /* -------------------------------- historias ------------------------------ */
 
 export async function createStory({ image, text = '' } = {}) {
   const me = requireMe();
-  if (!image) throw new ValidationError('Elige una foto para tu historia.');
+  if (!image) throw new ValidationError('Elegí una foto para tu historia.');
   const story = {
-    id: uid('s_'),
+    id: newId('s'),
     userId: me.id,
     image,
-    text: String(text || '').slice(0, 80),
+    text: norm(text),
     createdAt: nowISO(),
   };
-  await state.db.mutate(PATHS.stories, (doc) => {
-    ensureDoc(doc, 'stories');
-    doc.stories.push(story);
-    return doc;
-  }, { empty: EMPTY('stories'), message: 'NimbookGR: nueva historia' });
+  state.stories = [story, ...state.stories];
+  await queueDoc(P.stories, (doc) => {
+    const data = doc || { version: 1, stories: [] };
+    const alive = (data.stories || []).filter((item) =>
+      Date.now() - new Date(item.createdAt).getTime() < 24 * 3600 * 1000);
+    data.stories = [story, ...alive].slice(0, 300);
+    return data;
+  }, { delay: 400, message: 'NimbookGR: nueva historia' });
+  notify('stories');
   return story;
 }
 
 export async function deleteStory(storyId) {
   const me = requireMe();
-  const story = state.stories.find((s) => s.id === storyId);
-  if (!story || story.userId !== me.id) return;
-  await state.db.mutate(PATHS.stories, (doc) => {
-    ensureDoc(doc, 'stories');
-    doc.stories = doc.stories.filter((s) => s.id !== storyId);
-    return doc;
-  }, { empty: EMPTY('stories'), message: 'NimbookGR: borrar historia' });
-  if (story.image) await deleteMedia(story.image).catch(() => {});
+  state.stories = state.stories.filter((story) => story.id !== storyId);
+  await queueDoc(P.stories, (doc) => {
+    const data = doc || { version: 1, stories: [] };
+    data.stories = (data.stories || []).filter((item) => item.id !== storyId || item.userId !== me.id);
+    return data;
+  }, { delay: 0, message: 'NimbookGR: borrar historia' });
+  notify('stories');
 }
 
-/** Borra historias vencidas (más de 24 h). */
-export async function purgeOldStories() {
-  if (!state.db) return;
-  const expired = (state.db.peek(PATHS.stories)?.stories || [])
-    .filter((s) => Date.now() - Date.parse(s.createdAt || 0) > 24 * 3600 * 1000);
-  if (!expired.length) return;
-  const ids = new Set(expired.map((s) => s.id));
-  await state.db.mutate(PATHS.stories, (doc) => {
-    ensureDoc(doc, 'stories');
-    doc.stories = doc.stories.filter((s) => !ids.has(s.id));
-    return doc;
-  }, { empty: EMPTY('stories'), message: 'NimbookGR: limpiar historias vencidas' }).catch(() => {});
-  for (const story of expired) {
-    if (story.image) deleteMedia(story.image).catch(() => {});
-  }
-}
-
-/* ------------------------------- búsqueda -------------------------------- */
-
-export function registerSqlDebug() {
-  // placeholder para futuras consultas
-  syncFromDb();
+export async function loadMoreComments(postId) {
+  return loadComments(postId, { force: true });
 }

@@ -27,7 +27,6 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 - Compartir publicaciones (con la original incrustada).
 - Historias de 24 h con visor automático.
 - Seguidores: seguir y dejar de seguir, sugerencias con seguidores en común, sin solicitudes.
-- Messenger: conversaciones, fotos, no leídos, envío optimista.
 - Grupos públicos y privados con publicaciones, miembros y administración.
 - Notificaciones con campana y contador.
 - Perfiles con portada, foto, biografía y pestañas (publicaciones, seguidores, fotos, información).
@@ -41,49 +40,49 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 
 **Sin servidor**
 - 100 % estático: GitHub Pages, Netlify, Vercel o el servidor local incluido.
-- Lecturas con `ETag` (los `304` no consumen cuota) y caché local para arranques instantáneos.
-- Escrituras con control de concurrencia por `sha` y reintentos automáticos.
+- **Lecturas por jsDelivr** (`cdn.jsdelivr.net/gh/usuario/repo@main/...`): no gastan la API de GitHub ni el límite de 5 000 por hora.
+- **Escrituras solo por la API de GitHub**, con el token, en cola: se agrupan cada 2 s, se reintentan hasta 5 veces ante `409` con espera de 300 ms + aleatorio y siempre se hace *bajar → modificar → subir* con el `sha` recién leído.
+- Todo lo descargado se guarda en el navegador (localStorage) para no bajarlo dos veces; no hay sondeo cada 5 s: se actualiza al abrir o al tirar hacia abajo.
 
 ---
 
 ## Estructura del repositorio (la base de datos)
 
+Un archivo por cosa: así dos personas nunca escriben el mismo archivo y GitHub no se cae.
+
 ```
 data/
-  usuarios.json          cuentas: nombre, usuario, contraseña cifrada, foto, portada, seguidos
-  feed.json              publicaciones (texto, fotos, reacciones, privacidad, grupo)
-  comentarios.json       comentarios y respuestas
-  conversaciones.json    lista de chats y último mensaje
-  grupos.json            grupos y miembros
-  historias.json         historias activas (se limpian solas a las 24 h)
-  notificaciones/<id>.json   bandeja de cada usuario
-  mensajes/<chat>.json       mensajes de cada conversación
+  usuarios/index.json          lista liviana: id, usuario, nombre, foto, alta
+  usuarios/<id>.json           ficha completa (contraseña cifrada, bio, contacto…)
+  feed/index.json              últimos 200: id, autor y fecha (nada más)
+  feed/<post>.json             publicación completa (texto, fotos, contadores)
+  likes/<usuario>.json         { postId: tipo de reacción } de cada persona
+  comentarios/<post>/index.json    lista de comentarios del post
+  comentarios/<post>/<id>.json     comentario completo
+  siguiendo/<usuario>.json     a quién sigue
+  seguidores/<usuario>.json    quién lo sigue
+  notificaciones/<usuario>.json    bandeja de cada persona
+  grupos.json                  grupos y miembros
+  historias.json               historias activas (se limpian a las 24 h)
 media/
-  perfiles/       fotos de perfil
-  portadas/       fotos de portada
-  publicaciones/  fotos publicadas en el feed
-  historias/      fotos de historias
-  grupos/         portadas de grupos
-  chat/           fotos enviadas por mensaje
+  perfiles/  portadas/  publicaciones/  historias/  grupos/
 ```
 
-Cada imagen tiene un **nombre único** (`media/publicaciones/m3f8k2a1.jpg`) y la publicación guarda esa ruta en su campo `media`:
+**Regla de oro:** una publicación nunca guarda sus comentarios ni sus reacciones adentro.
+El «me gusta» escribe primero en `likes/<usuario>.json` y después, si se puede, suma el contador del post.
 
 ```json
 {
   "id": "p_m3f8",
   "authorId": "u_ab12",
   "text": "Atardecer desde el balcón",
-  "media": [{ "path": "media/publicaciones/m3f8k2a1.jpg", "type": "image/jpeg", "w": 1600, "h": 1200 }],
+  "media": [{ "path": "media/publicaciones/m3f8k2a1.jpg", "type": "image/jpeg" }],
   "privacy": "public",
-  "reactions": { "u_cd34": "love" },
+  "reactions": { "love": 4, "like": 9 },
+  "commentsCount": 3,
   "createdAt": "2026-11-19T22:10:00Z"
 }
 ```
-
-La app resuelve esa ruta por CDN (`cdn.jsdelivr.net`) y, si falla, por `raw.githubusercontent.com` o por la propia API (repositorios privados).
-
----
 
 ## Puesta en marcha
 

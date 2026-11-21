@@ -8,6 +8,7 @@ import {
 } from '../core/store.js';
 import { avatarEl, openModal, toast } from '../core/ui.js';
 import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../core/media.js';
+import { fetchImageUrl } from '../core/net.js';
 import { createStory, deleteStory } from '../core/actions.js';
 
 function storyGradient(seed) {
@@ -64,7 +65,7 @@ export function openStoryViewer(groups, startIndex = 0) {
 
     image.src = '';
     image.style.background = storyGradient(story.id);
-    image.src = mediaImg(story.image, { alt: 'Historia' }).src;
+    image.src = fetchImageUrl(story.image);
     caption.textContent = story.text || '';
 
     clear(header);

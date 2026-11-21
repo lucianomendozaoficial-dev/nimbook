@@ -1,160 +1,147 @@
 /* ==========================================================================
-   pages/search.js — resultados de búsqueda
+   pages/search.js — sección de búsqueda
    ========================================================================== */
-import { el, clear, debounce, formatCount, timeAgo } from '../core/util.js';
+import { el, clear, debounce } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { state, displayName, searchEverything, relationWith, countFollowers, userById } from '../core/store.js';
+import { state, displayName, searchEverything, relationWith, userById } from '../core/store.js';
 import { avatarEl, emptyState } from '../core/ui.js';
-import { mediaImg } from '../core/media.js';
 import { followButton } from '../components/follow-button.js';
+import { mediaImg } from '../core/media.js';
 import { postCard } from '../components/postcard.js';
+import { navigate, parseRoute } from '../core/router.js';
 
-export function searchPage(initialQuery = '') {
+export function searchPage(initial = '') {
   const root = el('div');
-  let query = initialQuery;
+  let query = initial;
   let filter = 'all';
   let cards = [];
 
   const input = el('input', {
-    type: 'search', placeholder: 'Buscar en NimbookGR', value: query,
-    'aria-label': 'Buscar',
+    type: 'search', placeholder: 'Buscar personas, publicaciones o grupos',
+    'aria-label': 'Buscar', value: query,
   });
   const results = el('div');
+  const tabs = el('div', { class: 'tabs' });
 
-  const filters = [
+  const FILTERS = [
     { id: 'all', label: 'Todo' },
     { id: 'people', label: 'Personas' },
     { id: 'posts', label: 'Publicaciones' },
     { id: 'groups', label: 'Grupos' },
   ];
-  const tabs = el('div', { class: 'tabs' });
 
-  function renderTabs(data) {
+  function setQuery(value) {
+    query = value.trim();
+    const route = parseRoute();
+    const next = `#/buscar?q=${encodeURIComponent(query)}`;
+    if (query && window.location.hash !== next) {
+      history.replaceState({ nb: true }, '', next);
+    } else if (!query && route.query.q) {
+      history.replaceState({ nb: true }, '', '#/buscar');
+    }
+    render();
+  }
+
+  input.addEventListener('input', debounce(() => setQuery(input.value), 220));
+
+  function renderTabs() {
     clear(tabs);
-    const counts = {
-      all: data.users.length + data.posts.length + data.groups.length,
-      people: data.users.length,
-      posts: data.posts.length,
-      groups: data.groups.length,
-    };
-    for (const item of filters) {
+    for (const item of FILTERS) {
       tabs.appendChild(el('button', {
-        class: `tab ${filter === item.id ? 'active' : ''}`, type: 'button',
-        onclick: () => { filter = item.id; renderResults(); },
-      }, item.label, counts[item.id]
-        ? el('span', { class: 'tab-count', text: `· ${counts[item.id]}` }) : null));
+        class: `tab ${filter === item.id ? 'active' : ''}`.trim(), type: 'button',
+        text: item.label,
+        onclick: () => { filter = item.id; render(); },
+      }));
     }
   }
 
-  function renderResults() {
-    clear(results);
-    cards.forEach(({ card }) => card.destroy?.());
+  function render() {
+    cards.forEach((card) => card.destroy?.());
     cards = [];
-    const data = searchEverything(query, state.me?.id);
-    renderTabs(data);
+    clear(results);
+    renderTabs();
 
-    if (!query.trim()) {
+    if (!query) {
       results.appendChild(el('div', { class: 'card' },
         emptyState({
           iconName: 'search',
-          title: 'Busca en NimbookGR',
-          description: 'Encuentra personas, publicaciones y grupos.',
+          title: 'Buscá en NimbookGR',
+          description: 'Personas, publicaciones y grupos de la comunidad.',
         })));
       return;
     }
 
-    const total = data.users.length + data.posts.length + data.groups.length;
-    if (!total) {
+    const found = searchEverything(query);
+    const showPeople = filter === 'all' || filter === 'people';
+    const showPosts = filter === 'all' || filter === 'posts';
+    const showGroups = filter === 'all' || filter === 'groups';
+
+    if (showPeople && found.users.length) {
+      results.appendChild(el('div', { class: 'page-card' },
+        el('div', { class: 'menu-section' }, 'Personas'),
+        ...found.users.map((person) => {
+          const user = state.users.get(person.id) || person;
+          const relation = relationWith(state.me?.id, user.id);
+          return el('div', { class: 'search-row' },
+            el('a', { href: `#/u/${user.username}` }, avatarEl(user, 'md')),
+            el('div', { class: 'grow' },
+              el('a', { href: `#/u/${user.username}`, class: 'post-name', text: displayName(user) }),
+              el('div', { class: 'muted small', text: `@${user.username}` })),
+            user.id === state.me?.id ? null : followButton(user));
+        })));
+    }
+
+    if (showGroups && found.groups.length) {
+      results.appendChild(el('div', { class: 'page-card' },
+        el('div', { class: 'menu-section' }, 'Grupos'),
+        ...found.groups.map((group) => el('a', {
+          class: 'search-row', href: `#/grupos/${group.id}`,
+        },
+        el('span', { class: 'group-mini' }, group.cover
+          ? mediaImg(group.cover, { alt: group.name })
+          : icon('groups', 18)),
+        el('div', { class: 'grow' },
+          el('div', { class: 'post-name', text: group.name }),
+          el('div', { class: 'muted small', text: `${group.memberIds?.length || 0} miembros` }))))));
+    }
+
+    if (showPosts && found.posts.length) {
+      const wrap = el('div', { class: 'col gap-16' });
+      for (const post of found.posts) {
+        const card = postCard(post);
+        cards.push(card);
+        wrap.appendChild(card.el);
+      }
+      results.appendChild(el('div', { class: 'page-head' },
+        el('h2', { text: 'Publicaciones' })));
+      results.appendChild(wrap);
+    }
+
+    if (!results.children.length) {
       results.appendChild(el('div', { class: 'card' },
         emptyState({
           iconName: 'search',
           title: `Sin resultados para “${query}”`,
-          description: 'Prueba con otras palabras.',
+          description: 'Probá con otras palabras.',
         })));
-      return;
-    }
-
-    if ((filter === 'all' || filter === 'people') && data.users.length) {
-      const card = el('div', { class: 'card pad' },
-        el('h3', { class: 'card-title', text: 'Personas' }));
-      for (const person of data.users.slice(0, 8)) {
-        const relation = relationWith(state.me.id, person.id);
-        card.appendChild(el('div', { class: 'person-row' },
-          el('a', { href: `#/u/${person.username}` }, avatarEl(person, 'md')),
-          el('div', { class: 'grow', style: { minWidth: '0' } },
-            el('a', {
-              href: `#/u/${person.username}`, class: 'strong',
-              style: { display: 'block' }, text: displayName(person),
-            }),
-            el('span', {
-              class: 'small muted',
-              text: `${formatCount(countFollowers(person.id))} seguidores · @${person.username}`,
-            })),
-          relation === 'following'
-            ? el('span', { class: 'chip brand', text: 'Siguiendo' })
-            : relation === 'follows-you'
-              ? el('span', { class: 'chip', text: 'Te sigue' })
-              : followButton(person)));
-      }
-      results.appendChild(card);
-    }
-
-    if ((filter === 'all' || filter === 'groups') && data.groups.length) {
-      const card = el('div', { class: 'card pad' },
-        el('h3', { class: 'card-title', text: 'Grupos' }));
-      for (const group of data.groups.slice(0, 8)) {
-        card.appendChild(el('a', {
-          class: 'person-row', href: `#/groups/${group.id}`,
-        },
-        el('span', {
-          class: 'avatar md',
-          style: { borderRadius: '8px', overflow: 'hidden' },
-        }, group.cover
-          ? mediaImg(group.cover, { alt: group.name })
-          : el('span', { class: 'center', style: { width: '100%', height: '100%' } }, icon('groups', 20))),
-        el('div', { class: 'grow' },
-          el('div', { class: 'strong', text: group.name }),
-          el('div', {
-            class: 'small muted',
-            text: `${group.privacy === 'private' ? 'Privado' : 'Público'} · ${formatCount(group.memberIds?.length || 0)} miembros`,
-          }))));
-      }
-      results.appendChild(card);
-    }
-
-    if ((filter === 'all' || filter === 'posts') && data.posts.length) {
-      const list = el('div');
-      for (const post of data.posts.slice(0, 10)) {
-        const card = postCard(post);
-        cards.push({ card });
-        list.appendChild(card.el);
-      }
-      results.appendChild(list);
     }
   }
 
-  input.addEventListener('input', debounce(() => {
-    query = input.value;
-    history.replaceState(null, '', `#/search?q=${encodeURIComponent(query)}`);
-    renderResults();
-  }, 250));
+  const back = el('div', { class: 'page-back' },
+    el('button', {
+      class: 'btn ghost sm', type: 'button',
+      onclick: () => navigate('/inicio'),
+    }, icon('arrow-left', 17), 'Volver'));
 
-  root.append(
-    el('div', { class: 'page-card' },
-      el('div', { style: { padding: '16px 16px 0' } },
-        el('h1', { text: 'Buscar' }),
-        el('div', { class: 'search-inline mt-12' }, icon('search', 18), input),
-        el('div', { class: 'mt-8' }, tabs))),
-    results);
+  root.append(back, el('div', { class: 'page-card' },
+    el('div', { class: 'search-inline', style: { margin: '4px 0 12px' } }, icon('search', 18), input),
+    tabs), results);
 
-  renderResults();
-  setTimeout(() => { if (!query) input.focus(); }, 100);
+  render();
+  setTimeout(() => input.focus(), 50);
 
   return {
     el: root,
-    onData: () => {
-      cards.forEach(({ card }) => card.update?.());
-    },
-    destroy: () => cards.forEach(({ card }) => card.destroy?.()),
+    destroy() { cards.forEach((card) => card.destroy?.()); },
   };
 }

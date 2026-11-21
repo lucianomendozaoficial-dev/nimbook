@@ -1,75 +1,72 @@
 /* ==========================================================================
-   app.js — arranque de NimbookGR: conexión, sesión, shell y rutas
+   app.js — arranque, shell y navegación
    ========================================================================== */
 import { el, clear } from './core/util.js';
 import { icon } from './core/icons.js';
-import { initTheme } from './core/theme.js';
-import { loadConnection } from './core/gh.js';
-import {
-  attach, state, hydrateCache, loadCore, subscribe,
-  refreshUserData, refreshFeed, displayName,
-} from './core/store.js';
+import { state, attach, subscribe, bootData, refreshAll } from './core/store.js';
 import { restoreSession, readSession } from './core/auth.js';
-import { startRouter, parseRoute } from './core/router.js';
-import { mountTopbar } from './components/topbar.js';
-import { mountSidebar } from './components/sidebar.js';
-import { mountRightRail } from './components/rightrail.js';
+import { initTheme } from './core/theme.js';
+import { applyReduced } from './core/motion.js';
+import { initPwa } from './core/pwa.js';
+import { unlockSounds, playSound } from './core/sounds.js';
+import { startRouter, parseRoute, goBack } from './core/router.js';
 import { toast, emptyState } from './core/ui.js';
-import { authScreen } from './pages/auth.js';
 import { offlineIllustration } from './core/illustrations.js';
-import { feedPage, postPage } from './pages/feed.js';
+import { authScreen } from './pages/auth.js';
+import { feedPage } from './pages/feed.js';
+import { postPage } from './pages/post.js';
 import { profilePage } from './pages/profile.js';
 import { friendsPage } from './pages/friends.js';
-import { messagesPage } from './pages/messages.js';
 import { notificationsPage } from './pages/notifications.js';
 import { groupsPage, groupPage } from './pages/groups.js';
 import { savedPage } from './pages/saved.js';
 import { searchPage } from './pages/search.js';
-import { settingsPage } from './pages/settings.js';
 import { menuPage } from './pages/menu.js';
+import { settingsPage } from './pages/settings.js';
+import { composePage } from './pages/publicar.js';
+import { mountTopbar } from './components/topbar.js';
+import { mountSidebar } from './components/sidebar.js';
+import { mountRightRail } from './components/rightrail.js';
 import { mountInstallBanner } from './components/install-banner.js';
-import { initPwa } from './core/pwa.js';
-import { unlockSounds, playSound } from './core/sounds.js';
 
 const root = document.getElementById('root');
-const splash = document.getElementById('splash');
-
 let shell = null;
 let currentPage = null;
-let currentRoute = null;
-let pollTimer = null;
-let lastFastPoll = 0;
-let lastSlowPoll = 0;
+let lastRouteName = '';
+let unsub = null;
 
-/* ------------------------------- utilidades ------------------------------ */
-
-function hideSplash() {
-  window.__NB_READY__ = true;
-  if (!splash) return;
-  splash.classList.add('hide');
-  setTimeout(() => splash.remove(), 500);
-}
+/* ------------------------------- splash ---------------------------------- */
 
 function setSplashMessage(text) {
   const node = document.getElementById('splash-msg');
   if (node) node.textContent = text;
 }
 
-function showBootError(message) {
-  clear(root);
-  root.appendChild(el('div', { class: 'auth' },
-    el('div', { class: 'auth-card error-card' },
-      el('div', { class: 'error-illustration', html: offlineIllustration() }),
-      el('h2', { text: 'Algo salió mal' }),
-      el('p', { class: 'muted', text: message }),
-      el('button', {
-        class: 'btn primary block lg', type: 'button', text: 'Reintentar',
-        onclick: () => window.location.reload(),
-      }))));
-  hideSplash();
+function hideSplash() {
+  window.__NB_READY__ = true;
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  splash.classList.add('hide');
+  setTimeout(() => splash.remove(), 450);
 }
 
-/* -------------------------- pantallas previas --------------------------- */
+function showBootError(message) {
+  window.__NB_READY__ = true;
+  const splash = document.getElementById('splash');
+  const box = document.getElementById('splash-error');
+  const msg = document.getElementById('splash-error-msg');
+  if (msg) msg.textContent = message;
+  if (box) box.hidden = false;
+  const bar = splash?.querySelector('.splash-bar');
+  if (bar) bar.classList.add('hide');
+  const retry = document.getElementById('splash-retry');
+  if (retry) retry.onclick = () => window.location.reload();
+  const offline = document.getElementById('splash-offline');
+  if (offline) offline.innerHTML = offlineIllustration();
+  setSplashMessage('');
+}
+
+/* -------------------------------- acceso --------------------------------- */
 
 function renderAuth() {
   clear(root);
@@ -77,8 +74,14 @@ function renderAuth() {
     onAuthenticated: async () => {
       clear(root);
       root.appendChild(el('div', { class: 'auth' }, el('span', { class: 'spinner big' })));
-      await loadCore();
-      await startApp();
+      try {
+        await bootData();
+        startApp();
+        toast(`Hola, ${state.me?.firstName || 'de nuevo'}`, { type: 'success' });
+      } catch (err) {
+        console.error(err);
+        showBootError('No pudimos cargar tu cuenta. Revisá tu conexión e intentá otra vez.');
+      }
     },
   }));
   hideSplash();
@@ -89,86 +92,88 @@ function renderAuth() {
 function buildShell() {
   clear(root);
   const topbar = mountTopbar();
-  const left = mountSidebar();
-  const right = mountRightRail();
-  const installBanner = mountInstallBanner();
+  const leftRail = mountSidebar();
+  const rightRail = mountRightRail();
+  const banner = mountInstallBanner();
   const center = el('div', { class: 'col-center' });
-  const main = el('main', { class: 'main' }, left.el, center, right.el);
+  const main = el('main', { class: 'main' }, leftRail.el, center, rightRail.el);
 
-  const mobileNav = el('nav', { class: 'mobile-nav', 'aria-label': 'Navegación móvil' });
+  const mobileNav = el('nav', { class: 'mobile-nav', 'aria-label': 'Navegación' });
   const items = [
     { id: 'feed', icon: 'home', label: 'Inicio', href: '#/inicio' },
     { id: 'friends', icon: 'users', label: 'Seguidores', href: '#/seguidores' },
-    { id: 'messages', icon: 'message', label: 'Mensajes', href: '#/mensajes', badge: 'chats' },
-    { id: 'notifications', icon: 'bell', label: 'Avisos', href: '#/notificaciones', badge: 'notifs' },
+    { id: 'compose', icon: 'plus', label: 'Publicar', href: '#/publicar' },
+    { id: 'notifications', icon: 'bell', label: 'Avisos', href: '#/notificaciones', badge: true },
     { id: 'menu', icon: 'menu', label: 'Menú', href: '#/menu' },
   ];
   const navButtons = new Map();
   for (const item of items) {
     const link = el('a', { href: item.href, 'aria-label': item.label },
-      el('span', { class: 'mn-ic' }, icon(item.icon, 24, { filled: true })),
+      el('span', { class: 'mn-ic' }, iconFor(item.icon)),
       el('span', { text: item.label }));
     if (item.badge) {
       const badge = el('span', { class: 'badge-dot hide' });
       link.querySelector('.mn-ic').appendChild(badge);
-      link.dataset.badge = item.badge;
     }
     navButtons.set(item.id, link);
     mobileNav.appendChild(link);
   }
 
-  root.append(el('div', { class: 'app' }, topbar.el, main, mobileNav, installBanner.el));
+  root.append(el('div', { class: 'app' }, topbar.el, main, mobileNav, banner.el));
   document.body.classList.add('has-shell');
 
-  const api = {
-    topbar, left, right, center, main, navButtons, mobileNav,
+  return {
+    topbar, left: leftRail, right: rightRail, center, main, navButtons,
     refreshChrome() {
       topbar.refresh();
-      left.render();
-      right.render();
+      leftRail.render();
+      rightRail.render();
       const route = parseRoute();
       const active = route.name === 'group' ? 'groups'
-        : route.name === 'post' ? 'feed'
-          : route.name;
-      for (const [id, link] of navButtons) {
-        link.classList.toggle('active', id === active);
-      }
-      const notifBadge = navButtons.get('notifications')?.querySelector('.badge-dot');
-      if (notifBadge) {
-        notifBadge.textContent = state.ui.unreadNotifs > 9 ? '9+' : String(state.ui.unreadNotifs);
-        notifBadge.classList.toggle('hide', state.ui.unreadNotifs === 0);
-      }
-      const chatBadge = navButtons.get('messages')?.querySelector('.badge-dot');
-      if (chatBadge) {
-        chatBadge.textContent = state.ui.unreadChats > 9 ? '9+' : String(state.ui.unreadChats);
-        chatBadge.classList.toggle('hide', state.ui.unreadChats === 0);
+        : route.name === 'post' ? 'feed' : route.name;
+      for (const [id, link] of navButtons) link.classList.toggle('active', id === active);
+      const badge = navButtons.get('notifications')?.querySelector('.badge-dot');
+      if (badge) {
+        const count = state.ui.unreadNotifs;
+        badge.textContent = count > 9 ? '9+' : String(count);
+        badge.classList.toggle('hide', count === 0);
       }
     },
     setLayout({ right = true, left = true, wide = false } = {}) {
       main.classList.toggle('no-right', !right);
       main.classList.toggle('only-feed', !left);
-      api.left.el.classList.toggle('hide', !left);
-      api.right.el.classList.toggle('hide', !right);
+      leftRail.el.classList.toggle('hide', !left);
+      rightRail.el.classList.toggle('hide', !right);
       center.classList.toggle('wide', wide);
     },
   };
-  return api;
 }
 
-/* --------------------------------- rutas -------------------------------- */
+function iconFor(name) {
+  const map = {
+    home: 'home', users: 'users', plus: 'plus', bell: 'bell', menu: 'menu',
+  };
+  return icon(map[name] || name, 24, { filled: true });
+}
+
+/* -------------------------------- rutas ---------------------------------- */
 
 function layoutFor(route) {
   switch (route.name) {
-    case 'profile': return { right: false, left: true, wide: true };
-    case 'friends': return { right: false, left: true, wide: true };
-    case 'messages': return { right: false, left: true, wide: true };
-    case 'group': return { right: false, left: true, wide: true };
-    case 'groups': return { right: false, left: true, wide: true };
-    case 'saved': return { right: false, left: true, wide: true };
-    case 'search': return { right: false, left: true, wide: true };
-    case 'settings': return { right: false, left: true, wide: true };
-    case 'menu': return { right: false, left: true, wide: true };
-    case 'post': return { right: false, left: true, wide: false };
+    case 'feed': return { right: true, left: true, wide: false };
+    case 'post': return { right: false, left: true, wide: true };
+    case 'profile':
+    case 'myprofile':
+    case 'friends':
+    case 'groups':
+    case 'group':
+    case 'saved':
+    case 'search':
+    case 'settings':
+    case 'menu':
+    case 'notifications':
+    case 'compose':
+      return { right: false, left: true, wide: true };
     default: return { right: true, left: true, wide: false };
   }
 }
@@ -176,25 +181,29 @@ function layoutFor(route) {
 function pageFor(route) {
   switch (route.name) {
     case 'feed': return feedPage();
-    case 'profile': return profilePage(route.params.username);
     case 'post': return postPage(route.params.id);
+    case 'profile': return profilePage(route.params.username, { tab: route.params.tab });
+    case 'myprofile': return profilePage(null, { preview: true });
     case 'friends': return friendsPage(route.params.tab);
-    case 'messages': return messagesPage({ u: route.query.u, id: route.params.id });
     case 'notifications': return notificationsPage();
     case 'groups': return groupsPage();
     case 'group': return groupPage(route.params.id);
     case 'saved': return savedPage();
     case 'search': return searchPage(route.query.q || '');
-    case 'settings': return settingsPage(route.params.tab);
     case 'menu': return menuPage();
+    case 'settings': return settingsPage();
+    case 'compose': return composePage();
     default:
       return {
         el: el('div', { class: 'card' },
           emptyState({
             iconName: 'alert',
             title: 'Página no encontrada',
-            description: 'La dirección que abriste no existe en NimbookGR.',
-            action: el('a', { class: 'btn primary', href: '#/inicio', text: 'Ir al inicio' }),
+            description: 'La dirección que abriste no existe.',
+            action: el('button', {
+              class: 'btn primary', type: 'button', text: 'Ir al inicio',
+              onclick: () => goBack('/inicio'),
+            }),
           })),
         onData() {},
         destroy() {},
@@ -202,87 +211,85 @@ function pageFor(route) {
   }
 }
 
+let lastKey = '';
+
+function routeKey(route) {
+  return [route.name, JSON.stringify(route.params), JSON.stringify(route.query)].join('|');
+}
+
 function renderRoute(route) {
   if (!shell) return;
-  const sameRoute = currentRoute
-    && currentRoute.name === route.name
-    && JSON.stringify(currentRoute.params) === JSON.stringify(route.params)
-    && JSON.stringify(currentRoute.query) === JSON.stringify(route.query);
-
-  if (sameRoute && currentPage) {
+  const key = routeKey(route);
+  if (key === lastKey && currentPage?.el?.isConnected) {
     shell.refreshChrome();
     return;
   }
-
+  lastKey = key;
   currentPage?.destroy?.();
-  currentPage = null;
-  currentRoute = route;
-  clear(shell.center);
-  const layout = layoutFor(route);
-  shell.setLayout(layout);
-
+  shell.setLayout(layoutFor(route));
+  shell.center.replaceChildren();
   const page = pageFor(route);
   currentPage = page;
   shell.center.appendChild(page.el);
   shell.refreshChrome();
-
-  window.scrollTo(0, 0);
+  if (route.name !== lastRouteName) {
+    window.scrollTo({ top: 0 });
+    lastRouteName = route.name;
+  }
 }
 
-/* -------------------------------- arranque ------------------------------ */
+/* ------------------------------ arranque -------------------------------- */
 
 async function startApp() {
   if (!shell) shell = buildShell();
-  shell.setLayout(layoutFor(parseRoute()));
-  shell.refreshChrome();
-
-  let lastUnread = state.ui.unreadNotifs;
-  let lastChats = state.ui.unreadChats;
-  subscribe((topic) => {
-    if (topic === 'offline') {
-      toast('Se perdió la conexión. Estás viendo lo último que cargaste.', { type: 'error' });
-    }
-    if (state.ui.unreadNotifs > lastUnread) playSound('notification');
-    if (state.ui.unreadChats > lastChats) playSound('notification');
-    lastUnread = state.ui.unreadNotifs;
-    lastChats = state.ui.unreadChats;
+  unsub?.();
+  unsub = subscribe((topic) => {
+    if (topic === 'ready') return;
     shell?.refreshChrome();
     currentPage?.onData?.(topic);
   });
-
-  const initial = startRouter((route) => renderRoute(route));
-  renderRoute(initial);
+  startRouter((route) => renderRoute(route));
+  renderRoute(parseRoute());
   hideSplash();
-  startPolling();
+  setupPullToRefresh();
 }
 
-/* -------------------------------- polling ------------------------------- */
+/* --------------------------- tirar para actualizar ----------------------- */
 
-async function pollOnce() {
-  if (document.hidden) return;
-  const now = Date.now();
-  if (now - lastFastPoll > 20_000) {
-    lastFastPoll = now;
-    try { await refreshUserData(); } catch { /* silencioso */ }
-  }
-  if (now - lastSlowPoll > 60_000) {
-    lastSlowPoll = now;
-    try { await refreshFeed(); } catch { /* silencioso */ }
-  }
-}
+function setupPullToRefresh() {
+  let startY = 0;
+  let pulling = false;
+  let distance = 0;
+  const indicator = el('div', { class: 'ptr' }, el('span', { class: 'spinner' }));
+  document.body.appendChild(indicator);
 
-function startPolling() {
-  clearInterval(pollTimer);
-  pollTimer = setInterval(pollOnce, 5000);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) pollOnce();
-  });
-  window.addEventListener('online', () => {
-    toast('Conexión restaurada', { type: 'success' });
-    pollOnce();
-  });
-  window.addEventListener('offline', () => {
-    toast('Te quedaste sin conexión', { type: 'error' });
+  window.addEventListener('touchstart', (event) => {
+    if (window.scrollY > 0 || event.touches.length !== 1) return;
+    startY = event.touches[0].clientY;
+    pulling = true;
+    distance = 0;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (event) => {
+    if (!pulling) return;
+    distance = event.touches[0].clientY - startY;
+    if (distance > 10) indicator.classList.add('visible');
+    indicator.style.transform = `translate(-50%, ${Math.min(70, distance * 0.5)}px)`;
+  }, { passive: true });
+
+  window.addEventListener('touchend', async () => {
+    if (!pulling) return;
+    pulling = false;
+    indicator.classList.remove('visible');
+    indicator.style.transform = '';
+    if (distance < 80) return;
+    playSound('open');
+    try {
+      await refreshAll();
+      toast('Todo actualizado', { type: 'success' });
+    } catch {
+      toast('No pudimos actualizar. Revisá tu conexión.', { type: 'error' });
+    }
   });
 }
 
@@ -290,61 +297,47 @@ function startPolling() {
 
 async function boot() {
   initTheme();
+  applyReduced();
   initPwa();
   setSplashMessage('Iniciando NimbookGR…');
 
-  // desbloquea el audio con el primer toque (política de los navegadores)
   const unlock = () => { unlockSounds(); document.removeEventListener('pointerdown', unlock); };
   document.addEventListener('pointerdown', unlock, { once: true });
 
   if (window.location.protocol === 'file:') {
-    showBootError(
-      'Para usar NimbookGR ábrelo desde su dirección web (o desde el acceso directo incluido), '
-      + 'no con doble clic en el archivo.',
-    );
+    showBootError('Para usar NimbookGR ábrelo desde su dirección web (o desde el acceso directo incluido).');
     return;
   }
 
-  const cfg = window.NIMBOOK_DEV_CONFIG || window.NIMBOOK_CONFIG || loadConnection() || null;
-  if (!cfg?.owner || !cfg?.repo || !cfg?.token) {
-    console.error('[boot] falta config.js con la conexión de NimbookGR');
-    showBootError('NimbookGR no está disponible en este momento. Vuelve a intentarlo en unos minutos.');
+  const cfg = window.NIMBOOK_DEV_CONFIG || window.NIMBOOK_CONFIG || null;
+  if (!cfg?.owner || !cfg?.repo) {
+    showBootError('NimbookGR no está disponible en este momento. Volvé a intentarlo en unos minutos.');
     return;
   }
 
-  attach(cfg);
-  hydrateCache();
+  attach({
+    ...cfg,
+    readBase: cfg.readBase || (cfg.local ? cfg.mediaBase || '.' : ''),
+    apiBase: cfg.apiBase || '',
+  });
 
-  // Sin sesión guardada no hace falta esperar a la red: mostramos el acceso
-  // al instante y traemos los datos en segundo plano.
   if (!readSession()) {
     renderAuth();
-    loadCore().catch((err) => console.warn('[boot] datos en segundo plano', err?.message));
     return;
   }
 
   try {
-    setSplashMessage('Preparando tu cuenta…');
-    await state.gh.getRepo();
     setSplashMessage('Verificando tu sesión…');
     const user = await restoreSession();
     if (!user) {
       renderAuth();
       return;
     }
-    setSplashMessage(`Cargando el muro de ${displayName(user)}…`);
-    await loadCore();
+    setSplashMessage(`Hola de nuevo, ${user.firstName || user.name || ''}…`);
+    await bootData();
     await startApp();
   } catch (err) {
     console.error('[boot]', err);
-    if (err?.code === 'auth' || err?.status === 401) {
-      showBootError('No pudimos conectar con tu cuenta. Inténtalo de nuevo en unos minutos.');
-      return;
-    }
-    if (err?.name === 'GitHubError' || err?.message?.includes('GitHub')) {
-      showBootError(err.message);
-      return;
-    }
     renderAuth();
   }
 }
@@ -353,11 +346,7 @@ window.addEventListener('error', (event) => {
   console.error('[global]', event.error || event.message);
 });
 window.addEventListener('unhandledrejection', (event) => {
-  const reason = event.reason;
-  if (reason?.message) console.warn('[unhandled]', reason.message);
+  console.error('[promise]', event.reason);
 });
 
-boot().catch((err) => {
-  console.error('[boot fatal]', err);
-  showBootError(err?.message || 'Error inesperado al iniciar NimbookGR.');
-});
+boot();

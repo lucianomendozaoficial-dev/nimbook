@@ -90,7 +90,8 @@ try {
   window.__NIMBOOK_MEDIA_BASE__ = '.';
   // sesión de demostración solo a propósito con ?demo=1
   if (/demo=1/.test(location.search)) {
-    localStorage.setItem('nb.session.v1', JSON.stringify({ userId: 'u_demo', at: Date.now() }));
+    localStorage.setItem('nb.session.v2', JSON.stringify({ userId: 'u_demo', at: Date.now() }));
+    localStorage.setItem('nb.cdn.v1', String(Date.now()));
   }
   if (!/nolive=1/.test(location.search) && window.EventSource) {
     var es = new EventSource('/__reload');
@@ -306,7 +307,9 @@ try {
     if (!filename) return;
     const name = filename.replace(/\\/g, '/');
     if (/^(\.tmp|\.git|node_modules)/.test(name)) return;
-    if (/^(data|media)\//.test(name)) return;
+    if (/^(\.tmp|\.git|node_modules|data|media)\//.test(name)) return;
+    // solo código y estilos: nunca datos, imágenes ni capturas
+    if (!/\.(js|mjs|css|html|webmanifest)$/i.test(name)) return;
     clearTimeout(watchTimer);
     watchTimer = setTimeout(broadcastReload, 220);
   });

@@ -87,23 +87,25 @@ const SKIP_DIRS = new Set(['.tmp', '.git', 'node_modules', '.vscode', '.idea']);
 const SKIP_FILES = new Set(['.nimbook-token', '.token', '.DS_Store', 'Thumbs.db']);
 
 const EMPTY_DATA = {
-  'data/usuarios.json': { version: 1, users: [] },
-  'data/feed.json': { version: 1, posts: [] },
-  'data/comentarios.json': { version: 1, comments: [] },
-  'data/conversaciones.json': { version: 1, conversations: [] },
+  'data/usuarios/index.json': { version: 1, users: [] },
+  'data/feed/index.json': { version: 1, posts: [] },
   'data/grupos.json': { version: 1, groups: [] },
   'data/historias.json': { version: 1, stories: [] },
 };
 
 const PLACEHOLDERS = [
+  'data/usuarios/.gitkeep',
+  'data/feed/.gitkeep',
+  'data/likes/.gitkeep',
+  'data/comentarios/.gitkeep',
+  'data/siguiendo/.gitkeep',
+  'data/seguidores/.gitkeep',
   'data/notificaciones/.gitkeep',
-  'data/mensajes/.gitkeep',
   'media/perfiles/.gitkeep',
   'media/portadas/.gitkeep',
   'media/publicaciones/.gitkeep',
   'media/historias/.gitkeep',
   'media/grupos/.gitkeep',
-  'media/chat/.gitkeep',
 ];
 
 async function collectFiles(dir = ROOT, relBase = '', out = new Map()) {
@@ -175,8 +177,7 @@ for (const rel of PLACEHOLDERS) {
 }
 
 if (args['with-demo']) {
-  for (const rel of ['data/usuarios.json', 'data/feed.json', 'data/comentarios.json',
-    'data/conversaciones.json', 'data/grupos.json', 'data/historias.json']) {
+  for (const rel of ['data/usuarios/index.json', 'data/feed/index.json', 'data/grupos.json', 'data/historias.json']) {
     try { files.set(rel, await fs.readFile(path.join(ROOT, rel))); } catch { /* noop */ }
   }
 }

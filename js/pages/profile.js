@@ -1,11 +1,12 @@
 /* ==========================================================================
-   pages/profile.js — perfil con portada, pestañas, fotos y amigos
+   pages/profile.js — perfil público y "Mi perfil"
    ========================================================================== */
-import { el, clear, formatCount, longDate, timeAgo, monthYear } from '../core/util.js';
+import { el, clear, formatCount, longDate, monthYear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, userByUsername, displayName, followersOf, followingOf, countFollowers, countFollowing,
-  postsByAuthor, canSeePost, relationWith, userById, mutualFollowers,
+  state, userById, userByUsername, displayName, followersOf, followingOf,
+  countFollowers, countFollowing, loadFollowers, loadFollowing, loadPost, loadUser,
+  postsByAuthor, canSeePost, relationWith, updateProfileCache,
 } from '../core/store.js';
 import {
   avatarEl, emptyState, openModal, toast, lightbox,
@@ -14,8 +15,7 @@ import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../cor
 import { updateProfile } from '../core/actions.js';
 import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
-import { mountComposer, openComposer } from '../components/composer.js';
-import { navigate } from '../core/router.js';
+import { navigate, goBack, parseRoute } from '../core/router.js';
 import { ValidationError } from '../core/auth.js';
 
 const TABS = [
@@ -25,518 +25,358 @@ const TABS = [
   { id: 'about', label: 'Información' },
 ];
 
-/* ------------------------------ editar perfil ---------------------------- */
+/* --------------------------- editar mi perfil ---------------------------- */
 
 export function editProfileModal(user, onSaved) {
-  const nameInput = el('input', { class: 'input', value: user.name || '', maxlength: '60' });
-  const usernameInput = el('input', {
+  const nameParts = String(user.name || '').trim().split(/\s+/);
+  const first = el('input', { class: 'input', value: user.firstName || nameParts.shift() || '', maxlength: '40' });
+  const last = el('input', { class: 'input', value: user.lastName || nameParts.join(' ') || '', maxlength: '40' });
+  const username = el('input', {
     class: 'input', value: user.username || '', maxlength: '30', autocapitalize: 'none',
   });
-  const bioInput = el('textarea', { class: 'textarea', rows: '3', maxlength: '500' });
-  bioInput.value = user.bio || '';
-  const locationInput = el('input', { class: 'input', value: user.location || '', maxlength: '60' });
-  const workInput = el('input', { class: 'input', value: user.work || '', maxlength: '80' });
-  const educationInput = el('input', { class: 'input', value: user.education || '', maxlength: '80' });
-  const birthdayInput = el('input', { class: 'input', type: 'date', value: user.birthday || '' });
-  const whatsappInput = el('input', {
-    class: 'input', value: user.whatsapp || '', maxlength: '20', inputmode: 'tel',
+  const bio = el('textarea', { class: 'textarea', rows: '3', maxlength: '300' });
+  bio.value = user.bio || '';
+  const whatsapp = el('input', {
+    class: 'input', value: user.whatsapp || '', inputmode: 'tel', maxlength: '20',
     placeholder: 'Ej. 2615551234',
   });
-  const instagramInput = el('input', {
+  const instagram = el('input', {
     class: 'input', value: user.instagram ? `@${user.instagram}` : '', maxlength: '40',
-    spellcheck: 'false', autocapitalize: 'none', placeholder: '@tuusuario',
+    placeholder: '@tuusuario',
   });
-  const genderSelect = el('select', { class: 'select' },
-    el('option', { value: '', text: 'Sin especificar' }),
-    el('option', { value: 'female', text: 'Mujer' }),
-    el('option', { value: 'male', text: 'Hombre' }),
-    el('option', { value: 'other', text: 'Otro' }),
-    el('option', { value: 'none', text: 'Prefiero no decirlo' }));
-  genderSelect.value = user.gender || '';
+  const birthday = el('input', { class: 'input', type: 'date', value: user.birthday || '' });
+  const location = el('input', { class: 'input', value: user.location || '', maxlength: '60' });
+  const work = el('input', { class: 'input', value: user.work || '', maxlength: '80' });
+  const education = el('input', { class: 'input', value: user.education || '', maxlength: '80' });
+  const error = el('div', { class: 'field-error hide' });
 
-  const avatarPreview = el('img', {
-    src: '', alt: 'Foto de perfil',
-    style: { width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover' },
-  });
-  if (user.avatar) avatarPreview.src = mediaImg(user.avatar).src;
+  const saveBtn = el('button', { class: 'btn primary block', type: 'button', text: 'Guardar cambios' });
+  const avatarBox = el('div', { class: 'avatar-edit' }, avatarEl(user, 'xl'));
+  const coverBox = el('div', { class: 'cover-edit-box' });
 
-  let avatarPath = user.avatar || null;
-  let uploadingAvatar = false;
-
-  const pickAvatar = async () => {
+  async function pick(kind) {
     const files = await openFilePicker();
     if (!files.length) return;
     const problem = validateImageFile(files[0]);
     if (problem) { toast(problem, { type: 'error' }); return; }
-    uploadingAvatar = true;
     try {
-      avatarPreview.src = URL.createObjectURL(files[0]);
-      const record = await uploadImage(files[0], 'avatars', { maxSize: 720 });
-      avatarPath = record.path;
-      toast('Foto lista. Guarda los cambios para aplicarla.');
-    } catch (err) {
-      toast(err.message, { type: 'error' });
-    } finally {
-      uploadingAvatar = false;
-    }
-  };
-
-  const body = el('div', { class: 'col gap-12' },
-    el('div', { class: 'row gap-12' },
-      el('div', { style: { position: 'relative' } },
-        avatarPreview,
-        el('button', {
-          class: 'profile-avatar-edit', type: 'button', 'aria-label': 'Cambiar foto de perfil',
-          style: { width: '32px', height: '32px' }, onclick: pickAvatar,
-        }, icon('camera', 16))),
-      el('div', { class: 'muted small', text: 'Puedes cambiar tu foto de perfil y tu portada desde tu perfil.' })),
-    el('div', { class: 'field' }, el('label', { text: 'Nombre' }), nameInput),
-    el('div', { class: 'field' }, el('label', { text: 'Usuario' }), usernameInput),
-    el('div', { class: 'field' }, el('label', { text: 'Biografía' }), bioInput),
-    el('div', { class: 'row gap-8' },
-      el('div', { class: 'field grow' }, el('label', { text: 'Ciudad' }), locationInput),
-      el('div', { class: 'field grow' }, el('label', { text: 'Fecha de nacimiento' }), birthdayInput)),
-    el('div', { class: 'row gap-8' },
-      el('div', { class: 'field grow' }, el('label', { text: 'Trabajo' }), workInput),
-      el('div', { class: 'field grow' }, el('label', { text: 'Estudios' }), educationInput)),
-    el('div', { class: 'row gap-8' },
-      el('div', { class: 'field grow' }, el('label', { text: 'WhatsApp' }), whatsappInput),
-      el('div', { class: 'field grow' }, el('label', { text: 'Instagram' }), instagramInput)),
-    el('div', { class: 'field' }, el('label', { text: 'Sexo' }), genderSelect));
-
-  const saveBtn = el('button', { class: 'btn primary block', type: 'button' }, 'Guardar');
+      toast('Subiendo imagen…');
+      const record = await uploadImage(files[0], kind === 'cover' ? 'covers' : 'avatars', {
+        maxSize: kind === 'cover' ? 2200 : 720,
+      });
+      const updated = await updateProfile(kind === 'cover' ? { cover: record.path } : { avatar: record.path });
+      updateProfileCache(updated);
+      clear(avatarBox);
+      avatarBox.appendChild(avatarEl(updated, 'xl'));
+      toast('Imagen actualizada', { type: 'success' });
+    } catch (err) { toast(err.message, { type: 'error' }); }
+  }
 
   const api = openModal({
-    title: 'Editar perfil',
-    body,
-    footer: [saveBtn],
-    onClose: () => {},
+    title: 'Personalizar mi perfil',
+    body: el('div', { class: 'col gap-12' },
+      el('div', { class: 'profile-edit-media' },
+        avatarBox,
+        el('div', { class: 'row gap-8' },
+          el('button', { class: 'btn sm', type: 'button', onclick: () => pick('avatar') },
+            icon('camera', 15), 'Cambiar foto'),
+          el('button', { class: 'btn sm', type: 'button', onclick: () => pick('cover') },
+            icon('photo', 15), 'Cambiar portada'))),
+      el('div', { class: 'row gap-8' },
+        el('div', { class: 'field grow' }, el('label', { text: 'Nombre' }), first),
+        el('div', { class: 'field grow' }, el('label', { text: 'Apellido' }), last)),
+      el('div', { class: 'field' }, el('label', { text: 'Usuario' }), username),
+      el('div', { class: 'field' }, el('label', { text: 'Biografía' }), bio),
+      el('div', { class: 'row gap-8' },
+        el('div', { class: 'field grow' }, el('label', { text: 'WhatsApp' }), whatsapp),
+        el('div', { class: 'field grow' }, el('label', { text: 'Instagram' }), instagram)),
+      el('div', { class: 'row gap-8' },
+        el('div', { class: 'field grow' }, el('label', { text: 'Fecha de nacimiento' }), birthday),
+        el('div', { class: 'field grow' }, el('label', { text: 'Ciudad' }), location)),
+      el('div', { class: 'row gap-8' },
+        el('div', { class: 'field grow' }, el('label', { text: 'Trabajo' }), work),
+        el('div', { class: 'field grow' }, el('label', { text: 'Estudios' }), education)),
+      error),
+    footer: saveBtn,
+    size: 'lg',
   });
 
   saveBtn.addEventListener('click', async () => {
-    if (uploadingAvatar) { toast('Espera a que suba la foto.', { type: 'error' }); return; }
     saveBtn.disabled = true;
     saveBtn.textContent = 'Guardando…';
+    error.classList.add('hide');
     try {
       await updateProfile({
-        name: nameInput.value,
-        username: usernameInput.value,
-        bio: bioInput.value,
-        location: locationInput.value,
-        work: workInput.value,
-        education: educationInput.value,
-        birthday: birthdayInput.value,
-        gender: genderSelect.value,
-        whatsapp: whatsappInput.value,
-        instagram: instagramInput.value,
-        avatar: avatarPath,
+        firstName: first.value,
+        lastName: last.value,
+        username: username.value,
+        bio: bio.value,
+        whatsapp: whatsapp.value,
+        instagram: instagram.value,
+        birthday: birthday.value,
+        location: location.value,
+        work: work.value,
+        education: education.value,
       });
       api.close();
       toast('Perfil actualizado', { type: 'success' });
       onSaved?.();
     } catch (err) {
+      error.textContent = err instanceof ValidationError ? err.message : 'No se pudo guardar.';
+      error.classList.remove('hide');
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Guardar';
-      toast(err instanceof ValidationError ? err.message : 'No se pudo guardar.', { type: 'error' });
+      saveBtn.textContent = 'Guardar cambios';
     }
   });
 }
 
-/* ----------------------------- botones de relación ----------------------- */
-
-function relationButtons(user, onChanged) {
-  const me = state.me;
-  const relation = relationWith(me.id, user.id);
-  const wrap = el('div', { class: 'profile-actions' });
-
-  const msgBtn = el('button', {
-    class: 'btn', type: 'button',
-    onclick: () => navigate(`/mensajes?u=${user.id}`),
-  }, icon('message', 18), 'Mensaje');
-
-  if (relation === 'self') {
-    wrap.append(
-      el('button', {
-        class: 'btn primary', type: 'button',
-        onclick: () => editProfileModal(user, onChanged),
-      }, icon('edit', 17), 'Editar perfil'),
-      el('button', {
-        class: 'btn', type: 'button', text: 'Añadir historia',
-        onclick: () => import('../components/stories.js').then(({ createStoryFlow }) => createStoryFlow()),
-      }, icon('camera', 17)));
-    return wrap;
-  }
-
-  wrap.append(followButton(user, { size: 'lg', onChange: onChanged }));
-  if (relation === 'follows-you' || relation === 'following') wrap.append(msgBtn);
-  return wrap;
-}
-
 /* -------------------------------- página -------------------------------- */
 
-export function profilePage(username) {
+export function profilePage(username, { preview = false } = {}) {
   const root = el('div');
+  let target = preview ? state.me : null;
   let cards = [];
+  let loading = true;
 
-  function user() {
-    return userByUsername(username) || state.users.find((u) => u.id === username);
+  function goTab(tab) {
+    const base = preview ? '/mi-perfil' : `/u/${target.username}`;
+    navigate(`${base}${tab === 'posts' ? '' : `/${tab}`}`);
   }
 
   function currentTab() {
-    const hash = window.location.hash.replace(/^#/, '');
-    const parts = hash.split('?')[0].split('/').filter(Boolean);
-    return parts[2] || 'posts';
+    return parseRoute().params.tab || 'posts';
   }
 
-  function goTab(tab) {
-    const target = user();
-    window.location.hash = `/u/${target.username}${tab === 'posts' ? '' : `/${tab}`}`;
-  }
-
-  function coverElement(target, isMe) {
-    const cover = el('div', { class: 'profile-cover' });
-    if (target.cover) {
-      cover.appendChild(mediaImg(target.cover, { alt: 'Portada' }));
-    }
-    if (isMe) {
-      cover.appendChild(el('button', {
-        class: 'cover-edit', type: 'button',
-        onclick: async () => {
-          const files = await openFilePicker();
-          if (!files.length) return;
-          const problem = validateImageFile(files[0]);
-          if (problem) { toast(problem, { type: 'error' }); return; }
-          try {
-            toast('Subiendo portada…');
-            const record = await uploadImage(files[0], 'covers', { maxSize: 2200 });
-            await updateProfile({ cover: record.path });
-            toast('Portada actualizada', { type: 'success' });
-          } catch (err) { toast(err.message, { type: 'error' }); }
-        },
-      }, icon('camera', 17), 'Editar portada'));
-    }
+  function coverEl(user) {
+    const cover = el('div', { class: 'profile-cover' },
+      user.cover ? mediaImg(user.cover, { alt: 'Portada', eager: true }) : null);
     return cover;
   }
 
-  function headElement(target, isMe) {
-    const avatarWrap = el('div', { class: 'profile-avatar-wrap' },
-      el('div', { class: 'profile-avatar' },
-        target.avatar
-          ? mediaImg(target.avatar, { alt: displayName(target) })
-          : el('span', {
-            class: 'center',
-            style: {
-              width: '100%', height: '100%', fontSize: '56px', color: '#fff', fontWeight: '700',
-              background: 'linear-gradient(135deg,#1877f2,#42b0ff)',
-            },
-            text: (displayName(target) || '?').slice(0, 2).toUpperCase(),
-          })),
-      isMe
-        ? el('button', {
-          class: 'profile-avatar-edit', type: 'button', 'aria-label': 'Cambiar foto de perfil',
-          onclick: async () => {
-            const files = await openFilePicker();
-            if (!files.length) return;
-            const problem = validateImageFile(files[0]);
-            if (problem) { toast(problem, { type: 'error' }); return; }
-            try {
-              toast('Subiendo foto…');
-              const record = await uploadImage(files[0], 'avatars', { maxSize: 720 });
-              await updateProfile({ avatar: record.path });
-              toast('Foto de perfil actualizada', { type: 'success' });
-            } catch (err) { toast(err.message, { type: 'error' }); }
-          },
-        }, icon('camera', 17))
-        : null);
-
-    const followers = followersOf(target.id);
-    const titles = el('div', { class: 'profile-titles' },
-      el('h1', { class: 'profile-name', text: displayName(target) }),
-      target.bio ? el('div', { class: 'muted', style: { marginTop: '4px', maxWidth: '520px' }, text: target.bio }) : null,
-      el('div', { class: 'profile-friends' },
-        followers.length
-          ? el('span', { class: 'avatar-stack' },
-            ...followers.slice(0, 3).map((follower) => avatarEl(follower, 'xs')))
-          : null,
-        el('a', {
-          href: `#/u/${target.username}/seguidores`,
-          text: `${formatCount(countFollowers(target.id))} seguidores`,
-        }),
-        el('span', { text: '·' }),
-        el('a', {
-          href: `#/u/${target.username}/siguiendo`,
-          text: `${formatCount(countFollowing(target.id))} siguiendo`,
-        }),
-        el('span', { text: '·' }),
-        el('span', { text: `${formatCount(postsByAuthor(target.id).length)} publicaciones` })));
-
-    const head = el('div', { class: 'profile-head' },
-      el('div', { class: 'profile-main' }, avatarWrap, titles, relationButtons(target, () => {
-        // re-render completo
-        render();
-      })));
-
-    // pestañas
-    const tabs = el('div', { class: 'profile-nav' });
-    for (const tab of TABS) {
-      const label = tab.id === 'seguidores'
-        ? `${tab.label} · ${formatCount(countFollowers(target.id))}`
-        : tab.label;
-      tabs.appendChild(el('button', {
-        class: `tab ${currentTab() === tab.id ? 'active' : ''}`, type: 'button',
-        text: label, onclick: () => goTab(tab.id),
-      }));
-    }
-    head.appendChild(el('div', { class: 'profile-nav-wrap' }, tabs));
-    return head;
-  }
-
-  function introCard(target) {
-    const items = [];
-    if (target.bio) items.push(el('div', { class: 'intro-item' }, icon('info', 18), target.bio));
-    if (target.work) items.push(el('div', { class: 'intro-item' }, icon('briefcase', 18), `Trabaja en ${target.work}`));
-    if (target.education) items.push(el('div', { class: 'intro-item' }, icon('education', 18), `Estudió en ${target.education}`));
-    if (target.location) items.push(el('div', { class: 'intro-item' }, icon('map-pin', 18), `Vive en ${target.location}`));
-    if (target.birthday) items.push(el('div', { class: 'intro-item' }, icon('calendar', 18), `Nació el ${longDate(target.birthday)}`));
-    if (target.whatsapp) {
-      items.push(el('a', {
-        class: 'intro-item intro-link',
-        href: `https://wa.me/${target.whatsapp}`,
-        target: '_blank',
-        rel: 'noopener noreferrer',
-        title: 'Escribir por WhatsApp',
-      }, icon('whatsapp', 18), `WhatsApp: +${target.whatsapp}`));
-    }
-    if (target.instagram) {
-      items.push(el('a', {
-        class: 'intro-item intro-link',
-        href: `https://instagram.com/${target.instagram}`,
-        target: '_blank',
-        rel: 'noopener noreferrer',
-        title: 'Ver Instagram',
-      }, icon('instagram', 18), `@${target.instagram}`));
-    }
-    items.push(el('div', { class: 'intro-item' }, icon('clock', 18), `Se unió en ${monthYear(target.createdAt)}`));
-
-    return el('div', { class: 'card intro-card' },
-      el('h3', { class: 'card-title', text: 'Información' }),
-      ...items);
-  }
-
-  function photosCard(target) {
-    const photos = postsByAuthor(target.id)
-      .filter((p) => canSeePost(p, state.me?.id))
-      .flatMap((p) => (p.media || []).map((m) => m.path))
-      .slice(0, 9);
-    if (!photos.length) return null;
-    return el('div', { class: 'card intro-card' },
-      el('div', { class: 'row between' },
-        el('h3', { class: 'card-title', text: 'Fotos' }),
+  function openMyMenu() {
+    const api = openModal({
+      title: 'Mi perfil',
+      body: el('div', { class: 'col gap-4' },
         el('button', {
-          class: 'link small', type: 'button', text: 'Ver todas',
-          onclick: () => goTab('photos'),
-        })),
-      el('div', { class: 'profile-photos' },
-        ...photos.map((path, index) => mediaImg(path, {
-          alt: 'Foto', onClick: () => lightbox(photos, index),
+          class: 'settings-row', type: 'button', style: { textAlign: 'left', width: '100%' },
+          onclick: () => { api.close(); editProfileModal(state.me, () => render()); },
+        }, el('span', { class: 'sr-ic' }, icon('edit', 18)),
+        el('div', { class: 'sr-body' },
+          el('div', { class: 'sr-title', text: 'Editar perfil' }),
+          el('div', { class: 'sr-sub', text: 'Foto, portada, datos y contacto' }))),
+        el('button', {
+          class: 'settings-row', type: 'button', style: { textAlign: 'left', width: '100%' },
+          onclick: () => { api.close(); navigate('/configuracion'); },
+        }, el('span', { class: 'sr-ic' }, icon('settings', 18)),
+        el('div', { class: 'sr-body' },
+          el('div', { class: 'sr-title', text: 'Configuración' }),
+          el('div', { class: 'sr-sub', text: 'Tema, sonidos y animaciones' }))),
+        el('button', {
+          class: 'settings-row', type: 'button', style: { textAlign: 'left', width: '100%' },
+          onclick: async () => {
+            const url = `${location.origin}${location.pathname}#/u/${state.me.username}`;
+            try { await navigator.clipboard.writeText(url); toast('Enlace copiado', { type: 'success' }); }
+            catch { toast('No se pudo copiar', { type: 'error' }); }
+            api.close();
+          },
+        }, el('span', { class: 'sr-ic' }, icon('link', 18)),
+        el('div', { class: 'sr-body' },
+          el('div', { class: 'sr-title', text: 'Copiar enlace de mi perfil' })))),
+      size: 'sm',
+    });
+  }
+
+  function header(user) {
+    const isMe = user.id === state.me?.id;
+    const followers = followersOf(user.id);
+    const actions = el('div', { class: 'profile-actions' });
+
+    if (preview) {
+      actions.appendChild(el('button', {
+        class: 'btn-icon profile-dots', type: 'button', 'aria-label': 'Opciones de mi perfil',
+        onclick: openMyMenu,
+      }, icon('more-h', 22)));
+    } else if (isMe) {
+      actions.append(
+        el('button', {
+          class: 'btn primary', type: 'button', onclick: () => editProfileModal(state.me, () => render()),
+        }, icon('edit', 16), 'Editar perfil'),
+        el('a', { class: 'btn', href: `#/u/${state.me.username}` }, icon('user', 16), 'Ver como público'));
+    } else {
+      actions.append(followButton(user, { size: 'lg', onChange: () => render() }));
+    }
+
+    return el('div', { class: 'profile-header' },
+      coverEl(user),
+      el('div', { class: 'profile-main-row' },
+        el('div', { class: 'profile-avatar-big' }, avatarEl(user, 'xxl')),
+        el('div', { class: 'profile-info' },
+          el('h1', { class: 'profile-name', text: displayName(user) }),
+          user.bio ? el('p', { class: 'muted', text: user.bio }) : null,
+          el('div', { class: 'profile-stats' },
+            el('a', { href: `#/u/${user.username}/seguidores`, text: `${formatCount(countFollowers(user.id))} seguidores` }),
+            el('span', { text: '·' }),
+            el('a', { href: `#/u/${user.username}/siguiendo`, text: `${formatCount(countFollowing(user.id))} siguiendo` }),
+            el('span', { text: '·' }),
+            el('span', { text: `${formatCount(postsByAuthor(user.id).length)} publicaciones` })),
+          el('div', { class: 'profile-actions-row' }, actions)),
+        el('div', { class: 'profile-avatar-stack' },
+          ...followers.slice(0, 5).map((person) => el('a', {
+            href: `#/u/${person.username}`, title: displayName(person),
+          }, avatarEl(person, 'xs'))))),
+      el('div', { class: 'profile-tabs' },
+        ...TABS.map((tab) => el('button', {
+          class: `tab ${currentTab() === tab.id ? 'active' : ''}`.trim(), type: 'button',
+          text: tab.id === 'seguidores'
+            ? `${tab.label} · ${formatCount(countFollowers(user.id))}`
+            : tab.label,
+          onclick: () => goTab(tab.id),
         }))));
   }
 
-  function followersCard(target) {
-    const followers = followersOf(target.id);
-    if (!followers.length) return null;
-    return el('div', { class: 'card intro-card' },
-      el('div', { class: 'row between' },
-        el('h3', { class: 'card-title', text: `Seguidores · ${formatCount(followers.length)}` }),
-        el('button', {
-          class: 'link small', type: 'button', text: 'Ver todos',
-          onclick: () => goTab('seguidores'),
-        })),
-      el('div', { class: 'profile-friend-grid' },
-        ...followers.slice(0, 9).map((follower) => el('a', {
-          class: 'pf', href: `#/u/${follower.username}`,
-        }, avatarEl(follower, 'lg'), el('span', { text: displayName(follower) })))));
-  }
-
-  function postsSection(target) {
-    const wrap = el('div');
-    const isMe = target.id === state.me?.id;
-    if (isMe) {
-      wrap.appendChild(mountComposer());
-    }
-    const posts = postsByAuthor(target.id).filter((p) => canSeePost(p, state.me?.id));
+  function postsSection(user) {
+    const wrap = el('div', { class: 'col gap-16' });
+    const posts = postsByAuthor(user.id).filter((post) => canSeePost(post, state.me?.id));
     if (!posts.length) {
       wrap.appendChild(el('div', { class: 'card' },
         emptyState({
-          iconName: 'photo-library',
-          title: isMe ? 'Aún no has publicado nada' : `${displayName(target)} todavía no tiene publicaciones`,
-          description: isMe ? 'Comparte tu primera foto o pensamiento con tus amigos.' : '',
-          action: isMe
+          iconName: 'photo',
+          title: user.id === state.me?.id ? 'Todavía no publicaste nada' : `${displayName(user)} no publicó nada`,
+          description: user.id === state.me?.id ? 'Tu primer momento puede ser hoy.' : '',
+          action: user.id === state.me?.id
             ? el('button', {
               class: 'btn primary', type: 'button', text: 'Crear publicación',
-              onclick: () => openComposer(),
+              onclick: () => navigate('/publicar'),
             })
             : null,
         })));
       return wrap;
     }
-    cards = [];
-    for (const post of posts.slice(0, 12)) {
-      const card = postCard(post);
-      cards.push({ id: post.id, card });
+    for (const post of posts.slice(0, 15)) {
+      const card = postCard(post, { onUpdate: () => render() });
+      cards.push(card);
       wrap.appendChild(card.el);
     }
     return wrap;
   }
 
-  function followersSection(target) {
-    const followers = followersOf(target.id);
-    const following = followingOf(target.id);
-    const wrap = el('div');
-    const gridWrap = (title, people, emptyText) => {
-      const card = el('div', { class: 'card pad' },
-        el('h3', { class: 'card-title', text: `${title} · ${formatCount(people.length)}` }));
-      if (!people.length) {
-        card.appendChild(el('p', { class: 'muted small', text: emptyText }));
-        return card;
-      }
-      const grid = el('div', { class: 'friend-grid', style: { paddingTop: '6px' } });
-      for (const person of people) {
-        grid.appendChild(el('a', { class: 'user-tile', href: `#/u/${person.username}` },
-          el('div', { class: 'ut-img' },
-            person.avatar
-              ? mediaImg(person.avatar, { alt: displayName(person) })
-              : el('div', {
-                class: 'center',
-                style: {
-                  width: '100%', height: '100%', fontSize: '34px', color: '#fff', fontWeight: '700',
-                  background: 'linear-gradient(135deg,#1877f2,#42b0ff)',
-                },
-                text: (displayName(person) || '?').slice(0, 2).toUpperCase(),
-              })),
-          el('div', { class: 'ut-body' },
-            el('span', { class: 'ut-name', text: displayName(person) }),
-            el('span', { class: 'ut-sub', text: `@${person.username}` }))));
-      }
-      card.appendChild(grid);
-      return card;
-    };
-    wrap.append(
-      gridWrap('Seguidores', followers, `Todavía nadie sigue a ${displayName(target)}.`),
-      el('div', { style: { height: '16px' } }),
-      gridWrap('Siguiendo', following, `${displayName(target)} todavía no sigue a nadie.`),
-    );
-    return wrap;
-  }
-
-  function photosSection(target) {
-    const photos = postsByAuthor(target.id)
-      .filter((p) => canSeePost(p, state.me?.id))
-      .flatMap((p) => (p.media || []).map((m) => ({ path: m.path, postId: p.id })));
-    if (!photos.length) {
+  function peopleSection(user, mode) {
+    const people = mode === 'siguiendo' ? followingOf(user.id) : followersOf(user.id);
+    if (!people.length) {
       return el('div', { class: 'card' },
         emptyState({
-          iconName: 'photo-library',
-          title: 'Sin fotos',
-          description: 'Las fotos que publique aparecerán aquí.',
+          iconName: 'users',
+          title: mode === 'siguiendo' ? 'Todavía no sigue a nadie' : 'Todavía no tiene seguidores',
+          description: mode === 'siguiendo'
+            ? 'Cuando siga a alguien aparecerá acá.'
+            : 'Compartí el perfil para que más gente lo siga.',
         }));
     }
-    const grid = el('div', {
-      style: {
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-        gap: '4px', padding: '4px',
-      },
-    });
-    const paths = photos.map((p) => p.path);
-    photos.forEach((photo, index) => {
-      grid.appendChild(mediaImg(photo.path, {
-        alt: 'Foto', onClick: () => lightbox(paths, index),
-        style: { width: '100%', aspectRatio: '1', objectFit: 'cover', cursor: 'zoom-in' },
-      }));
-    });
-    return el('div', { class: 'card' }, grid);
+    return el('div', { class: 'card pad' },
+      el('div', { class: 'friend-grid' },
+        ...people.map((person) => el('a', {
+          class: 'user-tile', href: `#/u/${person.username}`,
+        },
+        el('div', { class: 'ut-img' }, avatarEl(person, 'xl')),
+        el('div', { class: 'ut-body' },
+          el('span', { class: 'ut-name', text: displayName(person) }),
+          el('span', { class: 'ut-sub', text: `@${person.username}` }))))));
   }
 
-  function aboutSection(target) {
+  function photosSection(user) {
+    const photos = postsByAuthor(user.id)
+      .filter((post) => canSeePost(post, state.me?.id))
+      .flatMap((post) => (post.media || []).map((item) => ({ path: item.path, postId: post.id })));
+    if (!photos.length) {
+      return el('div', { class: 'card' }, emptyState({ iconName: 'photo', title: 'Sin fotos' }));
+    }
+    const paths = photos.map((photo) => photo.path);
+    return el('div', { class: 'card pad' },
+      el('div', { class: 'photo-grid' },
+        ...photos.map((photo, index) => mediaImg(photo.path, {
+          alt: 'Foto',
+          onClick: () => lightbox(paths, index),
+        }))));
+  }
+
+  function aboutSection(user) {
     const rows = [
-      ['Nombre', displayName(target)],
-      ['Usuario', `@${target.username}`],
-      ['Biografía', target.bio || '—'],
-      ['Trabajo', target.work || '—'],
-      ['Estudios', target.education || '—'],
-      ['Ciudad', target.location || '—'],
-      ['Nacimiento', target.birthday ? longDate(target.birthday) : '—'],
-      ['WhatsApp', target.whatsapp ? `+${target.whatsapp}` : '—'],
-      ['Instagram', target.instagram ? `@${target.instagram}` : '—'],
-      ['Miembro desde', monthYear(target.createdAt)],
-      ['Seguidores', formatCount(countFollowers(target.id))],
-      ['Siguiendo', formatCount(countFollowing(target.id))],
+      ['Nombre', displayName(user)],
+      ['Usuario', `@${user.username}`],
+      ['Biografía', user.bio || '—'],
+      ['Trabajo', user.work || '—'],
+      ['Estudios', user.education || '—'],
+      ['Ciudad', user.location || '—'],
+      ['Nacimiento', user.birthday ? longDate(user.birthday) : '—'],
+      ['WhatsApp', user.whatsapp ? `+${user.whatsapp}` : '—'],
+      ['Instagram', user.instagram ? `@${user.instagram}` : '—'],
+      ['Miembro desde', monthYear(user.createdAt)],
     ];
     return el('div', { class: 'card pad' },
-      el('h3', { class: 'card-title', text: 'Información' }),
-      ...rows.map(([label, value]) => el('div', {
-        class: 'row gap-12', style: { padding: '10px 0', borderBottom: '1px solid var(--line-soft)' },
-      },
-      el('span', { class: 'muted', style: { minWidth: '140px' }, text: label }),
-      el('span', { text: value }))));
+      el('h2', { class: 'card-title', text: 'Información' }),
+      ...rows.map(([label, value]) => el('div', { class: 'about-row' },
+        el('span', { class: 'muted', text: label }),
+        el('span', { text: value }))));
   }
 
   function render() {
-    clear(root);
-    cards.forEach(({ card }) => card.destroy?.());
+    cards.forEach((card) => card.destroy?.());
     cards = [];
-    const target = user();
+    clear(root);
+
+    if (loading) {
+      root.appendChild(el('div', { class: 'center', style: { padding: '60px' } },
+        el('span', { class: 'spinner' })));
+      return;
+    }
+
     if (!target) {
       root.appendChild(el('div', { class: 'card' },
         emptyState({
           iconName: 'user-x',
           title: 'Perfil no encontrado',
-          description: `No existe ninguna cuenta con @${username}.`,
-          action: el('a', { class: 'btn soft', href: '#/feed', text: 'Volver al inicio' }),
+          description: 'Esa cuenta no existe o cambió de usuario.',
+          action: el('button', {
+            class: 'btn primary', type: 'button', text: 'Ir al inicio',
+            onclick: () => goBack('/inicio'),
+          }),
         })));
       return;
     }
-    const isMe = target.id === state.me?.id;
+
+    root.appendChild(header(target));
     const tab = currentTab();
-    root.append(coverElement(target, isMe), headElement(target, isMe));
-
-    if (tab === 'seguidores' || tab === 'siguiendo' || tab === 'friends') {
-      root.appendChild(followersSection(target));
-      return;
-    }
-    if (tab === 'fotos' || tab === 'photos') {
-      root.appendChild(photosSection(target));
-      return;
-    }
-    if (tab === 'about') {
-      root.appendChild(aboutSection(target));
-      return;
-    }
-
-    const grid = el('div', { class: 'profile-grid' },
-      postsSection(target),
-      el('div', { class: 'profile-side' },
-        introCard(target),
-        photosCard(target),
-        followersCard(target)));
-    root.appendChild(grid);
+    if (tab === 'seguidores') root.appendChild(peopleSection(target, 'seguidores'));
+    else if (tab === 'siguiendo') root.appendChild(peopleSection(target, 'siguiendo'));
+    else if (tab === 'fotos') root.appendChild(photosSection(target));
+    else if (tab === 'about') root.appendChild(aboutSection(target));
+    else root.appendChild(postsSection(target));
   }
 
-  render();
+  async function init() {
+    if (!preview) {
+      const entry = state.userIndex.find((user) =>
+        user.username?.toLowerCase() === String(username || '').toLowerCase() || user.id === username);
+      target = entry ? await loadUser(entry.id) : userByUsername(username) || userById(username);
+    } else {
+      target = state.me;
+    }
+    if (target) {
+      await Promise.all([loadFollowers(target.id), loadFollowing(target.id)]);
+      const ids = state.feedIndex.filter((entry) => entry.authorId === target.id).slice(0, 15);
+      await Promise.all(ids.map((entry) => loadPost(entry.id)));
+    }
+    loading = false;
+    render();
+  }
+
+  init();
+
   return {
     el: root,
-    onData() {
-      const target = user();
-      if (!target) return;
-      // refresca las tarjetas sin perder el foco de los comentarios
-      cards.forEach(({ card }) => card.update?.());
-      const headEl = root.querySelector('.profile-head');
-      const fresh = headElement(target, target.id === state.me?.id);
-      if (headEl) headEl.replaceWith(fresh);
-      else render();
+    onData(topic) {
+      if (topic === 'post' || topic === 'me' || topic === 'follow') render();
     },
-    destroy() {
-      cards.forEach(({ card }) => card.destroy?.());
-    },
+    destroy() { cards.forEach((card) => card.destroy?.()); },
   };
 }

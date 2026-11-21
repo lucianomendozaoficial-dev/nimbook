@@ -1,9 +1,10 @@
 /* ==========================================================================
-   router.js — rutas por hash (funciona en GitHub Pages sin configuración)
-   Acepta nombres en español y también los antiguos en inglés.
+   router.js — rutas por hash con historial "nativo"
    ========================================================================== */
 
 const listeners = new Set();
+let depth = 0;
+let ignoreHash = false;
 
 export function parseRoute(hash = window.location.hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
@@ -22,9 +23,6 @@ export function parseRoute(hash = window.location.hash) {
     case 'seguidores':
     case 'people':
       return { name: 'friends', params: { tab: second || 'seguidores' }, query };
-    case 'messages':
-    case 'mensajes':
-      return { name: 'messages', params: { id: second || null }, query };
     case 'notifications':
     case 'notificaciones':
       return { name: 'notifications', params: {}, query };
@@ -40,10 +38,16 @@ export function parseRoute(hash = window.location.hash) {
     case 'buscar':
       return { name: 'search', params: {}, query };
     case 'settings':
+    case 'configuracion':
     case 'ajustes':
-      return { name: 'settings', params: { tab: second || 'cuenta' }, query };
+      return { name: 'settings', params: {}, query };
     case 'menu':
       return { name: 'menu', params: {}, query };
+    case 'publicar':
+    case 'compose':
+      return { name: 'compose', params: {}, query };
+    case 'mi-perfil':
+      return { name: 'myprofile', params: {}, query };
     case 'u':
     case 'perfil':
       return {
@@ -58,24 +62,37 @@ export function parseRoute(hash = window.location.hash) {
   }
 }
 
+function toHash(to) {
+  return to.startsWith('#') ? to : `#${to.startsWith('/') ? to : `/${to}`}`;
+}
+
 export function navigate(to, { replace = false } = {}) {
-  const hash = to.startsWith('#') ? to : `#${to.startsWith('/') ? to : `/${to}`}`;
+  const hash = toHash(to);
   if (window.location.hash === hash) {
     emit();
     return;
   }
   if (replace) {
-    const url = `${window.location.pathname}${window.location.search}${hash}`;
-    window.history.replaceState(null, '', url);
+    history.replaceState({ nb: true, depth }, '', hash);
     emit();
-  } else {
-    window.location.hash = hash;
+    return;
   }
+  depth += 1;
+  history.pushState({ nb: true, depth }, '', hash);
+  emit();
 }
 
-export function back() {
-  if (window.history.length > 1) window.history.back();
-  else navigate('/inicio');
+/** Vuelve atrás de forma natural; si no hay historial propio, va al inicio. */
+export function goBack(fallback = '/inicio') {
+  if (depth > 0) {
+    history.back();
+    return;
+  }
+  navigate(fallback, { replace: true });
+}
+
+export function backDepth() {
+  return depth;
 }
 
 function emit() {
@@ -91,7 +108,23 @@ export function onRouteChange(fn) {
 }
 
 export function startRouter(fn) {
-  window.addEventListener('hashchange', emit);
+  history.replaceState({ nb: true, depth: 0 }, '', window.location.hash || '#/inicio');
+
+  window.addEventListener('popstate', (event) => {
+    ignoreHash = true;
+    setTimeout(() => { ignoreHash = false; }, 0);
+    depth = Number(event.state?.depth) || 0;
+    emit();
+  });
+
+  // Enlaces <a href="#/..."> y ediciones manuales de la URL
+  window.addEventListener('hashchange', () => {
+    if (ignoreHash) return;
+    depth += 1;
+    history.replaceState({ nb: true, depth }, '', window.location.hash);
+    emit();
+  });
+
   onRouteChange(fn);
   return parseRoute();
 }

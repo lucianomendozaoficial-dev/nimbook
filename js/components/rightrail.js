@@ -1,5 +1,5 @@
 /* ==========================================================================
-   rightrail.js — personas que seguís y sugerencias (columna derecha)
+   rightrail.js — personas que seguís y sugerencias
    ========================================================================== */
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
@@ -7,7 +7,6 @@ import {
   state, displayName, followingOf, followSuggestions, mutualFollowers, countFollowers,
 } from '../core/store.js';
 import { avatarEl } from '../core/ui.js';
-import { isOnline } from '../core/auth.js';
 import { followButton } from './follow-button.js';
 
 export function mountRightRail() {
@@ -18,23 +17,18 @@ export function mountRightRail() {
     const me = state.me;
     if (!me) return;
 
-    const following = followingOf(me.id)
-      .sort((a, b) => Number(isOnline(b)) - Number(isOnline(a)));
-    const online = following.filter(isOnline);
-    const ordered = [...online, ...following.filter((person) => !isOnline(person))];
-
-    const head = el('div', { class: 'rail-title' },
+    const following = followingOf(me.id);
+    root.appendChild(el('div', { class: 'rail-title' },
       el('span', { text: 'Siguiendo' }),
       el('span', { class: 'row gap-4' },
         el('button', {
-          class: 'btn-icon', type: 'button', title: 'Buscar personas', 'aria-label': 'Buscar personas',
-          onclick: () => { window.location.hash = '/seguidores/todos'; },
+          class: 'btn-icon', type: 'button', title: 'Buscar personas',
+          onclick: () => { window.location.hash = '/buscar'; },
         }, icon('search', 18)),
         el('button', {
-          class: 'btn-icon', type: 'button', title: 'Ver sugerencias', 'aria-label': 'Ver sugerencias',
+          class: 'btn-icon', type: 'button', title: 'Ver sugerencias',
           onclick: () => { window.location.hash = '/seguidores/sugerencias'; },
-        }, icon('user-plus', 18))));
-    root.appendChild(head);
+        }, icon('user-plus', 18)))));
 
     if (!following.length) {
       root.appendChild(el('div', {
@@ -43,15 +37,11 @@ export function mountRightRail() {
       }));
     } else {
       const list = el('div');
-      for (const person of ordered.slice(0, 12)) {
+      for (const person of following.slice(0, 12)) {
         list.appendChild(el('a', {
-          class: 'rail-item', href: `#/mensajes?u=${person.id}`,
-          title: `Enviar mensaje a ${displayName(person)}`,
-        },
-        el('span', { class: `presence ${isOnline(person) ? '' : 'offline'}`.trim() },
-          avatarEl(person, 'sm'),
-          el('span', { class: 'dot' })),
-        el('span', { class: 'name', text: displayName(person) })));
+          class: 'rail-item', href: `#/u/${person.username}`,
+          title: displayName(person),
+        }, avatarEl(person, 'sm'), el('span', { class: 'name', text: displayName(person) })));
       }
       root.appendChild(list);
       if (following.length > 12) {
@@ -68,7 +58,7 @@ export function mountRightRail() {
       root.appendChild(el('div', { class: 'rail-title' }, 'Sugerencias para ti'));
       for (const person of suggestions) {
         const mutual = mutualFollowers(me.id, person.id).length;
-        const row = el('div', { class: 'rail-item', style: { gap: '10px' } },
+        root.appendChild(el('div', { class: 'rail-item', style: { gap: '10px' } },
           el('a', { href: `#/u/${person.username}` }, avatarEl(person, 'sm')),
           el('div', { class: 'grow', style: { minWidth: '0' } },
             el('a', {
@@ -82,8 +72,7 @@ export function mountRightRail() {
                 ? `${mutual} seguidor${mutual === 1 ? '' : 'es'} en común`
                 : `${countFollowers(person.id)} seguidores`,
             })),
-          followButton(person, { onChange: () => render() }));
-        root.appendChild(row);
+          followButton(person, { onChange: () => render() })));
       }
     }
 
