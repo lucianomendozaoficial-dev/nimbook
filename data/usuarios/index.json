@@ -1,4 +1,12 @@
 {
   "version": 1,
-  "users": []
+  "users": [
+    {
+      "id": "u_mwprpruarsatvb",
+      "username": "zumaprp6a5",
+      "name": "Zuma Prueba",
+      "avatar": null,
+      "createdAt": "2026-11-21T02:07:31.378Z"
+    }
+  ]
 }
