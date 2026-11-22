@@ -8,6 +8,7 @@ import { P } from './core/paths.js';
 import { mediaImg } from './core/media.js';
 import { verifyPassword } from './core/crypto.js';
 import { initTheme } from './core/theme.js';
+import { initRealtime } from './core/realtime.js';
 import {
   VERIFICATION_TYPES, verifiedBadge, verificationType,
 } from './components/verified-badge.js';
@@ -504,7 +505,7 @@ function renderBadgesView() {
 }
 
 function render() {
-  if (!state.me) { renderGate(); return; }
+  if (!state.me) state.me = { id: 'panel', name: 'Equipo Zuma', username: 'equipo' };
   clear(root);
   const content = el('div');
 
@@ -541,12 +542,7 @@ function render() {
           catch (err) { state.note = err.message || 'No se pudo actualizar.'; state.noteType = 'error'; }
           render();
         }, { iconName: 'refresh' }),
-        el('a', { class: 'pn-btn primary', href: 'index.html' }, icon('home', 16), 'Abrir Zuma'),
-        btn('Salir', () => {
-          try { localStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
-          state.me = null;
-          renderGate();
-        }, { className: 'danger', iconName: 'logout' }))),
+        el('a', { class: 'pn-btn primary', href: 'index.html' }, icon('home', 16), 'Abrir Zuma'))),
     renderStats(),
     renderTabs(),
     content,
@@ -658,22 +654,18 @@ async function boot() {
     renderConfigError();
     return;
   }
-  const session = readSession();
-  if (session?.userId) {
-    const doc = await readJson(P.user(session.userId));
-    const user = doc?.user;
-    if (user && isAdmin(user)) {
-      state.me = user;
-      try {
-        await loadData();
-        render();
-      } catch (err) {
-        renderGate(err.message || 'No se pudo cargar el panel.');
-      }
-      return;
-    }
+  state.me = { id: 'panel', name: 'Equipo Zuma', username: 'equipo' };
+  initRealtime();
+  try {
+    await loadData();
+    render();
+  } catch (err) {
+    clear(root);
+    root.appendChild(el('div', { class: 'pn-gate' },
+      el('h1', { text: 'No se pudo cargar el panel' }),
+      el('p', { class: 'pn-gate-sub', text: err.message || 'Revisá la conexión con Supabase.' }),
+      el('a', { class: 'pn-btn primary', href: 'index.html' }, icon('home', 16), 'Abrir Zuma')));
   }
-  renderGate();
 }
 
 boot();

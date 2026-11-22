@@ -2,7 +2,7 @@
    store.js — estado en memoria y lecturas desde Supabase
    ========================================================================== */
 import {
-  configure, fetchDoc, cachePeek, cachePut, onWrite, bumpVersion,
+  configure, fetchDoc, cachePut, onWrite, bumpVersion,
 } from './net.js';
 import { P } from './paths.js';
 
@@ -71,37 +71,65 @@ export function notify(topic = 'data', detail = {}) {
 
 export function attach(cfg) {
   state.cfg = configure(cfg);
-  onWrite((path) => {
+  onWrite((path, doc, meta = {}) => {
+    let topic = 'write';
+    const detail = { path, remote: Boolean(meta.remote) };
+
     if (path === P.userIndex) {
-      const doc = cachePeek(path);
       state.userIndex = doc?.users || [];
-    }
-    if (state.me && path === P.likes(state.me.id)) {
-      const doc = cachePeek(path);
-      state.likes = doc?.likes || {};
-    }
-    if (state.me && path === P.following(state.me.id)) {
-      const doc = cachePeek(path);
-      state.following = new Set(doc?.following || []);
-    }
-    if (state.me && path === P.followers(state.me.id)) {
-      const doc = cachePeek(path);
-      state.followers = new Set(doc?.followers || []);
-    }
-    if (path === P.shopIndex) {
-      const doc = cachePeek(path);
+      topic = 'people';
+    } else if (path === P.feedIndex) {
+      state.feedIndex = doc?.posts || [];
+      topic = 'feed';
+    } else if (path === P.groups) {
+      state.groups = doc?.groups || [];
+      topic = 'groups';
+    } else if (path === P.stories) {
+      state.stories = doc?.stories || [];
+      topic = 'stories';
+    } else if (path === P.shopIndex) {
       state.shopIndex = doc?.items || [];
-    }
-    if (path.startsWith('data/tienda/') && path !== P.shopIndex) {
-      const doc = cachePeek(path);
-      if (doc?.item) state.shopItems.set(doc.item.id, doc.item);
-    }
-    if (state.me && path === P.inbox(state.me.id)) {
-      const doc = cachePeek(path);
+      topic = 'shop';
+    } else if (state.me && path === P.likes(state.me.id)) {
+      state.likes = doc?.likes || {};
+      topic = 'reactions';
+    } else if (state.me && path === P.following(state.me.id)) {
+      state.following = new Set(doc?.following || []);
+      topic = 'follow';
+    } else if (state.me && path === P.followers(state.me.id)) {
+      state.followers = new Set(doc?.followers || []);
+      topic = 'follow';
+    } else if (state.me && path === P.inbox(state.me.id)) {
       state.inbox = Array.isArray(doc?.threads) ? doc.threads : [];
       state.ui.unreadMessages = countUnreadMessages(state.inbox);
+      topic = 'messages';
+    } else if (state.me && path === P.notifications(state.me.id)) {
+      state.notifications = (doc?.items || []).slice(0, 60);
+      state.ui.unreadNotifs = state.notifications.filter((item) => !item.read).length;
+      topic = 'notifications';
+    } else if (path.startsWith('data/usuarios/')) {
+      if (doc?.user) state.users.set(doc.user.id, doc.user);
+      topic = state.me && doc?.user?.id === state.me.id ? 'me' : 'people';
+    } else if (path.startsWith('data/feed/')) {
+      if (doc?.post) {
+        state.posts.set(doc.post.id, doc.post);
+        detail.id = doc.post.id;
+        detail.authorId = doc.post.authorId;
+      }
+      topic = 'post';
+    } else if (path.startsWith('data/comentarios/')) {
+      detail.postId = path.split('/')[2] || null;
+      topic = 'comments';
+    } else if (path.startsWith('data/tienda/')) {
+      if (doc?.item) state.shopItems.set(doc.item.id, doc.item);
+      topic = 'shop';
+    } else if (path.startsWith('data/mensajes/hilos/')) {
+      topic = 'messages';
+    } else if (path.startsWith('data/mensajes/bandejas/')) {
+      topic = 'messages';
     }
-    notify('write', { path });
+
+    notify(topic, detail);
   });
   return state;
 }

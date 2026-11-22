@@ -435,7 +435,7 @@ export function profilePage(username, { preview = false } = {}) {
   return {
     el: root,
     onData(topic) {
-      if (topic === 'post' || topic === 'me' || topic === 'follow') render();
+      if (topic === 'post' || topic === 'me' || topic === 'follow' || topic === 'people') render();
     },
     destroy() { cards.forEach((card) => card.destroy?.()); },
   };

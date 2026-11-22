@@ -51,7 +51,7 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - Publicaciones con texto, hasta 10 fotos, **sentimiento, ubicación, privacidad y fondos de color** (como Facebook).
 - **Historias en su propia sección**: la cámara se abre primero y abajo está la opción de elegir de la galería. La foto se comparte tal cual (sin editor); dura 24 h y se puede descargar.
 - **Insignias de verificación**: tres niveles con color, como Instagram. La **celeste** es para cuentas verificadas que no son famosas, la **morada** para influencers, políticos y figuras públicas, y la **dorada** para el equipo de Zuma y sus aliados. Al tocar una insignia se abre la sección que explica las tres.
-- **Panel de control** (`panel.html`): el equipo puede ver usuarios, sus publicaciones y datos, y asignar o quitar la insignia. Lee y escribe en Supabase con la clave publicable.
+- **Panel de control** (`panel.html`): abre **directo, sin login**, y permite ver usuarios, publicaciones y datos, y asignar o quitar insignias. Lee y escribe en Supabase con la clave publicable.
 - **Actualizar Zuma** en el menú: borra la caché, desregistra el service worker y recarga para ver los cambios sin Ctrl+R.
 - **Descargar imágenes** de publicaciones e historias desde el menú de la publicación o el visor.
 - **Eliminar cuenta** desde el menú: pide la contraseña, avisa que es permanente y borra perfil, publicaciones, historias, ventas, conversaciones y vínculos.
@@ -59,7 +59,10 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - **Shop**: mercado con productos de la gente de Zuma, búsqueda y categorías, publicación con fotos, precio, estado y ubicación, ficha con vendedor, botón para escribirle, marcar como vendido y eliminar lo propio. El botón **Vender algo** queda flotante.
 - **Contacto de la venta**: al publicar se puede activar el contacto y elegir **WhatsApp** o **Instagram** (con sus logos). En la ficha aparecen esos botones y, para quien no quiera usarlos, el chat privado de Zuma.
 - **Ventas en el muro**: cada tanto aparece una venta de Shop mezclada en «Para ti», sin importar a quién sigas, con la **marca de agua de Zuma** y la etiqueta «Venta» para que se note que es de Shop.
-- **Mensajes privados**: bandeja con conversaciones y contador de no leídos, chat uno a uno (enviar, actualizar, buscar gente para escribirle), aviso en la campana y atajo desde el perfil y desde Shop. El mensaje se ve al instante y el chat se actualiza solo **cada 5 segundos leyendo Supabase**. La bandeja del destinatario muestra a la otra persona (y se reparan las bandejas viejas que mostraban el propio usuario).
+- **Mensajes privados estilo WhatsApp** (solo el estilo): bandeja con contador de no leídos, burbujas verdes/blancas, separadores de fecha, hora dentro del mensaje y chat uno a uno. **Tiempo real** con Supabase Realtime: el mensaje aparece al instante, sin esperar 5 segundos. Los sonidos avisan cuando llega un mensaje y no tenés ese chat abierto.
+- **Emojis** en el chat, los comentarios y al crear publicaciones, con selector por categorías y recientes.
+- **Grupos y canales personalizables**: portada, color, emoji, descripción, categoría, reglas, privacidad y edición para el dueño. El canal usa el mismo editor.
+- **Todo en tiempo real**: publicaciones, reacciones, comentarios, grupos, historias, Shop, notificaciones y mensajes se actualizan solos entre dispositivos con Supabase Realtime; si el canal se cae, queda un sondeo de respaldo.
 - Reacciones con un toque (me gusta) o manteniendo apretado (6 opciones), comentarios y respuestas, compartir y guardar.
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
@@ -85,21 +88,19 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - El sitio es 100 % estático (GitHub Pages). La base de datos es **Postgres en Supabase**: una tabla `zuma_docs` con `path`, `data jsonb` y `updated_at`, más el bucket público `zuma-media` para las imágenes nuevas.
 - **Lecturas y escrituras** desde el navegador con `@supabase/supabase-js` (incluido en `js/vendor/`). No hay token de GitHub en la app.
 - Las escrituras se agrupan en cola y usan **bloqueo optimista** con `updated_at`: si otra persona escribió el mismo documento, se relee y se reintenta para no perder cambios.
-- Todo lo descargado se guarda en el navegador (localStorage) para no pedirlo dos veces; el chat abierto consulta Supabase cada 5 s y el resto se actualiza al abrir o al tirar hacia abajo.
+- Todo lo descargado se guarda en el navegador (localStorage) para no pedirlo dos veces; los cambios llegan por **Supabase Realtime** y el chat abierto tiene un sondeo de respaldo cada 5 s.
 - Las imágenes viejas siguen en GitHub Pages; las nuevas se suben a Supabase Storage y se guardan como URL pública.
 
 ---
  
 ## Panel de control
 
-`panel.html` es una página aparte para el equipo. Muestra los usuarios, sus datos y sus publicaciones, y permite asignar o quitar la insignia de verificación. Lee y escribe en Supabase con la clave publicable de `config.js`.
+`panel.html` es una página aparte para el equipo. **Abre directamente, sin login**, y permite ver usuarios, datos, publicaciones y asignar o quitar la insignia de verificación. Lee y escribe en Supabase con la clave publicable de `config.js`.
 
-- Se entra con una cuenta de administrador. La lista está al principio de `js/panel.js` (`ADMIN_USERNAMES`): por defecto `lucianomdz`, `lucianomdz.ok` y `eltuty`. En local se agrega `nico.gimenez` para poder probar el panel con los datos demo. Cambiala por las cuentas del equipo.
-- Si no hay una sesión de administrador, el panel muestra un acceso con usuario y contraseña; verifica la contraseña con el mismo PBKDF2 de la app.
 - Pestañas: **Usuarios** (buscar, ver ficha, asignar insignia), **Publicaciones** y **Insignias** (explicación y cuentas verificadas).
 - La insignia se guarda en `usuarios/<id>.json` (`verification: { type, at }`) y en `usuarios/index.json` (`verification: "celeste" | "morado" | "dorado"`) para que el muro y las listas la muestren sin descargar la ficha completa.
 
-> El panel es una herramienta del equipo, no un backend: la protección es del lado del navegador y las políticas actuales de Supabase permiten escribir con la clave publicable. No lo uses como bóveda de datos: para un equipo grande conviene pasar el login a Supabase Auth y cerrar las políticas por usuario.
+> El panel no tiene login: cualquiera que conozca la URL puede ver y modificar los datos, porque las políticas RLS actuales permiten escribir con la clave publicable. Para una comunidad grande hay que pasar el login a Supabase Auth y cerrar las políticas por usuario. No compartas el enlace del panel.
 
 ---
 
@@ -131,7 +132,7 @@ media/
   perfiles/  portadas/  publicaciones/  historias/  grupos/  tienda/
 ```
 
-**Shop y mensajes funcionan con la misma idea:** cada documento se lee y se escribe en Supabase. Un mensaje nuevo se guarda en el hilo compartido `mensajes/hilos/<id-menor>__<id-mayor>.json` y en las dos bandejas: la mía queda sin pendientes y la de la otra persona suma un no leído. Mientras un chat está abierto, se leen el hilo y la bandeja cada 5 segundos; no hay que recargar.
+**Shop y mensajes funcionan con la misma idea:** cada documento se lee y se escribe en Supabase. Un mensaje nuevo se guarda en el hilo compartido `mensajes/hilos/<id-menor>__<id-mayor>.json` y en las dos bandejas: la mía queda sin pendientes y la de la otra persona suma un no leído. El cambio se emite por Supabase Realtime y el chat abierto se actualiza al instante; el sondeo de 5 segundos queda como respaldo.
 
 **Regla de oro:** una publicación nunca guarda sus comentarios ni sus reacciones adentro.
 El «me gusta» escribe primero en `likes/<usuario>.json` y después, si se puede, suma el contador del post.
@@ -191,7 +192,7 @@ La base arranca **vacía**: no se migran datos viejos. Cada persona vuelve a cre
 
 1. Entra en `https://tuusuario.github.io/nimbook/`.
 2. Pulsa **Crear una cuenta nueva**, completa tus datos y publica tu primer momento.
-3. Para asignar insignias, entra a `panel.html` con una cuenta de administrador.
+3. Para asignar insignias, entra a `panel.html` directamente: no pide login.
 
 > El repositorio puede ser público: GitHub Pages lo necesita para servir el sitio. Los datos no están en el repositorio; están en Supabase.
 
@@ -248,11 +249,12 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Concurrencia | Cola por documento + bloqueo optimista con `updated_at` y reintentos |
 | Caché | Memoria + `localStorage` por documento (30 s en memoria) |
 | Cuota | La del plan de Supabase; ya no se gasta la API de GitHub para datos |
-| Chat en vivo | Sondeo cada 5 s a Supabase mientras el chat está abierto |
+| Tiempo real | Supabase Realtime Broadcast: cada escritura avisa a los demás dispositivos; el chat tiene sondeo de respaldo cada 5 s |
+| Chat en vivo | Realtime instantáneo + sonido si el chat no está abierto; el sondeo queda como respaldo |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
 | Historias | Cámara con `getUserMedia`; si no hay permiso o cámara, se elige de la galería. Se comparte la foto tal cual, sin editor |
 | Verificación | Tres niveles (celeste/morado/dorado) guardados en la ficha y el índice; la insignia es un botón que abre `#/verificacion` |
-| Panel | `panel.html` + `js/panel.js`, lectura y escritura en Supabase; acceso por cuenta administradora |
+| Panel | `panel.html` + `js/panel.js`, lectura y escritura en Supabase; **sin login** |
 | Eliminar cuenta | Verifica la contraseña y borra perfil, posts, historias, ventas, conversaciones y vínculos; el aviso indica que no se puede deshacer |
 | Imágenes | `canvas` → JPEG, máx. 1600 px y ~1,4 MB; las nuevas van a Supabase Storage |
 | Vídeos | **No soportados** (por diseño); solo imágenes |
@@ -264,7 +266,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - Los mensajes privados se guardan como JSON en Supabase: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Alguien con la clave publicable y las políticas actuales podría leer la tabla. Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
 - La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, la app ofrece elegir una foto de la galería.
 - Al eliminar una cuenta se borran sus documentos JSON, pero las imágenes ya subidas a Storage y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar.
-- El panel de control no tiene backend: el acceso es una verificación en el navegador. No lo uses como bóveda de datos.
+- El panel de control no tiene login por decisión de producto: cualquiera con el enlace puede ver y modificar datos. No lo uses como bóveda de datos; si el proyecto crece, hay que pasar el login a Supabase Auth.
 - Si dos personas escriben a la vez, la app relee y reintenta; en el peor caso avisa para volver a intentarlo.
 
 ---
@@ -291,8 +293,12 @@ js/core/crypto.js       PBKDF2
 js/core/media.js        compresión y subida de imágenes
 js/core/ui.js           modales, menús, toasts, visor de imágenes
 js/core/router.js       rutas por hash
-js/components/*         topbar, sidebars, compositor, tarjeta de post, historias, insignias
-js/pages/*              feed, Shop, historias con cámara, mensajes privados, perfil, búsqueda, verificación, menú…
+js/components/*         topbar, sidebars, compositor, tarjeta de post, historias, insignias, emojis
+js/components/emoji-picker.js   selector de emojis por categorías y recientes
+js/core/realtime.js     Supabase Realtime: cambios en vivo entre dispositivos
+js/pages/group-editor.js        crear y personalizar grupos/canales
+css/features.css        mensajes estilo WhatsApp, emojis, grupos y márgenes móviles
+js/pages/*              feed, Shop, grupos, historias con cámara, mensajes, perfil, búsqueda, verificación, menú…
 js/core/story-fonts.js  fuentes para las historias viejas que ya tenían texto
 js/core/update.js       Actualizar Zuma: limpia caché, desregistra el SW y recarga
 css/ios.css             capa de estilo iOS y estilos de las secciones nuevas

@@ -43,9 +43,9 @@ export function onWrite(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
-function emitWrite(path, doc) {
+function emitWrite(path, doc, meta = {}) {
   for (const fn of listeners) {
-    try { fn(path, doc); } catch (err) { console.error('[net]', err); }
+    try { fn(path, doc, meta); } catch (err) { console.error('[net]', err); }
   }
 }
 
@@ -114,6 +114,11 @@ function client() {
   return sb;
 }
 
+/** Cliente compartido (también lo usa el canal de tiempo real). */
+export function supabaseClient() {
+  return client();
+}
+
 function fail(error, fallback = 'No se pudo conectar con la base de datos.') {
   const err = new Error(error?.message || fallback);
   err.status = error?.code || error?.status || 0;
@@ -164,6 +169,23 @@ export async function fetchDoc(path, { fresh = false, maxAge = BUCKET } = {}) {
     const cached = cachePeek(path);
     if (cached !== undefined) return cached;
     throw err;
+  }
+}
+
+/**
+ * Refresca un documento que cambió en otro dispositivo y avisa a la app.
+ * El aviso remoto no se vuelve a emitir por el canal de tiempo real.
+ */
+export async function applyRemote(path) {
+  if (!path || !path.startsWith('data/')) return null;
+  try {
+    forget(path);
+    const doc = await fetchDoc(path, { fresh: true });
+    emitWrite(path, doc, { remote: true });
+    bumpVersion();
+    return doc;
+  } catch {
+    return null;
   }
 }
 

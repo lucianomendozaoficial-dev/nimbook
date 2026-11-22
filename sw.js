@@ -4,7 +4,7 @@
    hay conexiÃ³n, lo Ãºltimo guardado en cachÃ©.
    ========================================================================== */
 
-const CACHE = 'nimbookgr-v9';
+const CACHE = 'nimbookgr-v10';
 const SHELL = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const SHELL = [
   './css/app.css',
   './css/pages.css',
   './css/ios.css',
+  './css/features.css',
   './js/app.js',
   './js/vendor/supabase.js',
   './assets/logo/zuma-logo-192.png',

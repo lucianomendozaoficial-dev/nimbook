@@ -12,6 +12,7 @@ import { sendMessage, markThreadRead } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
 import { verifiedBadge } from '../components/verified-badge.js';
+import { emojiButton } from '../components/emoji-picker.js';
 
 export function messagesPage(username = '') {
   const root = el('div');
@@ -27,6 +28,7 @@ export function messagesPage(username = '') {
   let pollTimer = null;
   let pollBusy = false;
   let sending = false;
+  let syncTimer = null;
 
   const POLL_MS = 5000;
 
@@ -126,11 +128,12 @@ export function messagesPage(username = '') {
       'data-message-id': message.id,
     },
     mine ? null : avatarEl(userById(message.fromId) || partner, 'xs'),
-    el('div', { class: 'bubble', text: message.text }),
-    el('span', {
-      class: 'stamp',
-      text: message.pending ? 'enviando…' : clockTime(message.createdAt),
-    }));
+    el('div', { class: 'bubble' },
+      el('span', { class: 'msg-text', text: message.text }),
+      el('span', {
+        class: 'stamp',
+        text: message.pending ? 'enviando…' : clockTime(message.createdAt),
+      })));
   }
 
   function renderChatBody(partner) {
@@ -229,6 +232,41 @@ export function messagesPage(username = '') {
   }
   document.addEventListener('visibilitychange', onVisibility);
 
+  /** Un cambio llega por Realtime: refresca el hilo abierto sin esperar 5 s. */
+  function scheduleSync() {
+    if (!activePartner || destroyed) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(async () => {
+      if (!activePartner || destroyed) return;
+      const partner = activePartner;
+      const threadId = threadIdFor(state.me?.id, partner.id);
+      const before = messagesOf(threadId);
+      const beforeIds = new Set(before.map((message) => message.id));
+      try {
+        await loadThread(threadId, { force: true });
+      } catch {
+        return;
+      }
+      const after = messagesOf(threadId);
+      const changed = after.length !== before.length
+        || after.some((message) => !beforeIds.has(message.id));
+      if (!changed) return;
+      const incoming = after.some((message) => (
+        message.fromId !== state.me?.id && !message.pending && !beforeIds.has(message.id)
+      ));
+      const atBottom = !chatBody
+        || chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 110;
+      renderChatBody(partner);
+      if (incoming) await markThreadRead(partner.id).catch(() => {});
+      if (atBottom || incoming) {
+        requestAnimationFrame(() => {
+          if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+        });
+      }
+      renderList();
+    }, 90);
+  }
+
   function renderChat(partner) {
     clear(chatPane);
     messenger.classList.add('show-chat');
@@ -247,6 +285,11 @@ export function messagesPage(username = '') {
     }, icon('refresh', 19));
 
     const head = el('header', { class: 'chat-head' },
+      el('button', {
+        class: 'btn-icon chat-list-btn', type: 'button',
+        title: 'Ver conversaciones', 'aria-label': 'Ver conversaciones',
+        onclick: () => navigate('/mensajes'),
+      }, icon('list', 20)),
       el('a', { href: `#/u/${partner.username}` }, avatarEl(partner, 'md')),
       el('div', { class: 'grow', style: { minWidth: '0' } },
         el('div', { class: 'ch-name-row' },
@@ -269,7 +312,9 @@ export function messagesPage(username = '') {
     }, icon('send', 18));
 
     const form = el('form', { class: 'chat-input' },
-      el('div', { class: 'box' }, textarea),
+      el('div', { class: 'box' },
+        emojiButton(textarea, { className: 'chat-emoji', title: 'Agregar emoji' }),
+        textarea),
       sendBtn);
 
     const grow = () => {
@@ -419,11 +464,15 @@ export function messagesPage(username = '') {
   return {
     el: root,
     onData(topic) {
-      if (topic === 'messages' || topic === 'me') renderList();
+      if (topic === 'messages' || topic === 'me') {
+        renderList();
+        if (topic === 'messages') scheduleSync();
+      }
     },
     destroy() {
       destroyed = true;
       stopPolling();
+      clearTimeout(syncTimer);
       document.removeEventListener('visibilitychange', onVisibility);
     },
   };

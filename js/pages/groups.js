@@ -3,23 +3,47 @@ import { icon } from '../core/icons.js';
 import {
   state, displayName, userById, loadPost, canSeePost,
 } from '../core/store.js';
-import { emptyState, openModal, toast } from '../core/ui.js';
+import { emptyState } from '../core/ui.js';
 import { mediaImg } from '../core/media.js';
-import { createGroup, joinGroup, leaveGroup } from '../core/actions.js';
+import { joinGroup, leaveGroup } from '../core/actions.js';
 import { postCard } from '../components/postcard.js';
 import { navigate } from '../core/router.js';
-import { parseRoute } from '../core/router.js';
+import { openGroupEditor } from './group-editor.js';
 
 const TABS = [
   { id: 'grupos', label: 'Grupos', type: 'group' },
   { id: 'canales', label: 'Canales', type: 'channel' },
 ];
 
+const DEFAULT_COLOR = '#0a84ff';
+const emojiFallback = (type) => (type === 'channel' ? '📣' : '👥');
+
+function colorOf(group) {
+  return /^#[0-9a-f]{6}$/i.test(group?.color || '') ? group.color : DEFAULT_COLOR;
+}
+
+function coverOf(group, { big = false } = {}) {
+  if (group.cover) return mediaImg(group.cover, { alt: group.name, eager: big });
+  return el('div', {
+    class: `group-cover-fallback${big ? ' big' : ''}`,
+    style: { '--group-color': colorOf(group) },
+  }, el('span', { class: 'group-cover-emoji', text: group.emoji || emojiFallback(group.type) }));
+}
+
+function privacyLabel(group) {
+  return group.privacy === 'private' ? 'Privado' : 'Público';
+}
+
+function memberWord(group) {
+  const n = group.memberIds?.length || 0;
+  if ((group.type || 'group') === 'channel') return n === 1 ? 'seguidor' : 'seguidores';
+  return n === 1 ? 'miembro' : 'miembros';
+}
+
 export function groupsPage(tab = 'grupos') {
   const root = el('div');
   const list = el('div', { class: 'group-grid' });
   const tabs = el('div', { class: 'tabs' });
-
   const current = TABS.find((item) => item.id === tab) || TABS[0];
 
   function renderTabs() {
@@ -36,7 +60,9 @@ export function groupsPage(tab = 'grupos') {
   function render() {
     clear(list);
     renderTabs();
-    const items = state.groups.filter((group) => (group.type || 'group') === current.type);
+    const items = state.groups
+      .filter((group) => (group.type || 'group') === current.type)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     if (!items.length) {
       list.appendChild(el('div', { class: 'card' },
@@ -47,74 +73,35 @@ export function groupsPage(tab = 'grupos') {
             ? 'Creá un canal para compartir novedades con tus seguidores.'
             : 'Creá el primero y sumá a tus amigos.',
           action: el('button', {
-            class: 'btn primary', type: 'button', text: current.type === 'channel' ? 'Crear canal' : 'Crear grupo',
-            onclick: () => openCreate(current.type),
+            class: 'btn primary', type: 'button',
+            text: current.type === 'channel' ? 'Crear canal' : 'Crear grupo',
+            onclick: () => openGroupEditor({ type: current.type, onSaved: render }),
           }),
         })));
       return;
     }
 
     for (const group of items) {
-      list.appendChild(el('a', { class: 'group-card', href: `#/grupos/${group.id}` },
-        el('div', { class: 'group-cover' }, group.cover
-          ? mediaImg(group.cover, { alt: group.name })
-          : el('div', { class: 'group-cover-fallback' },
-            icon((group.type || 'group') === 'channel' ? 'radio' : 'groups', 34))),
-        el('div', { class: 'group-body' },
-          el('div', { class: 'row between' },
-            el('div', { class: 'post-name', text: group.name }),
-            (group.type || 'group') === 'channel'
-              ? el('span', { class: 'chip brand', text: 'Canal' })
-              : null),
-          el('div', { class: 'muted small' },
-            `${formatCount(group.memberIds?.length || 0)} ${(group.type || 'group') === 'channel' ? (group.memberIds?.length === 1 ? 'seguidor' : 'seguidores') : (group.memberIds?.length === 1 ? 'miembro' : 'miembros')} · ${group.privacy === 'private' ? 'Privado' : 'Público'}`))));
+      list.appendChild(el('a', {
+        class: 'group-card', href: `#/grupos/${group.id}`,
+        style: { '--group-color': colorOf(group) },
+      },
+      el('div', { class: 'group-cover' }, coverOf(group)),
+      el('div', { class: 'group-body' },
+        el('div', { class: 'group-name-row' },
+          el('span', { class: 'group-card-emoji', text: group.emoji || emojiFallback(group.type) }),
+          el('span', { class: 'group-card-name', text: group.name }),
+          el('span', {
+            class: `chip ${(group.type || 'group') === 'channel' ? 'brand' : ''}`.trim(),
+            text: (group.type || 'group') === 'channel' ? 'Canal' : 'Grupo',
+          })),
+        group.category ? el('div', { class: 'group-category', text: group.category }) : null,
+        el('div', { class: 'group-desc', text: group.description || 'Sin descripción.' }),
+        el('div', { class: 'group-meta' },
+          el('span', { text: `${formatCount(group.memberIds?.length || 0)} ${memberWord(group)}` }),
+          el('span', { text: '·' }),
+          el('span', { text: privacyLabel(group) })))));
     }
-  }
-
-  function openCreate(type = 'group') {
-    const name = el('input', { class: 'input', placeholder: 'Nombre', maxlength: '60' });
-    const description = el('textarea', {
-      class: 'textarea', rows: '3', placeholder: '¿De qué se trata?', maxlength: '300',
-    });
-    let kind = type;
-    const kindRow = el('div', { class: 'segmented', style: { width: '100%' } });
-    const paint = () => {
-      clear(kindRow);
-      for (const item of [{ id: 'group', label: 'Grupo' }, { id: 'channel', label: 'Canal' }]) {
-        kindRow.appendChild(el('button', {
-          class: `segmented-item ${kind === item.id ? 'active' : ''}`.trim(), type: 'button',
-          text: item.label, style: { flex: '1' },
-          onclick: () => { kind = item.id; paint(); },
-        }));
-      }
-    };
-    paint();
-
-    const api = openModal({
-      title: type === 'channel' ? 'Crear canal' : 'Crear grupo',
-      body: el('div', { class: 'col gap-12' },
-        kindRow,
-        el('div', { class: 'field' }, el('label', { text: 'Nombre' }), name),
-        el('div', { class: 'field' }, el('label', { text: 'Descripción' }), description),
-        el('p', { class: 'muted small', text: kind === 'channel'
-          ? 'En un canal solo publicás vos; los demás lo leen.'
-          : 'En un grupo todos los miembros pueden publicar.' })),
-      footer: el('button', {
-        class: 'btn primary block', type: 'button', text: 'Crear',
-        onclick: async (event) => {
-          event.currentTarget.disabled = true;
-          try {
-            const group = await createGroup({ name: name.value, description: description.value, type: kind });
-            api.close();
-            toast(kind === 'channel' ? 'Canal creado' : 'Grupo creado', { type: 'success' });
-            navigate(`/grupos/${group.id}`);
-          } catch (err) {
-            event.currentTarget.disabled = false;
-            toast(err.message, { type: 'error' });
-          }
-        },
-      }, 'Crear'),
-    });
   }
 
   root.append(
@@ -124,11 +111,10 @@ export function groupsPage(tab = 'grupos') {
         el('p', { class: 'muted small', text: 'Comunidades para compartir con tu gente.' })),
       el('button', {
         class: 'btn primary sm', type: 'button',
-        onclick: () => openCreate(current.type),
+        onclick: () => openGroupEditor({ type: current.type, onSaved: render }),
       }, icon('plus', 16), current.type === 'channel' ? 'Crear canal' : 'Crear grupo')),
     el('div', { class: 'page-card', style: { padding: '12px 16px', marginBottom: '16px' } }, tabs),
-    list,
-  );
+    list);
 
   render();
   return {
@@ -159,11 +145,14 @@ export function groupPage(id) {
     const isChannel = (group.type || 'group') === 'channel';
     const isOwner = group.ownerId === me.id;
     const canPost = !isChannel || isOwner;
+    const color = colorOf(group);
 
     const stats = el('div', { class: 'profile-stats' },
-      el('span', { text: `${formatCount(group.memberIds?.length || 0)} ${isChannel ? (group.memberIds?.length === 1 ? 'seguidor' : 'seguidores') : (group.memberIds?.length === 1 ? 'miembro' : 'miembros')}` }),
+      el('span', { text: `${formatCount(group.memberIds?.length || 0)} ${memberWord(group)}` }),
       el('span', { text: '·' }),
-      el('span', { text: group.privacy === 'private' ? 'Privado' : 'Público' }),
+      el('span', { text: privacyLabel(group) }),
+      group.category ? el('span', { text: '·' }) : null,
+      group.category ? el('span', { class: 'group-category', text: group.category }) : null,
       group.ownerId ? el('span', { text: '·' }) : null,
       group.ownerId
         ? el('span', { text: `Creado por ${displayName(userById(group.ownerId))}` })
@@ -184,23 +173,41 @@ export function groupPage(id) {
         class: 'btn', type: 'button', onclick: () => navigate(`/publicar?g=${group.id}`),
       }, icon('edit', 16), isChannel ? 'Publicar en el canal' : 'Publicar en el grupo'));
     }
+    if (isOwner) {
+      actions.appendChild(el('button', {
+        class: 'btn', type: 'button',
+        onclick: () => openGroupEditor({ group, onSaved: render }),
+      }, icon('settings', 16), 'Personalizar'));
+    }
 
-    const info = el('div', { class: 'profile-info' },
-      el('div', { class: 'row gap-8', style: { alignItems: 'center' } },
+    const info = el('div', { class: 'profile-info group-profile-info' },
+      el('div', { class: 'group-title-row' },
+        el('span', { class: 'group-title-emoji', text: group.emoji || emojiFallback(group.type) }),
         el('h1', { class: 'profile-name', text: group.name }),
         el('span', { class: 'chip brand', text: isChannel ? 'Canal' : 'Grupo' })),
-      el('p', { class: 'muted', text: group.description || '' }),
+      el('p', { class: 'muted', text: group.description || 'Sin descripción.' }),
       stats,
       actions);
 
-    const cover = el('div', { class: 'profile-cover' },
+    const cover = el('div', { class: 'profile-cover', style: { '--group-color': color } },
       group.cover
         ? mediaImg(group.cover, { alt: group.name, eager: true })
-        : el('div', { class: 'group-cover-fallback big' }, icon(isChannel ? 'radio' : 'groups', 40)));
+        : el('div', { class: 'group-cover-fallback big', style: { '--group-color': color } },
+          el('span', { class: 'group-cover-emoji', text: group.emoji || emojiFallback(group.type) })));
 
-    wrap.appendChild(el('div', { class: 'profile-header' },
-      cover,
-      el('div', { class: 'profile-main-row' }, info)));
+    wrap.appendChild(el('div', {
+      class: 'profile-header group-profile-header',
+      style: { '--group-color': color },
+    }, cover, el('div', { class: 'profile-main-row' }, info)));
+
+    if (group.rules) {
+      wrap.appendChild(el('div', { class: 'page-card group-rules' },
+        el('div', { class: 'group-rules-icon' }, icon('shield', 20)),
+        el('div', null,
+          el('div', { class: 'strong', text: isChannel ? 'Reglas del canal' : 'Reglas del grupo' }),
+          el('p', { class: 'muted small', text: group.rules }))));
+    }
+
     const posts = state.feedIndex
       .map((entry) => state.posts.get(entry.id))
       .filter((post) => post && post.groupId === group.id && canSeePost(post, me.id));
@@ -239,7 +246,7 @@ export function groupPage(id) {
   root.append(wrap);
   return {
     el: root,
-    onData(topic) { if (topic === 'groups' || topic === 'feed') render(); },
+    onData(topic) { if (topic === 'groups' || topic === 'feed' || topic === 'post') render(); },
     destroy() { cards.forEach((card) => card.destroy?.()); },
   };
 }

@@ -110,6 +110,11 @@ const SOUNDS = {
     noise({ duration: 0.18, gain: 0.16, from: 700, to: 2600 });
     tone({ freq: 520, endFreq: 880, duration: 0.11, type: 'sine', gain: 0.22, delay: 0.02 });
   },
+  message() {
+    tone({ freq: 880, duration: 0.1, type: 'sine', gain: 0.22 });
+    tone({ freq: 1174, duration: 0.12, type: 'sine', gain: 0.2, delay: 0.09 });
+    tone({ freq: 1568, duration: 0.18, type: 'sine', gain: 0.14, delay: 0.19 });
+  },
   notification() {
     tone({ freq: 880, duration: 0.14, type: 'sine', gain: 0.26 });
     tone({ freq: 1174, duration: 0.2, type: 'sine', gain: 0.22, delay: 0.12 });

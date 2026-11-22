@@ -12,7 +12,13 @@ export function el(tag, props, ...children) {
       else if (key === 'text') node.textContent = value;
       else if (key === 'html') node.innerHTML = value;
       else if (key === 'dataset') Object.assign(node.dataset, value);
-      else if (key === 'style' && typeof value === 'object') Object.assign(node.style, value);
+      else if (key === 'style' && typeof value === 'object') {
+        for (const [prop, val] of Object.entries(value)) {
+          if (val === null || val === undefined) continue;
+          if (prop.startsWith('--')) node.style.setProperty(prop, String(val));
+          else node.style[prop] = val;
+        }
+      }
       else if (key === 'value') node.value = value;
       else if (key === 'checked' || key === 'disabled' || key === 'selected') node[key] = !!value;
       else if (key.startsWith('on') && typeof value === 'function') {

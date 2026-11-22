@@ -3,8 +3,9 @@
    ========================================================================== */
 import { el, clear } from './core/util.js';
 import { icon } from './core/icons.js';
-import { state, attach, subscribe, bootData, refreshAll } from './core/store.js';
+import { state, attach, subscribe, bootData, refreshAll, userById } from './core/store.js';
 import { restoreSession, readSession } from './core/auth.js';
+import { initRealtime } from './core/realtime.js';
 import { initTheme } from './core/theme.js';
 import { applyReduced } from './core/motion.js';
 import { initPwa } from './core/pwa.js';
@@ -276,8 +277,28 @@ function renderRoute(route) {
 async function startApp() {
   if (!shell) shell = buildShell();
   unsub?.();
+  let lastUnreadMessages = state.ui.unreadMessages || 0;
+
+  function activeChatUsername() {
+    const match = location.hash.match(/^#\/mensajes\/([^/?#]+)/);
+    return match ? decodeURIComponent(match[1]).toLowerCase() : '';
+  }
+
   unsub = subscribe((topic) => {
     if (topic === 'ready') return;
+    if (topic === 'messages') {
+      const total = state.ui.unreadMessages || 0;
+      if (total > lastUnreadMessages) {
+        const incoming = state.inbox
+          .filter((entry) => entry.unread > 0 && entry.lastFromId !== state.me?.id)
+          .sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt))[0];
+        const partner = incoming ? userById(incoming.withId) : null;
+        const active = activeChatUsername();
+        const inThisChat = Boolean(active && partner?.username?.toLowerCase() === active);
+        if (!inThisChat) playSound('message');
+      }
+      lastUnreadMessages = total;
+    }
     shell?.refreshChrome();
     currentPage?.onData?.(topic);
   });
@@ -370,6 +391,7 @@ async function boot() {
     ...cfg,
     readBase: cfg.readBase || (cfg.local ? cfg.mediaBase || '.' : ''),
   });
+  initRealtime();
 
   if (!readSession()) {
     renderAuth();

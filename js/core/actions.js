@@ -589,7 +589,10 @@ export async function markAllNotificationsRead() {
 
 /* --------------------------------- grupos -------------------------------- */
 
-export async function createGroup({ name, description = '', privacy = 'public', cover = null, type = 'group' } = {}) {
+export async function createGroup({
+  name, description = '', privacy = 'public', cover = null, type = 'group',
+  rules = '', category = '', color = '', emoji = '',
+} = {}) {
   const me = requireMe();
   const clean = norm(name);
   if (clean.length < 3) throw new ValidationError('El grupo necesita un nombre.');
@@ -598,7 +601,11 @@ export async function createGroup({ name, description = '', privacy = 'public', 
     type: type === 'channel' ? 'channel' : 'group',
     name: clean,
     description: norm(description),
-    privacy,
+    rules: norm(rules).slice(0, 2000),
+    category: norm(category).slice(0, 40),
+    color: /^#[0-9a-f]{6}$/i.test(String(color || '')) ? color : '#0a84ff',
+    emoji: Array.from(String(emoji || '')).slice(0, 2).join(''),
+    privacy: privacy === 'private' ? 'private' : 'public',
     cover,
     ownerId: me.id,
     memberIds: [me.id],
@@ -612,6 +619,38 @@ export async function createGroup({ name, description = '', privacy = 'public', 
   }, { delay: 0, message: 'Zuma: nuevo grupo' });
   notify('groups');
   return group;
+}
+
+/** El dueño puede cambiar nombre, texto, reglas, categoría, color, emoji y portada. */
+export async function updateGroup(groupId, changes = {}) {
+  const me = requireMe();
+  const group = state.groups.find((item) => item.id === groupId);
+  if (!group) throw new ValidationError('No encontramos ese grupo.');
+  if (group.ownerId !== me.id) throw new ValidationError('Solo quien creó el grupo puede editarlo.');
+
+  const next = { ...group };
+  if (changes.name !== undefined) {
+    const name = norm(changes.name);
+    if (name.length < 3) throw new ValidationError('El nombre es demasiado corto.');
+    next.name = name;
+  }
+  if (changes.description !== undefined) next.description = norm(changes.description).slice(0, 500);
+  if (changes.rules !== undefined) next.rules = norm(changes.rules).slice(0, 2000);
+  if (changes.category !== undefined) next.category = norm(changes.category).slice(0, 40);
+  if (changes.color !== undefined) {
+    next.color = /^#[0-9a-f]{6}$/i.test(String(changes.color || '')) ? changes.color : '#0a84ff';
+  }
+  if (changes.emoji !== undefined) next.emoji = Array.from(String(changes.emoji || '')).slice(0, 2).join('');
+  if (changes.cover !== undefined) next.cover = changes.cover || null;
+  if (changes.privacy !== undefined) next.privacy = changes.privacy === 'private' ? 'private' : 'public';
+
+  state.groups = state.groups.map((item) => (item.id === groupId ? next : item));
+  await queueDoc(P.groups, (doc) => {
+    if (!doc?.groups) return undefined;
+    return { ...doc, groups: doc.groups.map((item) => (item.id === groupId ? next : item)) };
+  }, { delay: 0, message: 'Zuma: grupo actualizado' });
+  notify('groups');
+  return next;
 }
 
 export async function joinGroup(groupId) {
@@ -940,7 +979,7 @@ export async function markThreadRead(otherUserId) {
   if (!me || !otherUserId) return;
   const threadId = threadIdFor(me.id, otherUserId);
   const entry = state.inbox.find((row) => row.threadId === threadId);
-  if (!entry || (!entry.unread && entry.readLocally)) return;
+  if (!entry || !Number(entry.unread)) return;
 
   state.inbox = state.inbox.map((row) => (
     row.threadId === threadId ? { ...row, unread: 0, readLocally: true } : row

@@ -11,6 +11,7 @@ import {
 import { createPost } from '../core/actions.js';
 import { navigate, parseRoute } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
+import { emojiButton } from '../components/emoji-picker.js';
 
 const PRIVACY = [
   { id: 'public', label: 'Público', icon: 'globe', sub: 'Cualquiera puede verlo' },
@@ -262,6 +263,7 @@ export function composePage() {
   });
 
   const toolbar = el('div', { class: 'compose-tools' },
+    emojiButton(textarea, { className: 'compose-tool', label: 'Emoji', title: 'Agregar emoji' }),
     el('button', { class: 'compose-tool', type: 'button', onclick: addPhotos },
       icon('camera', 19), el('span', { text: 'Fotos' })),
     el('button', { class: 'compose-tool', type: 'button', onclick: openFeeling },

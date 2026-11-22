@@ -12,6 +12,7 @@ import { addComment, deleteComment } from '../core/actions.js';
 import { mediaImg } from '../core/media.js';
 import { playSound } from '../core/sounds.js';
 import { verifiedBadge } from '../components/verified-badge.js';
+import { emojiButton } from '../components/emoji-picker.js';
 
 export function postPage(postId) {
   const root = el('div');
@@ -82,7 +83,10 @@ export function postPage(postId) {
         }, icon('x', 14))));
     }
     composer.append(
-      el('div', { class: 'row gap-8' }, input, sendBtn),
+      el('div', { class: 'row gap-8' },
+        input,
+        emojiButton(input, { className: 'btn-icon comment-emoji', title: 'Agregar emoji' }),
+        sendBtn),
     );
   }
 
