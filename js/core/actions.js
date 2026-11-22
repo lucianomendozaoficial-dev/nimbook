@@ -1,7 +1,9 @@
 /* ==========================================================================
    actions.js — todas las escrituras (con cola, agrupadas y con reintentos)
    ========================================================================== */
-import { queueDoc, writeNow, deleteDoc, newId, nowISO, forget } from './net.js';
+import {
+  queueDoc, writeNow, deleteDoc, fetchDoc, newId, nowISO, forget,
+} from './net.js';
 import { P } from './paths.js';
 import {
   state, notify, loadUserIndex, loadUser, loadPost, loadComments,
@@ -677,6 +679,82 @@ export async function leaveGroup(groupId) {
     return { ...doc, groups: doc.groups.map((item) => (item.id === groupId ? { ...item, memberIds } : item)) };
   }, { delay: 800, message: 'Zuma: salir del grupo' });
   notify('groups');
+}
+
+/* ------------------------------ soporte ---------------------------------- */
+
+export const VERIFICATION_PRICES = {
+  celeste: 10000,
+  morado: 18000,
+};
+
+export async function requestVerification({
+  type, dni, birthDate, country, city,
+} = {}) {
+  const me = requireMe();
+  const kind = type === 'morado' ? 'morado' : type === 'celeste' ? 'celeste' : null;
+  if (!kind) throw new ValidationError('Elegí una insignia disponible.');
+  const cleanDni = String(dni || '').replace(/[^0-9a-z]/gi, '').toUpperCase();
+  if (cleanDni.length < 6 || cleanDni.length > 12) throw new ValidationError('Escribí un DNI válido.');
+  const cleanBirth = String(birthDate || '').trim();
+  const born = cleanBirth ? new Date(`${cleanBirth}T12:00:00`) : null;
+  if (!born || Number.isNaN(born.getTime()) || born > new Date()) {
+    throw new ValidationError('Elegí tu fecha de nacimiento.');
+  }
+  const cleanCountry = norm(country).slice(0, 60);
+  const cleanCity = norm(city).slice(0, 80);
+  if (cleanCountry.length < 2) throw new ValidationError('Escribí tu país de residencia.');
+  if (cleanCity.length < 2) throw new ValidationError('Escribí tu ciudad.');
+
+  const doc = await fetchDoc(P.supportVerifications, { fresh: true });
+  const requests = Array.isArray(doc?.requests) ? doc.requests : [];
+  if (requests.some((item) => item.userId === me.id && item.status === 'pending')) {
+    throw new ValidationError('Ya tenés una solicitud pendiente. Te vamos a responder por soporte.');
+  }
+
+  const request = {
+    id: newId('v'),
+    userId: me.id,
+    username: me.username,
+    name: me.name,
+    type: kind,
+    price: VERIFICATION_PRICES[kind],
+    dni: cleanDni,
+    birthDate: cleanBirth,
+    country: cleanCountry,
+    city: cleanCity,
+    status: 'pending',
+    createdAt: nowISO(),
+  };
+  await queueDoc(P.supportVerifications, (current) => {
+    const data = current || { version: 1, requests: [] };
+    return { ...data, requests: [request, ...(data.requests || [])].slice(0, 500) };
+  }, { delay: 0, message: 'Zuma: solicitud de verificación' });
+  notify('support', { kind: 'verification', request });
+  return request;
+}
+
+export async function reportAccount(userId, reason, detail = '') {
+  const me = requireMe();
+  if (!userId || userId === me.id) throw new ValidationError('No podés reportar tu propia cuenta.');
+  const cleanReason = norm(reason).slice(0, 120);
+  if (!cleanReason) throw new ValidationError('Elegí un motivo.');
+  const cleanDetail = norm(detail).slice(0, 800);
+  const report = {
+    id: newId('r'),
+    reportedId: userId,
+    reporterId: me.id,
+    reason: cleanReason,
+    detail: cleanDetail,
+    status: 'pending',
+    createdAt: nowISO(),
+  };
+  await queueDoc(P.supportReports, (doc) => {
+    const data = doc || { version: 1, reports: [] };
+    return { ...data, reports: [report, ...(data.reports || [])].slice(0, 1000) };
+  }, { delay: 0, message: 'Zuma: reporte de cuenta' });
+  notify('support', { kind: 'report', report });
+  return report;
 }
 
 /* -------------------------------- historias ------------------------------ */

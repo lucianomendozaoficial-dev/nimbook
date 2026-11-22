@@ -29,4 +29,9 @@ export const P = {
   /* Mensajes privados: bandeja de cada persona e hilo compartido */
   inbox: (userId) => `data/mensajes/bandejas/${userId}.json`,
   thread: (threadId) => `data/mensajes/hilos/${threadId}.json`,
+
+  /* Soporte, verificaciones y reportes */
+  supportVerifications: 'data/soporte/verificaciones.json',
+  supportReports: 'data/soporte/reportes.json',
+  supportUser: 'u_support',
 };

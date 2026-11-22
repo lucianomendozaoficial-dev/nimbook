@@ -12,6 +12,19 @@ let ready = false;
 let channel = null;
 let local = null;
 const pending = [];
+const remoteListeners = new Set();
+
+export function onRemoteDoc(fn) {
+  remoteListeners.add(fn);
+  return () => remoteListeners.delete(fn);
+}
+
+async function applyIncoming(path) {
+  await applyRemote(path);
+  for (const fn of remoteListeners) {
+    try { fn(path); } catch { /* noop */ }
+  }
+}
 
 function publish(path) {
   if (!path || !path.startsWith('data/')) return;
@@ -51,7 +64,7 @@ export function initRealtime() {
       local = new BroadcastChannel('zuma-live');
       local.onmessage = (event) => {
         const path = event.data?.path;
-        if (path) applyRemote(path);
+        if (path) applyIncoming(path);
       };
     } catch { /* sin BroadcastChannel */ }
     ready = true;
@@ -65,7 +78,7 @@ export function initRealtime() {
     });
     channel.on('broadcast', { event: 'doc' }, (message) => {
       const path = message?.payload?.path;
-      if (typeof path === 'string' && path.startsWith('data/')) applyRemote(path);
+      if (typeof path === 'string' && path.startsWith('data/')) applyIncoming(path);
     });
     channel.subscribe((status) => {
       ready = status === 'SUBSCRIBED';

@@ -4,7 +4,7 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, countFollowers, countFollowing, followingOf,
+  state, displayName, countFollowing, followingOf,
 } from '../core/store.js';
 import { avatarEl } from '../core/ui.js';
 import { parseRoute } from '../core/router.js';
@@ -37,12 +37,6 @@ export function mountSidebar() {
       active: route.name === 'myprofile',
     }));
 
-    root.appendChild(item({
-      iconName: 'users', color: 'green', label: 'Seguidores',
-      count: countFollowers(me.id) || null,
-      href: '#/seguidores',
-      active: route.name === 'friends' && route.params.tab === 'seguidores',
-    }));
     root.appendChild(item({
       iconName: 'user-plus', color: 'purple', label: 'Siguiendo',
       count: countFollowing(me.id) || null,

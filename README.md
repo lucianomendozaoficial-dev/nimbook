@@ -49,9 +49,11 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 **Red social**
 - Registro e inicio de sesión (contraseñas cifradas con PBKDF2-SHA256).
 - Publicaciones con texto, hasta 10 fotos, **sentimiento, ubicación, privacidad y fondos de color** (como Facebook).
-- **Historias en su propia sección**: la cámara se abre primero y abajo está la opción de elegir de la galería. La foto se comparte tal cual (sin editor); dura 24 h y se puede descargar.
-- **Insignias de verificación**: tres niveles con color, como Instagram. La **celeste** es para cuentas verificadas que no son famosas, la **morada** para influencers, políticos y figuras públicas, y la **dorada** para el equipo de Zuma y sus aliados. Al tocar una insignia se abre la sección que explica las tres.
-- **Panel de control** (`panel.html`): abre **directo, sin login**, y permite ver usuarios, publicaciones y datos, y asignar o quitar insignias. Lee y escribe en Supabase con la clave publicable.
+- **Historias en su propia sección**: la cámara se abre primero con formato **9:16** (1080×1920, como Instagram) y abajo está **tu galería de Zuma**. La foto se comparte tal cual; dura 24 h, se puede descargar y las historias vistas quedan después de las nuevas (la tuya siempre primera).
+- **Galería propia**: las fotos importadas del dispositivo quedan guardadas y comprimidas en el navegador (IndexedDB), así después las elegís desde la galería de Zuma sin abrir el selector del sistema cada vez.
+- **Insignias de verificación**: se puede **pedir** la celeste o la morada con DNI, fecha de nacimiento, país y ciudad. La celeste cuesta **$10.000/mes** y la morada **$18.000/mes**; la dorada no está a la venta (solo equipo y aliados). Soporte revisa y aprueba desde el panel.
+- **Soporte**: perfil oficial **@soporte**, chat privado con los usuarios, avisos publicados desde el panel y **reportes de cuentas con motivo**. Todo aparece en la pestaña **Soporte** del panel.
+- **Panel de control** (`panel.html`): abre **directo, sin login**, y permite ver usuarios, publicaciones, datos, insignias, solicitudes de verificación, reportes y el chat de soporte.
 - **Actualizar Zuma** en el menú: borra la caché, desregistra el service worker y recarga para ver los cambios sin Ctrl+R.
 - **Descargar imágenes** de publicaciones e historias desde el menú de la publicación o el visor.
 - **Eliminar cuenta** desde el menú: pide la contraseña, avisa que es permanente y borra perfil, publicaciones, historias, ventas, conversaciones y vínculos.
@@ -67,6 +69,8 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
 - Compartir publicaciones (con la original incrustada).
+- La celeste es para cuentas verificadas que no son famosas; la morada para influencers, políticos y figuras públicas; la dorada es solo para el equipo de Zuma y sus aliados.
+- El **nav principal ya no muestra Seguidores**; se llega a seguidores/siguiendo desde el perfil.
 - Seguidores: seguir y dejar de seguir, sugerencias con seguidores en común, sin solicitudes.
 - Grupos públicos y privados con publicaciones, miembros y administración.
 - Canales: solo el creador publica; el resto los sigue y lee.
@@ -97,8 +101,9 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 
 `panel.html` es una página aparte para el equipo. **Abre directamente, sin login**, y permite ver usuarios, datos, publicaciones y asignar o quitar la insignia de verificación. Lee y escribe en Supabase con la clave publicable de `config.js`.
 
-- Pestañas: **Usuarios** (buscar, ver ficha, asignar insignia), **Publicaciones** y **Insignias** (explicación y cuentas verificadas).
+- Pestañas: **Usuarios** (buscar, ver ficha, asignar insignia), **Publicaciones**, **Insignias** y **Soporte** (solicitudes de verificación, reportes, chat de @soporte y publicar avisos).
 - La insignia se guarda en `usuarios/<id>.json` (`verification: { type, at }`) y en `usuarios/index.json` (`verification: "celeste" | "morado" | "dorado"`) para que el muro y las listas la muestren sin descargar la ficha completa.
+- En **Soporte** se aprueban o rechazan solicitudes, se resuelven reportes y se responde el chat como @soporte. El perfil de soporte se crea solo la primera vez que se abre el panel.
 
 > El panel no tiene login: cualquiera que conozca la URL puede ver y modificar los datos, porque las políticas RLS actuales permiten escribir con la clave publicable. Para una comunidad grande hay que pasar el login a Supabase Auth y cerrar las políticas por usuario. No compartas el enlace del panel.
 
@@ -124,6 +129,8 @@ data/
   notificaciones/<usuario>.json    bandeja de cada persona
   grupos.json                  grupos y canales (tipo, dueño y miembros)
   historias.json               historias activas (imagen; las viejas pueden tener texto y fuente)
+  soporte/verificaciones.json  solicitudes de verificación (DNI, nacimiento, país, ciudad)
+  soporte/reportes.json        cuentas reportadas y motivo
   tienda/index.json            productos de Shop: id, vendedor, foto, precio y estado
   tienda/<producto>.json       ficha completa (descripción, fotos y contacto opcional)
   mensajes/bandejas/<usuario>.json   conversaciones de cada persona y no leídos
@@ -252,8 +259,9 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Tiempo real | Supabase Realtime Broadcast: cada escritura avisa a los demás dispositivos; el chat tiene sondeo de respaldo cada 5 s |
 | Chat en vivo | Realtime instantáneo + sonido si el chat no está abierto; el sondeo queda como respaldo |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
-| Historias | Cámara con `getUserMedia`; si no hay permiso o cámara, se elige de la galería. Se comparte la foto tal cual, sin editor |
-| Verificación | Tres niveles (celeste/morado/dorado) guardados en la ficha y el índice; la insignia es un botón que abre `#/verificacion` |
+| Historias | Cámara 9:16; la galería propia guarda copias comprimidas en IndexedDB y las fotos se eligen desde ahí |
+| Verificación | Tres niveles; **solicitud paga** celeste $10.000/mes y morada $18.000/mes (dorada solo por invitación). Guarda DNI, nacimiento, país y ciudad en `soporte/verificaciones.json` |
+| Soporte | Perfil @soporte, chat privado, reportes de cuentas y avisos publicados desde el panel |
 | Panel | `panel.html` + `js/panel.js`, lectura y escritura en Supabase; **sin login** |
 | Eliminar cuenta | Verifica la contraseña y borra perfil, posts, historias, ventas, conversaciones y vínculos; el aviso indica que no se puede deshacer |
 | Imágenes | `canvas` → JPEG, máx. 1600 px y ~1,4 MB; las nuevas van a Supabase Storage |
@@ -265,6 +273,9 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - La `service_role` de Supabase **nunca** va en el navegador ni en `config.js`: solo se usa desde el SQL Editor o scripts privados.
 - Los mensajes privados se guardan como JSON en Supabase: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Alguien con la clave publicable y las políticas actuales podría leer la tabla. Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
 - La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, la app ofrece elegir una foto de la galería.
+- El trámite de verificación guarda DNI y fecha de nacimiento en Supabase. Como el panel no tiene login, cualquiera con el enlace puede ver esos datos; para producción conviene cerrar el panel con autenticación.
+- La **dorada** no está a la venta; solo la asigna el equipo.
+- La galería propia solo contiene las fotos que el usuario importó desde el dispositivo; el navegador no permite leer toda la galería del teléfono sin permiso.
 - Al eliminar una cuenta se borran sus documentos JSON, pero las imágenes ya subidas a Storage y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar.
 - El panel de control no tiene login por decisión de producto: cualquiera con el enlace puede ver y modificar datos. No lo uses como bóveda de datos; si el proyecto crece, hay que pasar el login a Supabase Auth.
 - Si dos personas escriben a la vez, la app relee y reintenta; en el peor caso avisa para volver a intentarlo.
@@ -296,6 +307,8 @@ js/core/router.js       rutas por hash
 js/components/*         topbar, sidebars, compositor, tarjeta de post, historias, insignias, emojis
 js/components/emoji-picker.js   selector de emojis por categorías y recientes
 js/core/realtime.js     Supabase Realtime: cambios en vivo entre dispositivos
+js/core/gallery.js      galería propia con IndexedDB (fotos importadas)
+js/core/native.js       transiciones de vista y vibración nativa
 js/pages/group-editor.js        crear y personalizar grupos/canales
 css/features.css        mensajes estilo WhatsApp, emojis, grupos y márgenes móviles
 js/pages/*              feed, Shop, grupos, historias con cámara, mensajes, perfil, búsqueda, verificación, menú…

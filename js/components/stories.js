@@ -4,7 +4,7 @@
 import { el, clear, timeAgo, STORY_GRADIENTS, hashCode } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, storiesGrouped, initialsOf,
+  state, displayName, storiesGrouped, initialsOf, markStorySeen, notify,
 } from '../core/store.js';
 import { avatarEl, toast } from '../core/ui.js';
 import { mediaImg, downloadImage, mediaFileName } from '../core/media.js';
@@ -60,6 +60,7 @@ export function openStoryViewer(groups, startIndex = 0) {
     const current = currentStory();
     if (!current) { destroy(); return; }
     const { group, story } = current;
+    markStorySeen(story.id);
 
     image.style.background = storyGradient(story.id);
     image.src = fetchImageUrl(story.image);
@@ -150,6 +151,7 @@ export function openStoryViewer(groups, startIndex = 0) {
     document.removeEventListener('keydown', onKey);
     root.remove();
     document.body.style.overflow = '';
+    notify('stories');
   }
 
   document.addEventListener('keydown', onKey);
@@ -208,7 +210,7 @@ export function mountStories() {
       const group = groups[index];
       const story = group.latest;
       const card = el('button', {
-        class: `story-card ${story.image ? '' : 'gradient'}`.trim(),
+        class: `story-card ${story.image ? '' : 'gradient'}${group.unseen ? '' : ' seen'}`.trim(),
         type: 'button',
         'aria-label': `Historia de ${displayName(group.user)}`,
         onclick: () => openStoryViewer(groups, index),

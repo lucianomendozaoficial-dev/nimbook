@@ -8,8 +8,9 @@ import {
 } from '../core/store.js';
 import { avatarEl, emptyState, toast } from '../core/ui.js';
 import {
-  mediaImg, openFilePicker, uploadImage, validateImageFile,
+  mediaImg, uploadImage, validateImageFile,
 } from '../core/media.js';
+import { openGallery } from '../core/gallery.js';
 import { createStory } from '../core/actions.js';
 import { openStoryViewer } from '../components/stories.js';
 import { navigate } from '../core/router.js';
@@ -51,7 +52,8 @@ export function storiesPage() {
     groups.forEach((group, index) => {
       const latest = group.latest;
       const tile = el('button', {
-        class: 'story-tile', type: 'button',
+        class: `story-tile${group.unseen ? '' : ' seen'}`,
+        type: 'button',
         'aria-label': `Historia de ${displayName(group.user)}`,
         onclick: () => openStoryViewer(groups, index),
       });
@@ -164,11 +166,13 @@ export function storyComposerPage() {
   }
 
   async function pickFromGallery() {
-    const files = await openFilePicker();
-    if (!files.length) return;
-    const problem = validateImageFile(files[0]);
-    if (problem) { toast(problem, { type: 'error' }); return; }
-    usePhoto(files[0]);
+    openGallery({
+      onPick: (file) => {
+        const problem = validateImageFile(file);
+        if (problem) { toast(problem, { type: 'error' }); return; }
+        usePhoto(file);
+      },
+    });
   }
 
   function usePhoto(file) {
@@ -182,14 +186,21 @@ export function storyComposerPage() {
 
   async function shoot() {
     if (!stream || busy) return;
-    const width = video.videoWidth || 1080;
-    const height = video.videoHeight || 1920;
+    const targetW = 1080;
+    const targetH = 1920;
+    const videoW = video.videoWidth || 1080;
+    const videoH = video.videoHeight || 1920;
+    const scale = Math.max(targetW / videoW, targetH / videoH);
+    const sourceW = targetW / scale;
+    const sourceH = targetH / scale;
+    const sourceX = (videoW - sourceW) / 2;
+    const sourceY = (videoH - sourceH) / 2;
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = targetW;
+    canvas.height = targetH;
     const ctx = canvas.getContext('2d');
     try {
-      ctx.drawImage(video, 0, 0, width, height);
+      ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, targetW, targetH);
     } catch {
       toast('La cámara todavía no está lista. Probá de nuevo en un segundo.', { type: 'error' });
       return;

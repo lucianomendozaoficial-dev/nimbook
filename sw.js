@@ -1,10 +1,10 @@
-/* ==========================================================================
-   sw.js â€” permite instalar Zuma y usarla sin conexiÃ³n.
+﻿/* ==========================================================================
+   sw.js Ã¢â‚¬â€ permite instalar Zuma y usarla sin conexiÃƒÂ³n.
    Estrategia: primero la red (para recibir siempre los cambios) y, si no
-   hay conexiÃ³n, lo Ãºltimo guardado en cachÃ©.
+   hay conexiÃƒÂ³n, lo ÃƒÂºltimo guardado en cachÃƒÂ©.
    ========================================================================== */
 
-const CACHE = 'nimbookgr-v10';
+const CACHE = 'nimbookgr-v11';
 const SHELL = [
   './',
   './index.html',

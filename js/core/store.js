@@ -610,7 +610,37 @@ export function allPhotos() {
     (post.media || []).map((media) => ({ ...media, postId: post.id })));
 }
 
+const SEEN_STORIES_KEY = 'zuma.stories.vistos.v1';
+
+function readSeenStories() {
+  try {
+    const list = JSON.parse(localStorage.getItem(SEEN_STORIES_KEY) || '[]');
+    return new Set(Array.isArray(list) ? list : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSeenStories(seen) {
+  try {
+    localStorage.setItem(SEEN_STORIES_KEY, JSON.stringify([...seen].slice(-800)));
+  } catch { /* noop */ }
+}
+
+export function storySeen(storyId) {
+  return readSeenStories().has(storyId);
+}
+
+export function markStorySeen(storyId) {
+  if (!storyId) return;
+  const seen = readSeenStories();
+  if (seen.has(storyId)) return;
+  seen.add(storyId);
+  writeSeenStories(seen);
+}
+
 export function storiesGrouped(viewerId) {
+  const seen = readSeenStories();
   const byUser = new Map();
   for (const story of state.stories) {
     if (!byUser.has(story.userId)) byUser.set(story.userId, []);
@@ -622,12 +652,24 @@ export function storiesGrouped(viewerId) {
     if (!user) continue;
     // solo mis historias y las de las personas que sigo
     if (userId !== viewerId && !isFollowing(viewerId, userId)) continue;
-    list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    groups.push({ user, stories: list, latest: list[0] });
+    list.sort((a, b) => {
+      const seenDiff = Number(seen.has(a.id)) - Number(seen.has(b.id));
+      return seenDiff || new Date(b.createdAt) - new Date(a.createdAt);
+    });
+    const latest = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+    groups.push({
+      user,
+      stories: list,
+      latest,
+      unseen: list.some((story) => !seen.has(story.id)),
+      unseenCount: list.filter((story) => !seen.has(story.id)).length,
+    });
   }
   groups.sort((a, b) => {
-    const score = (group) => (group.user.id === viewerId ? 2 : (isFollowing(viewerId, group.user.id) ? 1 : 0));
-    return score(b) - score(a) || new Date(b.latest.createdAt) - new Date(a.latest.createdAt);
+    if (a.user.id === viewerId) return -1;
+    if (b.user.id === viewerId) return 1;
+    if (a.unseen !== b.unseen) return a.unseen ? -1 : 1;
+    return new Date(b.latest.createdAt) - new Date(a.latest.createdAt);
   });
   return groups;
 }

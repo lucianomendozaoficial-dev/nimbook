@@ -252,6 +252,107 @@ html[data-theme="dark"] .msg.me .bubble .stamp { color: rgba(233, 237, 239, .55)
   .chat-input { padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
 }
 
+/* -------------------------- selector del muro ----------------------------- */
+.feed-toolbar {
+  justify-content: center;
+  padding: 0 0 12px;
+}
+.feed-toolbar .segmented {
+  width: 100%;
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 15px;
+  background: var(--card-2);
+  border: .5px solid var(--line-soft);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .04);
+}
+.feed-toolbar .segmented-item {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 11px;
+  font-size: 13.8px;
+  font-weight: 650;
+  color: var(--text-2);
+  background: transparent;
+  border: 0;
+  transition: background 180ms var(--ease), color 180ms var(--ease), box-shadow 180ms var(--ease), transform 120ms var(--ease);
+}
+.feed-toolbar .segmented-item:active { transform: scale(.98); }
+.feed-toolbar .segmented-item.active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, .18), 0 1px 2px rgba(0, 0, 0, .06);
+}
+html[data-theme="dark"] .feed-toolbar .segmented-item.active {
+  background: var(--card-3);
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, .55);
+}
+
+/* --------------------------- historias vistas ---------------------------- */
+.story-card.seen img.cover,
+.story-tile.seen > img { filter: saturate(.55) brightness(.86); }
+.story-card.seen .sc-name { color: rgba(255, 255, 255, .72); }
+.story-card.seen .sc-avatar { opacity: .7; }
+.story-tile.seen { opacity: .82; }
+.story-tile.seen .story-tile-name { color: rgba(255, 255, 255, .72); }
+
+/* --------------------------- cámara de historias ------------------------- */
+.story-camera,
+.story-publish-preview {
+  width: min(100%, calc(min(78vh, 760px) * 9 / 16));
+  height: min(78vh, 760px);
+  aspect-ratio: 9 / 16;
+  border-radius: 26px;
+}
+.story-camera video,
+.story-camera .story-video { width: 100%; height: 100%; object-fit: cover; }
+.story-publish-preview img { width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 767px) {
+  .story-camera,
+  .story-publish-preview {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    border-radius: 20px;
+  }
+}
+
+/* --------------------------- galería propia ------------------------------ */
+.zuma-gallery { display: flex; flex-direction: column; gap: 12px; }
+.zuma-gallery-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.zuma-gallery-head p { max-width: 360px; margin: 0; }
+.zuma-gallery-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px; max-height: 56vh; overflow-y: auto; padding: 2px;
+}
+.zuma-gallery-item {
+  position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+  background: var(--card-2); border: 0; padding: 0;
+}
+.zuma-gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.zuma-gallery-item:hover img { filter: brightness(.9); }
+.zuma-gallery-check {
+  position: absolute; right: 6px; top: 6px;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .42); color: #fff;
+}
+.zuma-gallery-empty {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 34px 18px; text-align: center; color: var(--text-2);
+}
+.zuma-gallery-empty .big-ic {
+  width: 64px; height: 64px; border-radius: 50%; background: var(--card-2);
+  display: flex; align-items: center; justify-content: center; color: var(--brand);
+  margin-bottom: 4px;
+}
+.zuma-gallery-empty p { max-width: 340px; }
+
 /* ------------------------------ grupos ----------------------------------- */
 .group-cover-fallback {
   background: var(--group-color, #0a84ff);
@@ -342,4 +443,57 @@ html[data-theme="dark"] .msg.me .bubble .stamp { color: rgba(233, 237, 239, .55)
   .modal .modal-head { padding-left: 16px; padding-right: 16px; }
   .modal .modal-body { padding-left: 16px; padding-right: 16px; }
   .search-page, .page-shell { padding-left: 2px; padding-right: 2px; }
+}
+
+/* --------------------------- verificación de pago ------------------------ */
+.verification-card { display: flex; flex-direction: column; }
+.verification-card > .btn { margin-top: auto; }
+.verification-price {
+  display: flex; flex-direction: column; gap: 1px; align-items: center;
+  margin: 14px 0 12px; padding: 10px 12px; border-radius: 13px;
+  background: var(--brand-soft);
+}
+.verification-price-value { font-size: 18px; font-weight: 850; color: var(--brand); letter-spacing: -.3px; }
+.verification-price-note { font-size: 11px; font-weight: 650; color: var(--text-2); }
+.verification-unavailable {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  margin-top: auto; padding-top: 16px;
+}
+.verification-options { display: grid; gap: 8px; }
+.verification-option {
+  display: flex; align-items: center; gap: 9px; padding: 12px 13px;
+  border-radius: 13px; border: 1.5px solid var(--line-soft);
+  background: var(--card); text-align: left;
+}
+.verification-option.active { border-color: var(--brand); background: var(--brand-soft); }
+.verification-option span { font-size: 14px; font-weight: 700; }
+.verification-option small { margin-left: auto; font-size: 12px; font-weight: 650; color: var(--text-2); }
+.verification-form-price {
+  padding: 9px 12px; border-radius: 10px; background: var(--card-2);
+  font-size: 13px; font-weight: 750; color: var(--brand);
+}
+.verification-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 620px) {
+  .verification-form-grid { grid-template-columns: 1fr; }
+  .verification-card { border-radius: 18px; }
+}
+
+/* --------------------------- transición nativa --------------------------- */
+.col-center { view-transition-name: zuma-page; }
+::view-transition-old(zuma-page) {
+  animation: zuma-page-out 140ms ease both;
+}
+::view-transition-new(zuma-page) {
+  animation: zuma-page-in 220ms cubic-bezier(.22, 1, .36, 1) both;
+}
+@keyframes zuma-page-out {
+  to { opacity: .35; transform: translateY(4px) scale(.995); }
+}
+@keyframes zuma-page-in {
+  from { opacity: .5; transform: translateY(7px) scale(.997); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(zuma-page),
+  ::view-transition-new(zuma-page) { animation: none; }
 }

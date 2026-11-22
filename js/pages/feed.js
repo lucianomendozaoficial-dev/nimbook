@@ -10,6 +10,7 @@ import { avatarEl, emptyState, toast } from '../core/ui.js';
 import { emptyFeedIllustration } from '../core/illustrations.js';
 import { mountStories } from '../components/stories.js';
 import { postCard } from '../components/postcard.js';
+import { haptic } from '../core/native.js';
 import { shopFeedCard } from '../components/shop-feed-card.js';
 import { navigate } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
@@ -77,6 +78,7 @@ export function feedPage() {
         text: item.label,
         onclick: () => {
           if (mode === item.id) return;
+          haptic(6);
           mode = item.id;
           sessionStorage.setItem('zuma.feedMode', mode);
           seed = Math.floor(Math.random() * 9999) + 1;
@@ -87,17 +89,7 @@ export function feedPage() {
         },
       }));
     }
-    toolbar.append(
-      segmented,
-      el('div', { class: 'row gap-6' },
-        el('span', {
-          class: 'muted tiny feed-hint',
-          text: mode === 'foryou' ? 'Mezclado para vos' : 'Sólo a quienes seguís',
-        }),
-        el('button', {
-          class: 'btn-icon', type: 'button', title: 'Actualizar el muro',
-          'aria-label': 'Actualizar el muro', onclick: () => refresh(),
-        }, icon('refresh', 18))));
+    toolbar.append(segmented);
   }
 
   /* -------------------------------- listado ------------------------------ */

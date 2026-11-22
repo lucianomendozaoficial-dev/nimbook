@@ -9,6 +9,7 @@ import { initRealtime } from './core/realtime.js';
 import { initTheme } from './core/theme.js';
 import { applyReduced } from './core/motion.js';
 import { initPwa } from './core/pwa.js';
+import { haptic, withViewTransition } from './core/native.js';
 import { unlockSounds, playSound } from './core/sounds.js';
 import { startRouter, parseRoute, goBack } from './core/router.js';
 import { toast, emptyState } from './core/ui.js';
@@ -106,7 +107,6 @@ function buildShell() {
   const mobileNav = el('nav', { class: 'mobile-nav', 'aria-label': 'Navegación' });
   const items = [
     { id: 'feed', icon: 'home', label: 'Inicio', href: '#/inicio' },
-    { id: 'friends', icon: 'users', label: 'Seguidores', href: '#/seguidores' },
     { id: 'compose', icon: 'plus', label: 'Publicar', href: '#/publicar' },
     { id: 'shop', icon: 'shop', label: 'Shop', href: '#/tienda' },
     { id: 'messages', icon: 'message', label: 'Mensajes', href: '#/mensajes', badge: true },
@@ -259,17 +259,19 @@ function renderRoute(route) {
     return;
   }
   lastKey = key;
-  currentPage?.destroy?.();
-  shell.setLayout(layoutFor(route));
-  shell.center.replaceChildren();
-  const page = pageFor(route);
-  currentPage = page;
-  shell.center.appendChild(page.el);
-  shell.refreshChrome();
-  if (route.name !== lastRouteName) {
-    window.scrollTo({ top: 0 });
-    lastRouteName = route.name;
-  }
+  withViewTransition(() => {
+    currentPage?.destroy?.();
+    shell.setLayout(layoutFor(route));
+    shell.center.replaceChildren();
+    const page = pageFor(route);
+    currentPage = page;
+    shell.center.appendChild(page.el);
+    shell.refreshChrome();
+    if (route.name !== lastRouteName) {
+      window.scrollTo({ top: 0 });
+      lastRouteName = route.name;
+    }
+  });
 }
 
 /* ------------------------------ arranque -------------------------------- */

@@ -12,7 +12,7 @@ import {
   avatarEl, emptyState, openModal, toast, lightbox,
 } from '../core/ui.js';
 import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../core/media.js';
-import { updateProfile } from '../core/actions.js';
+import { updateProfile, reportAccount } from '../core/actions.js';
 import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
 import { listingCard } from './shop.js';
@@ -210,6 +210,50 @@ export function profilePage(username, { preview = false } = {}) {
     }, icon('link', 18));
   }
 
+  function openReport(user) {
+    const reasons = [
+      'Cuenta falsa o suplantación',
+      'Acoso o amenazas',
+      'Spam o estafa',
+      'Contenido inapropiado',
+      'Discurso de odio',
+      'Otro motivo',
+    ];
+    const reason = el('select', { class: 'input' },
+      el('option', { value: '', text: 'Elegí un motivo' }),
+      ...reasons.map((text) => el('option', { value: text, text })));
+    const detail = el('textarea', {
+      class: 'textarea', rows: '3', maxlength: '800',
+      placeholder: 'Contanos qué pasó (opcional)',
+    });
+    const submit = el('button', {
+      class: 'btn danger block', type: 'button', text: 'Enviar reporte',
+    });
+    submit.addEventListener('click', async () => {
+      if (!reason.value) { toast('Elegí un motivo.', { type: 'error' }); return; }
+      submit.disabled = true;
+      submit.textContent = 'Enviando…';
+      try {
+        await reportAccount(user.id, reason.value, detail.value);
+        api.close();
+        toast('Reporte enviado a soporte. Gracias.', { type: 'success' });
+      } catch (err) {
+        submit.disabled = false;
+        submit.textContent = 'Enviar reporte';
+        toast(err.message || 'No se pudo enviar el reporte.', { type: 'error' });
+      }
+    });
+    const api = openModal({
+      title: `Reportar a ${displayName(user)}`,
+      size: 'sm',
+      body: el('div', { class: 'col gap-12' },
+        el('p', { class: 'muted small', text: 'El reporte llega al equipo de soporte con el motivo. No se le avisa a la persona reportada.' }),
+        el('div', { class: 'field' }, el('label', { text: 'Motivo' }), reason),
+        el('div', { class: 'field' }, el('label', { text: 'Detalle' }), detail),
+        submit),
+    });
+  }
+
   function header(user) {
     const isMe = user.id === state.me?.id;
     const followers = followersOf(user.id);
@@ -233,7 +277,14 @@ export function profilePage(username, { preview = false } = {}) {
           class: 'btn', type: 'button',
           onclick: () => navigate(`/mensajes/${user.username}`),
         }, icon('message', 16), 'Mensaje'),
-        shareProfile(user));
+        shareProfile(user),
+        user.support
+          ? null
+          : el('button', {
+            class: 'btn-icon profile-report', type: 'button',
+            title: 'Reportar cuenta', 'aria-label': 'Reportar cuenta',
+            onclick: () => openReport(user),
+          }, icon('flag', 18)));
     }
 
     return el('div', { class: 'profile-header profile-hero' },

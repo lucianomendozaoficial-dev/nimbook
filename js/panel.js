@@ -8,7 +8,7 @@ import { P } from './core/paths.js';
 import { mediaImg } from './core/media.js';
 import { verifyPassword } from './core/crypto.js';
 import { initTheme } from './core/theme.js';
-import { initRealtime } from './core/realtime.js';
+import { initRealtime, onRemoteDoc } from './core/realtime.js';
 import {
   VERIFICATION_TYPES, verifiedBadge, verificationType,
 } from './components/verified-badge.js';
@@ -33,6 +33,10 @@ const state = {
   postsIndex: [],
   stories: [],
   shop: [],
+  verifications: [],
+  reports: [],
+  supportInbox: [],
+  supportUser: null,
   postDocs: new Map(),
   tab: 'users',
   query: '',
@@ -105,17 +109,23 @@ async function readJson(path) {
 /* ------------------------------- carga de datos -------------------------- */
 
 async function loadData() {
-  const [usersDoc, feedDoc, storiesDoc, shopDoc] = await Promise.all([
+  const [usersDoc, feedDoc, storiesDoc, shopDoc, verificationsDoc, reportsDoc, supportInboxDoc] = await Promise.all([
     readJson(P.userIndex),
     readJson(P.feedIndex),
     readJson(P.stories),
     readJson(P.shopIndex),
+    readJson(P.supportVerifications),
+    readJson(P.supportReports),
+    readJson(P.inbox(P.supportUser)),
   ]);
   if (!usersDoc) throw new Error('No se pudo leer la lista de usuarios. Revisá la conexión o config.js.');
 
   state.postsIndex = Array.isArray(feedDoc?.posts) ? feedDoc.posts : [];
   state.stories = Array.isArray(storiesDoc?.stories) ? storiesDoc.stories : [];
   state.shop = Array.isArray(shopDoc?.items) ? shopDoc.items : [];
+  state.verifications = Array.isArray(verificationsDoc?.requests) ? verificationsDoc.requests : [];
+  state.reports = Array.isArray(reportsDoc?.reports) ? reportsDoc.reports : [];
+  state.supportInbox = Array.isArray(supportInboxDoc?.threads) ? supportInboxDoc.threads : [];
   state.postDocs.clear();
 
   const index = Array.isArray(usersDoc.users) ? usersDoc.users : [];
@@ -133,8 +143,60 @@ async function loadData() {
     users.push(...batch);
   }
   state.users = users;
+  const support = users.find((user) => user.id === P.supportUser || user.username === 'soporte');
+  if (support) {
+    state.supportUser = support;
+  } else {
+    await ensureSupportUser();
+  }
   if (state.me) state.me = users.find((user) => user.id === state.me.id) || state.me;
   state.loadedAt = Date.now();
+}
+
+async function ensureSupportUser() {
+  const now = nowISO();
+  const support = {
+    id: P.supportUser,
+    username: 'soporte',
+    firstName: 'Soporte',
+    lastName: 'Zuma',
+    name: 'Soporte Zuma',
+    avatar: 'assets/logo/zuma-logo-128.png',
+    cover: null,
+    bio: 'Cuenta oficial de ayuda de Zuma. Escribinos por mensaje privado o reportá una cuenta desde su perfil.',
+    whatsapp: '',
+    instagram: '',
+    birthday: '',
+    location: '',
+    work: 'Equipo Zuma',
+    education: '',
+    password: null,
+    saved: [],
+    support: true,
+    verification: { type: 'dorado', at: now },
+    createdAt: now,
+  };
+  await queueDoc(P.user(support.id), () => ({ version: 1, user: support }), {
+    delay: 0, message: 'Zuma: perfil de soporte',
+  });
+  const entry = {
+    id: support.id,
+    username: support.username,
+    firstName: support.firstName,
+    lastName: support.lastName,
+    name: support.name,
+    avatar: support.avatar,
+    support: true,
+    verification: 'dorado',
+    createdAt: now,
+  };
+  await queueDoc(P.userIndex, (doc) => {
+    const data = doc || { version: 1, users: [] };
+    if ((data.users || []).some((row) => row.id === support.id)) return data;
+    return { ...data, users: [entry, ...(data.users || [])] };
+  }, { delay: 0, message: 'Zuma: perfil de soporte' });
+  state.supportUser = support;
+  if (!state.users.some((user) => user.id === support.id)) state.users.push(support);
 }
 
 function countPosts(userId) {
@@ -186,7 +248,7 @@ function verificationButtons(user, { onDone = null } = {}) {
 }
 
 async function setVerification(userId, type, onDone = null) {
-  if (state.busy) return;
+  if (state.busy) return false;
   state.busy = true;
   state.note = type ? `Guardando insignia ${VERIFICATION_TYPES[type].label}…` : 'Quitando insignia…';
   state.noteType = 'info';
@@ -218,9 +280,11 @@ async function setVerification(userId, type, onDone = null) {
       : `Insignia quitada a ${nameOf(user)}.`;
     state.noteType = 'info';
     onDone?.();
+    return true;
   } catch (err) {
     state.note = `No se pudo guardar la insignia: ${err?.message || 'error de red'}`;
     state.noteType = 'error';
+    return false;
   } finally {
     state.busy = false;
     render();
@@ -308,11 +372,362 @@ function renderStats() {
     stat('shop', state.shop.length, 'Productos en Shop'));
 }
 
+/* --------------------------------- soporte -------------------------------- */
+
+const ARS = new Intl.NumberFormat('es-AR');
+const supportPrice = (type) => (type === 'celeste' ? 10000 : type === 'morado' ? 18000 : 0);
+
+function supportUserRow(user) {
+  return user || { id: '', name: 'Usuario', username: '' };
+}
+
+function statsCard(iconName, value, label) {
+  return el('div', { class: 'pn-stat' },
+    el('div', { class: 'pn-stat-ic' }, icon(iconName, 19)),
+    el('div', { class: 'pn-stat-value', text: formatCount(value) }),
+    el('div', { class: 'pn-stat-label', text: label }));
+}
+
+async function updateSupportRequest(id, status) {
+  await queueDoc(P.supportVerifications, (doc) => {
+    if (!doc?.requests) return undefined;
+    return {
+      ...doc,
+      requests: doc.requests.map((row) => (row.id === id ? { ...row, status } : row)),
+    };
+  }, { delay: 0, message: 'Zuma: solicitud de verificación' });
+  state.verifications = state.verifications.map((row) => (row.id === id ? { ...row, status } : row));
+}
+
+async function approveVerification(request) {
+  const ok = await setVerification(request.userId, request.type);
+  if (!ok) return;
+  await updateSupportRequest(request.id, 'approved');
+  state.note = `Insignia ${VERIFICATION_TYPES[request.type].label} aprobada para ${nameOf(supportUserRow(state.users.find((u) => u.id === request.userId)))}.`;
+  state.noteType = 'info';
+  render();
+}
+
+async function rejectVerification(request) {
+  await updateSupportRequest(request.id, 'rejected');
+  state.note = 'Solicitud rechazada.';
+  state.noteType = 'info';
+  render();
+}
+
+async function resolveReport(report) {
+  await queueDoc(P.supportReports, (doc) => {
+    if (!doc?.reports) return undefined;
+    return {
+      ...doc,
+      reports: doc.reports.map((row) => (row.id === report.id ? { ...row, status: 'resolved' } : row)),
+    };
+  }, { delay: 0, message: 'Zuma: reporte resuelto' });
+  state.reports = state.reports.map((row) => (row.id === report.id ? { ...row, status: 'resolved' } : row));
+  state.note = 'Reporte marcado como resuelto.';
+  state.noteType = 'info';
+  render();
+}
+
+function renderSupportView() {
+  const pending = state.verifications.filter((row) => row.status === 'pending');
+  const reports = state.reports;
+  const unread = state.supportInbox.reduce((sum, row) => sum + (Number(row.unread) || 0), 0);
+  const support = state.supportUser;
+  const wrap = el('div', { class: 'col gap-16 pn-support' });
+
+  wrap.appendChild(el('div', { class: 'pn-support-stats' },
+    statsCard('shield', pending.length, 'Solicitudes pendientes'),
+    statsCard('flag', reports.filter((row) => row.status !== 'resolved').length, 'Reportes abiertos'),
+    statsCard('message', unread, 'Mensajes sin leer'),
+    statsCard('user', support ? 1 : 0, 'Perfil de soporte')));
+
+  wrap.appendChild(el('div', { class: 'pn-card' },
+    el('div', { class: 'pn-card-head' },
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: 'Perfil de soporte' }),
+        el('div', { class: 'pn-card-sub', text: 'Los usuarios pueden escribirle a @soporte y ver sus publicaciones.' })),
+      el('div', { class: 'pn-user-actions' },
+        support ? el('a', {
+          class: 'pn-btn primary sm', href: 'index.html#/u/soporte', target: '_blank', rel: 'noopener',
+        }, icon('user', 15), 'Ver perfil') : null))));
+
+  const verCard = el('div', { class: 'pn-card' },
+    el('div', { class: 'pn-card-head' },
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: 'Solicitudes de verificación' }),
+        el('div', { class: 'pn-card-sub', text: 'DNI, nacimiento, país, ciudad e insignia elegida. El pago se coordina antes de aprobar.' }))));
+  if (!pending.length) {
+    verCard.appendChild(el('div', { class: 'pn-post' }, el('span', { class: 'muted', text: 'No hay solicitudes pendientes.' })));
+  }
+  for (const request of pending) {
+    const user = state.users.find((row) => row.id === request.userId);
+    const type = VERIFICATION_TYPES[request.type] || VERIFICATION_TYPES.celeste;
+    verCard.appendChild(el('div', { class: 'pn-support-request' },
+      el('div', { class: 'pn-support-request-head' },
+        avatarEl(user, 42),
+        el('div', { class: 'grow' },
+          el('div', { class: 'pn-name-row' },
+            el('span', { class: 'pn-user-name', text: nameOf(user) }),
+            verifiedBadge({ verification: request.type }, { size: 15, interactive: false })),
+          el('div', { class: 'pn-user-sub', text: `@${request.username || user?.username || '—'} · ${new Date(request.createdAt).toLocaleString('es-AR')}` })),
+        el('span', { class: 'pn-support-price', text: `$ ${ARS.format(supportPrice(request.type))}/mes` })),
+      el('div', { class: 'pn-support-badge' }, type.title),
+      el('div', { class: 'pn-fields pn-support-fields' },
+        ...[
+          ['DNI', request.dni],
+          ['Nacimiento', request.birthDate],
+          ['País', request.country],
+          ['Ciudad', request.city],
+          ['Insignia', type.title],
+          ['Precio', `$ ${ARS.format(request.price || supportPrice(request.type))}/mes`],
+        ].map(([label, value]) => el('div', { class: 'pn-field' },
+          el('div', { class: 'pn-field-label', text: label }),
+          el('div', { class: 'pn-field-value', text: value || '—' })))),
+      el('div', { class: 'pn-user-actions' },
+        btn('Aprobar y verificar', () => approveVerification(request), { className: 'primary sm', iconName: 'check' }),
+        btn('Rechazar', () => rejectVerification(request), { className: 'danger sm', iconName: 'x' }))));
+  }
+  wrap.appendChild(verCard);
+
+  const reportCard = el('div', { class: 'pn-card' },
+    el('div', { class: 'pn-card-head' },
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: 'Cuentas reportadas' }),
+        el('div', { class: 'pn-card-sub', text: 'Reportes enviados desde los perfiles, con el motivo.' }))));
+  if (!reports.length) {
+    reportCard.appendChild(el('div', { class: 'pn-post' }, el('span', { class: 'muted', text: 'No hay reportes todavía.' })));
+  }
+  for (const report of reports.slice(0, 40)) {
+    const reported = supportUserRow(state.users.find((row) => row.id === report.reportedId));
+    const reporter = supportUserRow(state.users.find((row) => row.id === report.reporterId));
+    reportCard.appendChild(el('div', { class: 'pn-support-report' },
+      el('div', { class: 'pn-support-request-head' },
+        avatarEl(reported, 38),
+        el('div', { class: 'grow' },
+          el('div', { class: 'pn-user-name', text: nameOf(reported) }),
+          el('div', { class: 'pn-user-sub', text: `@${reported.username || '—'} · reportado por @${reporter.username || '—'} · ${timeAgo(report.createdAt)}` })),
+        el('span', { class: `pn-status${report.status === 'resolved' ? ' resolved' : ''}`, text: report.status === 'resolved' ? 'Resuelto' : 'Pendiente' })),
+      el('div', { class: 'pn-support-reason', text: report.reason }),
+      report.detail ? el('p', { class: 'pn-support-detail', text: report.detail }) : null,
+      report.status !== 'resolved'
+        ? el('div', { class: 'pn-user-actions' },
+          btn('Marcar resuelto', () => resolveReport(report), { className: 'sm', iconName: 'check' }))
+        : null));
+  }
+  wrap.appendChild(reportCard);
+
+  const chatCard = el('div', { class: 'pn-card' },
+    el('div', { class: 'pn-card-head' },
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: 'Chat de soporte' }),
+        el('div', { class: 'pn-card-sub', text: 'Mensajes privados que los usuarios le envían a @soporte.' }))));
+  if (!state.supportInbox.length) {
+    chatCard.appendChild(el('div', { class: 'pn-post' }, el('span', { class: 'muted', text: 'Todavía no hay conversaciones de soporte.' })));
+  }
+  for (const row of state.supportInbox.slice(0, 40)) {
+    const person = supportUserRow(state.users.find((user) => user.id === row.withId));
+    chatCard.appendChild(el('div', { class: 'pn-user pn-support-chat-row' },
+      avatarEl(person, 40),
+      el('div', { class: 'pn-user-main' },
+        el('div', { class: 'pn-name-row' },
+          el('span', { class: 'pn-user-name', text: nameOf(person) }),
+          Number(row.unread) ? el('span', { class: 'pn-status', text: `${row.unread} sin leer` }) : null),
+        el('div', { class: 'pn-user-sub', text: row.lastText || '' })),
+      el('div', { class: 'pn-user-actions' },
+        btn('Abrir chat', () => openSupportChat(person.id), { className: 'sm', iconName: 'message' }))));
+  }
+  wrap.appendChild(chatCard);
+
+  const postCard = el('div', { class: 'pn-card' },
+    el('div', { class: 'pn-card-head' },
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: 'Publicar como Soporte' }),
+        el('div', { class: 'pn-card-sub', text: 'La publicación aparece en el perfil de @soporte y en el muro.' }))));
+  const postText = el('textarea', {
+    class: 'textarea', rows: '3', maxlength: '2000',
+    placeholder: 'Novedad o aviso de soporte…',
+  });
+  const publishBtn = btn('Publicar aviso', async () => {
+    const text = postText.value.trim();
+    if (!text || !support) return;
+    publishBtn.disabled = true;
+    try {
+      await publishSupportPost(text, support);
+      postText.value = '';
+      state.note = 'Publicación de soporte publicada.';
+      state.noteType = 'info';
+      render();
+    } catch (err) {
+      state.note = err.message || 'No se pudo publicar.';
+      state.noteType = 'error';
+      render();
+    }
+  }, { className: 'primary', iconName: 'send' });
+  postCard.appendChild(el('div', { class: 'pn-support-compose' }, postText, publishBtn));
+  wrap.appendChild(postCard);
+
+  return wrap;
+}
+
+async function publishSupportPost(text, support) {
+  const now = nowISO();
+  const id = `p_support_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const post = {
+    id,
+    authorId: support.id,
+    text: String(text).slice(0, 2000),
+    media: [],
+    privacy: 'public',
+    reactions: {},
+    commentsCount: 0,
+    createdAt: now,
+  };
+  await queueDoc(P.post(id), () => ({ version: 1, post }), {
+    delay: 0, message: 'Zuma: aviso de soporte',
+  });
+  await queueDoc(P.feedIndex, (doc) => {
+    const data = doc || { version: 1, posts: [] };
+    return {
+      ...data,
+      posts: [{ id, authorId: support.id, createdAt: now }, ...(data.posts || [])].slice(0, 200),
+    };
+  }, { delay: 0, message: 'Zuma: aviso de soporte' });
+  state.postsIndex = [{ id, authorId: support.id, createdAt: now }, ...state.postsIndex].slice(0, 200);
+  state.postDocs.set(id, post);
+}
+
+function openSupportChat(userId) {
+  const person = state.users.find((user) => user.id === userId) || { id: userId, name: 'Usuario', username: '' };
+  const supportId = P.supportUser;
+  const threadId = [supportId, userId].sort().join('__');
+  const backdrop = el('div', { class: 'pn-modal-backdrop' });
+  const modal = el('div', { class: 'pn-modal pn-support-modal' });
+  const close = () => {
+    clearInterval(pollMessages);
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (event) => { if (event.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+  const pollMessages = setInterval(() => loadMessages().catch(() => {}), 5000);
+
+  const body = el('div', { class: 'pn-support-thread' });
+  const input = el('textarea', { rows: '2', placeholder: 'Responder como Soporte…', maxlength: '4000' });
+  const send = el('button', { class: 'pn-btn primary', type: 'submit' }, icon('send', 16), el('span', { text: 'Enviar' }));
+
+  async function loadMessages() {
+    const doc = await readJson(P.thread(threadId));
+    const messages = doc?.thread?.messages || [];
+    clear(body);
+    if (!messages.length) {
+      body.appendChild(el('div', { class: 'pn-post' }, el('span', { class: 'muted', text: 'Todavía no hay mensajes en esta conversación.' })));
+      return;
+    }
+    for (const message of messages) {
+      body.appendChild(el('div', {
+        class: `pn-support-msg${message.fromId === supportId ? ' me' : ''}`,
+      },
+      el('div', { class: 'pn-support-bubble' },
+        el('span', { text: message.text || '' }),
+        el('span', { class: 'pn-support-stamp', text: new Date(message.createdAt).toLocaleString('es-AR') }))));
+    }
+    body.scrollTop = body.scrollHeight;
+  }
+
+  async function markRead() {
+    await queueDoc(P.inbox(supportId), (doc) => {
+      if (!doc?.threads) return undefined;
+      return {
+        ...doc,
+        threads: doc.threads.map((row) => (row.threadId === threadId ? { ...row, unread: 0 } : row)),
+      };
+    }, { delay: 0, message: 'Zuma: soporte leído' });
+    state.supportInbox = state.supportInbox.map((row) => (row.threadId === threadId ? { ...row, unread: 0 } : row));
+  }
+
+  const form = el('form', { class: 'pn-support-reply' }, input, send);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text || state.busy) return;
+    state.busy = true;
+    send.disabled = true;
+    try {
+      const message = {
+        id: `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+        fromId: supportId,
+        text,
+        createdAt: nowISO(),
+      };
+      await queueDoc(P.thread(threadId), (doc) => {
+        const data = doc?.thread ? doc : {
+          version: 1,
+          thread: { id: threadId, memberIds: [supportId, userId], messages: [] },
+        };
+        data.thread.messages = [...(data.thread.messages || []), message].slice(-400);
+        data.thread.updatedAt = message.createdAt;
+        return data;
+      }, { delay: 0, message: 'Zuma: respuesta de soporte' });
+
+      const base = {
+        threadId,
+        lastText: text.slice(0, 140),
+        lastAt: message.createdAt,
+        lastFromId: supportId,
+      };
+      await queueDoc(P.inbox(userId), (doc) => {
+        const data = doc && Array.isArray(doc.threads) ? doc : { version: 1, threads: [] };
+        const previous = data.threads.find((row) => row.threadId === threadId);
+        const entry = { ...base, withId: supportId, unread: (Number(previous?.unread) || 0) + 1 };
+        data.threads = [entry, ...data.threads.filter((row) => row.threadId !== threadId)].slice(0, 100);
+        return data;
+      }, { delay: 0, message: 'Zuma: respuesta de soporte' });
+      await queueDoc(P.inbox(supportId), (doc) => {
+        const data = doc && Array.isArray(doc.threads) ? doc : { version: 1, threads: [] };
+        const entry = { ...base, withId: userId, unread: 0 };
+        data.threads = [entry, ...data.threads.filter((row) => row.threadId !== threadId)].slice(0, 100);
+        return data;
+      }, { delay: 0, message: 'Zuma: respuesta de soporte' });
+
+      state.supportInbox = [
+        { ...base, withId: userId, unread: 0 },
+        ...state.supportInbox.filter((row) => row.threadId !== threadId),
+      ];
+      input.value = '';
+      await loadMessages();
+      render();
+    } catch (err) {
+      state.note = err.message || 'No se pudo responder.';
+      state.noteType = 'error';
+      render();
+    } finally {
+      state.busy = false;
+      send.disabled = false;
+      input.focus();
+    }
+  });
+
+  modal.append(
+    el('div', { class: 'pn-modal-head' },
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: `Soporte · ${nameOf(person)}` }),
+        el('div', { class: 'pn-card-sub', text: `@${person.username || '—'}` })),
+      el('button', { class: 'pn-close', type: 'button', 'aria-label': 'Cerrar', onclick: close }, icon('x', 18))),
+    el('div', { class: 'pn-modal-body' }, body, form));
+  backdrop.appendChild(modal);
+  document.body.appendChild(backdrop);
+  markRead().then(() => loadMessages()).catch(() => loadMessages());
+  setTimeout(() => input.focus(), 100);
+}
+
 function renderTabs() {
   const tabs = [
     { id: 'users', label: 'Usuarios', iconName: 'users' },
     { id: 'posts', label: 'Publicaciones', iconName: 'grid' },
     { id: 'badges', label: 'Insignias', iconName: 'shield' },
+    { id: 'support', label: 'Soporte', iconName: 'message' },
   ];
   return el('div', { class: 'pn-tabs' },
     ...tabs.map((tab) => el('button', {
@@ -519,6 +934,7 @@ function render() {
     }
     if (state.tab === 'posts') content.appendChild(renderPostsView());
     else if (state.tab === 'badges') content.appendChild(renderBadgesView());
+    else if (state.tab === 'support') content.appendChild(renderSupportView());
     else content.appendChild(renderUsersView());
   };
 
@@ -656,6 +1072,20 @@ async function boot() {
   }
   state.me = { id: 'panel', name: 'Equipo Zuma', username: 'equipo' };
   initRealtime();
+  let supportRefreshTimer = null;
+  onRemoteDoc((path) => {
+    const isSupport = path.startsWith('data/soporte')
+      || path.includes('mensajes/bandejas/u_support')
+      || (path.includes('mensajes/hilos/') && path.includes('u_support'));
+    if (!isSupport) return;
+    clearTimeout(supportRefreshTimer);
+    supportRefreshTimer = setTimeout(async () => {
+      try {
+        await loadData();
+        render();
+      } catch { /* se reintenta en el próximo cambio */ }
+    }, 500);
+  });
   try {
     await loadData();
     render();
