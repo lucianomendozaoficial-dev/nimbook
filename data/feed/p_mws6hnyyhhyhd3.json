@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "post": {
+    "id": "p_mws6hnyyhhyhd3",
+    "authorId": "u_mwprvtuccxcjip",
+    "text": "",
+    "media": [
+      {
+        "path": "media/publicaciones/mws6hmh0-ws6hmh.jpg",
+        "type": "image/jpeg"
+      }
+    ],
+    "privacy": "public",
+    "feeling": null,
+    "location": null,
+    "bg": null,
+    "shareOf": null,
+    "groupId": null,
+    "createdAt": "2026-11-22T18:36:39.706Z",
+    "reactions": {},
+    "commentsCount": 0
+  }
+}
