@@ -280,12 +280,18 @@ export async function loadInbox(userId, { fresh = false } = {}) {
   const doc = await docJson(P.inbox(userId), { fresh });
   const raw = Array.isArray(doc?.threads) ? doc.threads : null;
   // Repara bandejas viejas: el "otro" se deduce del id del hilo, no de withId.
-  const fetched = raw ? raw.map((entry) => {
-    const partner = String(entry.threadId || '')
-      .split('__')
-      .find((id) => id && id !== userId) || null;
-    return partner && entry.withId !== partner ? { ...entry, withId: partner } : entry;
-  }) : null;
+  // También descarta hilos con uno mismo, que quedaron por el bug anterior.
+  const fetched = raw ? raw
+    .filter((entry) => {
+      const ids = String(entry.threadId || '').split('__').filter(Boolean);
+      return ids.length === 2 && ids[0] !== ids[1] && ids.includes(userId);
+    })
+    .map((entry) => {
+      const partner = String(entry.threadId || '')
+        .split('__')
+        .find((id) => id && id !== userId) || null;
+      return partner && entry.withId !== partner ? { ...entry, withId: partner } : entry;
+    }) : null;
   if (userId !== state.me?.id) return fetched || [];
 
   const local = state.inbox;
