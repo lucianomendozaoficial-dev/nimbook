@@ -1,5 +1,5 @@
 /* ==========================================================================
-   store.js — estado en memoria y lecturas (todo por CDN, sin token)
+   store.js — estado en memoria y lecturas desde Supabase
    ========================================================================== */
 import {
   configure, fetchDoc, cachePeek, cachePut, onWrite, bumpVersion,
@@ -184,8 +184,7 @@ export async function loadFeedPage({ reset = false } = {}) {
 
 /**
  * Carga unas pocas publicaciones de gente que no seguís para que el muro tenga
- * contenido mezclado desde la primera pantalla. Son lecturas por CDN: no gastan
- * la API de GitHub.
+ * contenido mezclado desde la primera pantalla. Son lecturas a Supabase.
  */
 export async function loadDiscoveryPage(viewerId, limit = 8) {
   if (!viewerId) return 0;

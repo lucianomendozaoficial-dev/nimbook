@@ -1,10 +1,10 @@
 # Zuma
 
-Red social completa inspirada en Facebook, hecha con **JavaScript puro** (sin frameworks, sin build) y con **tu repositorio de GitHub como base de datos**.
+Red social completa inspirada en Facebook, hecha con **JavaScript puro** (sin frameworks, sin build), publicada en **GitHub Pages** y con **Supabase** como base de datos.
 
 **En línea:** https://lucianomendozaoficial-dev.github.io/nimbook/
 
-Los usuarios, las publicaciones, las historias, los chats y las imágenes viven en archivos JSON y carpetas dentro del repositorio. La aplicación los lee y los escribe directamente con la API de GitHub desde el navegador, así que se puede publicar gratis en GitHub Pages.
+Los usuarios, las publicaciones, las historias, los chats y las ventas viven en la tabla `zuma_docs` de Supabase (un documento JSON por “archivo”), y las imágenes nuevas se guardan en **Supabase Storage**. GitHub solo se usa para alojar el sitio estático. El navegador lee y escribe con la **clave publicable** de Supabase y las políticas RLS del proyecto.
 
 ![Feed de Zuma](docs/preview-feed.jpg)
 
@@ -51,7 +51,7 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 - Publicaciones con texto, hasta 10 fotos, **sentimiento, ubicación, privacidad y fondos de color** (como Facebook).
 - **Historias en su propia sección**: la cámara se abre primero y abajo está la opción de elegir de la galería. La foto se comparte tal cual (sin editor); dura 24 h y se puede descargar.
 - **Insignias de verificación**: tres niveles con color, como Instagram. La **celeste** es para cuentas verificadas que no son famosas, la **morada** para influencers, políticos y figuras públicas, y la **dorada** para el equipo de Zuma y sus aliados. Al tocar una insignia se abre la sección que explica las tres.
-- **Panel de control** (`panel.html`): el equipo puede ver usuarios, sus publicaciones y datos, y asignar o quitar la insignia. Lee por el link público y escribe con el token de `config.js`.
+- **Panel de control** (`panel.html`): el equipo puede ver usuarios, sus publicaciones y datos, y asignar o quitar la insignia. Lee y escribe en Supabase con la clave publicable.
 - **Actualizar Zuma** en el menú: borra la caché, desregistra el service worker y recarga para ver los cambios sin Ctrl+R.
 - **Descargar imágenes** de publicaciones e historias desde el menú de la publicación o el visor.
 - **Eliminar cuenta** desde el menú: pide la contraseña, avisa que es permanente y borra perfil, publicaciones, historias, ventas, conversaciones y vínculos.
@@ -59,7 +59,7 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 - **Shop**: mercado con productos de la gente de Zuma, búsqueda y categorías, publicación con fotos, precio, estado y ubicación, ficha con vendedor, botón para escribirle, marcar como vendido y eliminar lo propio. El botón **Vender algo** queda flotante.
 - **Contacto de la venta**: al publicar se puede activar el contacto y elegir **WhatsApp** o **Instagram** (con sus logos). En la ficha aparecen esos botones y, para quien no quiera usarlos, el chat privado de Zuma.
 - **Ventas en el muro**: cada tanto aparece una venta de Shop mezclada en «Para ti», sin importar a quién sigas, con la **marca de agua de Zuma** y la etiqueta «Venta» para que se note que es de Shop.
-- **Mensajes privados**: bandeja con conversaciones y contador de no leídos, chat uno a uno (enviar, actualizar, buscar gente para escribirle), aviso en la campana y atajo desde el perfil y desde Shop. El mensaje se ve al instante y el chat se actualiza solo **cada 5 segundos leyendo el link público** (raw/CDN), sin gastar la API de GitHub. La bandeja del destinatario muestra a la otra persona (y se reparan las bandejas viejas que mostraban el propio usuario).
+- **Mensajes privados**: bandeja con conversaciones y contador de no leídos, chat uno a uno (enviar, actualizar, buscar gente para escribirle), aviso en la campana y atajo desde el perfil y desde Shop. El mensaje se ve al instante y el chat se actualiza solo **cada 5 segundos leyendo Supabase**. La bandeja del destinatario muestra a la otra persona (y se reparan las bandejas viejas que mostraban el propio usuario).
 - Reacciones con un toque (me gusta) o manteniendo apretado (6 opciones), comentarios y respuestas, compartir y guardar.
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
@@ -81,30 +81,33 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 - Responsive: 3 columnas en escritorio, rail de iconos en tablet, feed completo y navegación inferior en móvil.
 - Logo propio en PNG para todas las resoluciones, favicon `.ico`, iconos PWA y `manifest` instalable.
 
-**Sin servidor**
-- 100 % estático: GitHub Pages, Netlify, Vercel o el servidor local incluido.
-- **Lecturas por `raw.githubusercontent.com`** (siempre frescas, sin token): no gastan la API de GitHub ni el límite de 5 000 por hora. Las imágenes van por **jsDelivr**, que sí cachea bien porque tienen nombre único.
-- **Escrituras solo por la API de GitHub**, con el token, en cola: se agrupan cada 2 s, se reintentan hasta 5 veces ante `409` con espera de 300 ms + aleatorio y siempre se hace *bajar → modificar → subir* con el `sha` recién leído.
-- Todo lo descargado se guarda en el navegador (localStorage) para no bajarlo dos veces; el chat abierto se lee cada 5 s por el link público y el resto se actualiza al abrir o al tirar hacia abajo.
+**Supabase**
+- El sitio es 100 % estático (GitHub Pages). La base de datos es **Postgres en Supabase**: una tabla `zuma_docs` con `path`, `data jsonb` y `updated_at`, más el bucket público `zuma-media` para las imágenes nuevas.
+- **Lecturas y escrituras** desde el navegador con `@supabase/supabase-js` (incluido en `js/vendor/`). No hay token de GitHub en la app.
+- Las escrituras se agrupan en cola y usan **bloqueo optimista** con `updated_at`: si otra persona escribió el mismo documento, se relee y se reintenta para no perder cambios.
+- Todo lo descargado se guarda en el navegador (localStorage) para no pedirlo dos veces; el chat abierto consulta Supabase cada 5 s y el resto se actualiza al abrir o al tirar hacia abajo.
+- Las imágenes viejas siguen en GitHub Pages; las nuevas se suben a Supabase Storage y se guardan como URL pública.
 
 ---
  
 ## Panel de control
 
-`panel.html` es una página aparte para el equipo. Muestra los usuarios, sus datos y sus publicaciones, y permite asignar o quitar la insignia de verificación. Lee los archivos por el link público y escribe con el token de `config.js`.
+`panel.html` es una página aparte para el equipo. Muestra los usuarios, sus datos y sus publicaciones, y permite asignar o quitar la insignia de verificación. Lee y escribe en Supabase con la clave publicable de `config.js`.
 
 - Se entra con una cuenta de administrador. La lista está al principio de `js/panel.js` (`ADMIN_USERNAMES`): por defecto `lucianomdz`, `lucianomdz.ok` y `eltuty`. En local se agrega `nico.gimenez` para poder probar el panel con los datos demo. Cambiala por las cuentas del equipo.
 - Si no hay una sesión de administrador, el panel muestra un acceso con usuario y contraseña; verifica la contraseña con el mismo PBKDF2 de la app.
 - Pestañas: **Usuarios** (buscar, ver ficha, asignar insignia), **Publicaciones** y **Insignias** (explicación y cuentas verificadas).
 - La insignia se guarda en `usuarios/<id>.json` (`verification: { type, at }`) y en `usuarios/index.json` (`verification: "celeste" | "morado" | "dorado"`) para que el muro y las listas la muestren sin descargar la ficha completa.
 
-> El panel es una herramienta del equipo, no un backend: la protección es del lado del navegador y el token de `config.js` ya es público en un sitio estático. Usá un token limitado a este repositorio, con caducidad, y no compartas el enlace del panel.
+> El panel es una herramienta del equipo, no un backend: la protección es del lado del navegador y las políticas actuales de Supabase permiten escribir con la clave publicable. No lo uses como bóveda de datos: para un equipo grande conviene pasar el login a Supabase Auth y cerrar las políticas por usuario.
 
 ---
 
-## Estructura del repositorio (la base de datos)
+## Estructura de los documentos (Supabase)
 
-Un archivo por cosa: así dos personas nunca escriben el mismo archivo y GitHub no se cae.
+Todo vive en la tabla `zuma_docs`: una fila por documento, con `path` como clave, `data` en JSONB y `updated_at`. Los `path` mantienen los nombres de antes, así el código y las acciones siguen igual:
+
+Un documento por cosa: así dos personas no pisan el mismo registro y las escrituras son pequeñas.
 
 ```
 data/
@@ -128,13 +131,7 @@ media/
   perfiles/  portadas/  publicaciones/  historias/  grupos/  tienda/
 ```
 
-**Shop y mensajes funcionan con la misma idea:** primero se lee el archivo por el
-enlace de `raw.githubusercontent.com` (sin token) y las escrituras van por la API
-con el token, en cola. Un mensaje nuevo se guarda en el hilo compartido
-`mensajes/hilos/<id-menor>__<id-mayor>.json` y en las dos bandejas: la mía queda
-sin pendientes y la de la otra persona suma un no leído. Mientras un chat está
-abierto, se leen el hilo y la bandeja cada 5 segundos por ese link público: el
-token solo se usa al enviar, marcar leído o publicar.
+**Shop y mensajes funcionan con la misma idea:** cada documento se lee y se escribe en Supabase. Un mensaje nuevo se guarda en el hilo compartido `mensajes/hilos/<id-menor>__<id-mayor>.json` y en las dos bandejas: la mía queda sin pendientes y la de la otra persona suma un no leído. Mientras un chat está abierto, se leen el hilo y la bandeja cada 5 segundos; no hay que recargar.
 
 **Regla de oro:** una publicación nunca guarda sus comentarios ni sus reacciones adentro.
 El «me gusta» escribe primero en `likes/<usuario>.json` y después, si se puede, suma el contador del post.
@@ -154,16 +151,31 @@ El «me gusta» escribe primero en `likes/<usuario>.json` y después, si se pued
 
 ## Puesta en marcha
 
-### 1. Crea el token de GitHub
+### 1. Crea la tabla y el bucket en Supabase
 
-1. **GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens**.
-2. *Repository access*: **Only select repositories** → tu repositorio de Zuma.
-3. *Repository permissions*: **Contents: Read and write** (Metadata se activa solo).
-4. Copia el token (`github_pat_…`).
+1. Abre el **SQL Editor** del proyecto: https://supabase.com/dashboard/project/jnewregdsxppdzfdvsqb/sql/new
+2. Copia y ejecuta todo **`supabase/schema.sql`**.
+3. Al terminar deben existir la tabla `public.zuma_docs` y el bucket público `zuma-media`.
 
-> El token se guarda solo en el navegador (`localStorage`) y nunca se sube al repositorio.
+Ese archivo también crea las políticas RLS y los permisos para la clave publicable.
 
-### 2. Publica la aplicación
+> No hace falta `npm install` ni un paso de build: el cliente de Supabase para el navegador ya está en `js/vendor/supabase.js`.
+
+### 2. Configura la conexión
+
+`config.js` ya tiene la URL del proyecto, la clave publicable y el bucket:
+
+```js
+window.NIMBOOK_CONFIG = {
+  supabaseUrl: 'https://jnewregdsxppdzfdvsqb.supabase.co',
+  supabaseKey: 'sb_publishable_…',
+  storageBucket: 'zuma-media',
+};
+```
+
+> La clave publicable está pensada para el navegador. La seguridad real la dan las políticas de Supabase, no el secreto de la clave. Nunca pongas la `service_role` en `config.js` ni en el sitio.
+
+### 3. Publica la aplicación
 
 Con Node.js instalado:
 
@@ -171,51 +183,38 @@ Con Node.js instalado:
 node tools/deploy.mjs --repo tuusuario/nimbook --token github_pat_xxx --pages
 ```
 
-Crea un **único commit** con la aplicación, los JSON vacíos y `config.js`. Si el repositorio no existe, añade `--create`.
-
-### 3. Configura la conexión (una sola vez)
-
-Edita **`config.js`** con tu repositorio y tu token:
-
-```js
-const partes = ['github_pat_xxx', 'yyy', 'zzz'];  // el token, repartido en partes
-window.NIMBOOK_CONFIG = { owner: 'tuusuario', repo: 'nimbook', branch: 'main', token: partes.join('') };
-```
-
-Ese archivo es lo único técnico que existe: los usuarios **nunca** ven repositorios ni tokens, solo la pantalla de entrada y registro.
-
-> **Importante:** GitHub bloquea los commits que contienen un token a la vista, por eso `config.js` guarda el token repartido en tres partes. La web lo necesita para guardar los datos, así que **cualquier visitante puede técnicamente leerlo y escribir en el repositorio**. Usá un token limitado a ese repositorio y solo con permiso de *Contents*; si se filtra, revocalo, generá otro y actualizá las tres partes de `config.js`.
+Ese token es **solo para que el script suba el sitio a GitHub Pages**; no se guarda en la app ni en `config.js`.
 
 ### 4. Ábrela y regístrate
 
+La base arranca **vacía**: no se migran datos viejos. Cada persona vuelve a crear su cuenta y publica de nuevo.
+
 1. Entra en `https://tuusuario.github.io/nimbook/`.
 2. Pulsa **Crear una cuenta nueva**, completa tus datos y publica tu primer momento.
+3. Para asignar insignias, entra a `panel.html` con una cuenta de administrador.
 
-> Para que GitHub Pages funcione gratis y las imágenes carguen rápido por CDN, el repositorio debe ser **público** (Settings → General → Change visibility).
->
-> El token queda dentro de `config.js` para que la web pueda guardar los datos. Cualquier visitante podría verlo, así que usa un token **limitado a ese repositorio** y con permiso solo de *Contents*. Si se filtra, revócalo, genera otro y vuelve a subir `config.js`.
+> El repositorio puede ser público: GitHub Pages lo necesita para servir el sitio. Los datos no están en el repositorio; están en Supabase.
 
 ---
 
-## Reparar los índices
+## Base vacía
 
-Si alguna vez un despliegue pisara `data/usuarios/index.json` o `data/feed/index.json`, se reconstruyen solos desde los archivos que ya existen:
+La primera vez que abras la app con Supabase, la tabla `zuma_docs` está vacía y vas a ver la pantalla de registro. No hay datos de ejemplo en producción y no se importa nada de GitHub: las cuentas y publicaciones se crean de nuevo.
 
-```bash
-node tools/repair.mjs --repo tuusuario/zuma --token github_pat_xxx
+Para empezar de cero otra vez, ejecutá en el SQL Editor:
+
+```sql
+delete from public.zuma_docs;
 ```
-
-**El despliegue ya no toca los datos existentes**: solo crea los índices y carpetas que faltan. Para borrarlos a propósito hay que usar `--reset-data`.
 
 ## Probarlo en tu PC
 
 Haz doble clic en **`Zuma.bat`**. Abre el navegador en `http://localhost:4173/` con un servidor local y **datos de prueba guardados en tu PC**: los cambios que hagas ahí no los ve nadie hasta que publiques.
 
 - Los archivos `js` y `css` se **recargan solos** al guardarlos (no hace falta refrescar).
+- El servidor local **emula Supabase** (`/sb/rest/v1` y `/sb/storage/v1`) y guarda los documentos en `data/` y las imágenes nuevas en `media/`.
 - Los usuarios y publicaciones de prueba viven en `data/` y `media/` de tu carpeta.
 - Necesita Node.js (https://nodejs.org). Si no está instalado, el acceso directo te lo indica.
-
-**Ver la web publicada desde el local** (con tus datos reales): abre `config.js` y listo; el modo local solo se activa con el lanzador.
 
 **Datos de ejemplo con 6 personas, fotos, grupos y canales**
 
@@ -245,28 +244,28 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Framework | Ninguno: módulos ES nativos, DOM a mano |
 | Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/tienda`, `#/tienda/producto`, `#/mensajes`, `#/mensajes/usuario`, `#/historias`, `#/historias/crear`, `#/verificacion`) y `panel.html`, compatibles con Pages |
 | Estado | Store propio con índices (`Map`) y selectores |
-| Concurrencia | Cola por archivo + reintentos ante `409` / `sha` inválido |
-| Caché | Memoria + `localStorage` por archivo con `ETag` y `sha` |
-| Cuota | ~5 000 peticiones/hora con token; los `304` no cuentan |
-| Chat en vivo | Sondeo cada 5 s por `raw.githubusercontent.com` (sin token); el token solo se usa al escribir |
+| Base de datos | Supabase Postgres, tabla `zuma_docs` (`path` + `data jsonb` + `updated_at`) |
+| Concurrencia | Cola por documento + bloqueo optimista con `updated_at` y reintentos |
+| Caché | Memoria + `localStorage` por documento (30 s en memoria) |
+| Cuota | La del plan de Supabase; ya no se gasta la API de GitHub para datos |
+| Chat en vivo | Sondeo cada 5 s a Supabase mientras el chat está abierto |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
 | Historias | Cámara con `getUserMedia`; si no hay permiso o cámara, se elige de la galería. Se comparte la foto tal cual, sin editor |
 | Verificación | Tres niveles (celeste/morado/dorado) guardados en la ficha y el índice; la insignia es un botón que abre `#/verificacion` |
-| Panel | `panel.html` + `js/panel.js`, lectura pública y escritura con token; acceso por cuenta administradora |
+| Panel | `panel.html` + `js/panel.js`, lectura y escritura en Supabase; acceso por cuenta administradora |
 | Eliminar cuenta | Verifica la contraseña y borra perfil, posts, historias, ventas, conversaciones y vínculos; el aviso indica que no se puede deshacer |
-| Imágenes | `canvas` → JPEG, máx. 1600 px y ~1,4 MB, nombre único |
+| Imágenes | `canvas` → JPEG, máx. 1600 px y ~1,4 MB; las nuevas van a Supabase Storage |
 | Vídeos | **No soportados** (por diseño); solo imágenes |
 
 ### Límites conocidos
 
-- Cada «me gusta» o comentario es un commit: es el precio de usar GitHub como base de datos.
-- GitHub recomienda mantener los archivos por debajo de 1 MB; para comunidades grandes conviene dividir `feed.json` por mes.
-- El token está dentro de `config.js`: usa uno limitado a este repositorio y con caducidad, y revócalo si se filtra.
-- Los mensajes privados se guardan como JSON en el repositorio: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Si el repositorio es público, alguien con el enlace podría abrir el archivo (como pasa con el resto de los datos). Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
+- Las políticas RLS actuales permiten leer y escribir con la clave publicable. Es una etapa de transición: para una comunidad abierta conviene migrar el login a **Supabase Auth** y cerrar las políticas por usuario.
+- La `service_role` de Supabase **nunca** va en el navegador ni en `config.js`: solo se usa desde el SQL Editor o scripts privados.
+- Los mensajes privados se guardan como JSON en Supabase: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Alguien con la clave publicable y las políticas actuales podría leer la tabla. Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
 - La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, la app ofrece elegir una foto de la galería.
-- Al eliminar una cuenta se borran sus archivos JSON, pero las imágenes ya subidas a `media/` y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar en el repositorio.
-- El panel de control no tiene backend: el acceso es una verificación en el navegador y el token de escritura está en `config.js`. No lo uses como bóveda de datos: para un equipo grande haría falta un servidor o autenticación real.
-- Si dos personas escriben a la vez, la app reintenta automáticamente; en el peor caso avisa para volver a intentarlo.
+- Al eliminar una cuenta se borran sus documentos JSON, pero las imágenes ya subidas a Storage y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar.
+- El panel de control no tiene backend: el acceso es una verificación en el navegador. No lo uses como bóveda de datos.
+- Si dos personas escriben a la vez, la app relee y reintenta; en el peor caso avisa para volver a intentarlo.
 
 ---
 
@@ -274,7 +273,8 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 
 ```
 index.html              punto de entrada (SPA)
-config.js               conexión con el almacenamiento (repo + token)
+config.js               conexión con Supabase (URL, clave publicable y bucket)
+supabase/schema.sql     tabla zuma_docs + bucket zuma-media + políticas RLS
 manifest.webmanifest    PWA instalable
 Zuma.bat           lanzador local para Windows (modo prueba, sin publicar)
 Iniciar-Zuma.ps1     servidor local sin dependencias
@@ -282,8 +282,10 @@ css/base.css            tokens, reset, tipografía, utilidades
 css/app.css             barra superior, columnas, navegación, componentes
 css/pages.css           feed, perfil, mensajes, seguidores, grupos, ajustes
 js/app.js               arranque, shell y rutas
-js/core/gh.js           cliente de la API de GitHub
-js/core/db.js           caché, ETag y mutaciones con reintento
+js/vendor/supabase.js   cliente de Supabase para el navegador (sin build)
+js/core/net.js          Supabase: documentos, Storage, cola y bloqueo optimista
+js/core/gh.js           cliente legado de GitHub (solo migración/reparación)
+js/core/db.js           capa legada de GitHub (no se usa en la app)
 js/core/store.js        estado, índices y selectores
 js/core/actions.js      todas las escrituras (posts, seguidores, chats…)
 js/core/auth.js         registro, acceso y sesión
@@ -297,12 +299,12 @@ js/core/story-fonts.js  fuentes para las historias viejas que ya tenían texto
 js/core/update.js       Actualizar Zuma: limpia caché, desregistra el SW y recarga
 css/ios.css             capa de estilo iOS y estilos de las secciones nuevas
 panel.html              panel de control del equipo
-js/panel.js             usuarios, publicaciones e insignias (lectura pública, escritura con token)
+js/panel.js             usuarios, publicaciones e insignias (Supabase)
 css/panel.css           estilos del panel
 js/components/verified-badge.js  insignias celeste, morada y dorada
 js/pages/verification.js         explicación de las tres insignias
 assets/logo/            logo PNG en todos los tamaños + favicon
-tools/                  despliegue, emulador de GitHub, datos de ejemplo y pruebas
+tools/                  despliegue, emulador local de Supabase, datos de ejemplo y pruebas
 ```
 
 Hecho para que tengas tu propia red social sin depender de nadie. 🚀

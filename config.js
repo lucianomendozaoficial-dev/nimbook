@@ -1,22 +1,12 @@
 /* ==========================================================================
-   config.js — conexión de Zuma con su almacenamiento.
+   config.js — conexión de Zuma con Supabase.
 
-   La web necesita este acceso para que cualquiera pueda registrarse y
-   publicar sin configurar nada. Está repartido en partes para que GitHub
-   no lo marque como "secreto expuesto" al publicar el repositorio.
-   Si algún día se filtra o querés cambiarlo, generá un token nuevo con
-   permiso de Contents sobre este repositorio y reemplazá las tres partes.
+   La URL y la clave publicable están pensadas para el navegador: cualquiera
+   puede leerlas, pero el acceso real lo controlan las políticas (RLS) de
+   Supabase. No pongas acá la clave service_role ni secretos privados.
    ========================================================================== */
-(function () {
-  var partes = [
-    'github_pat_11B7JASJI02YLQ90wSq0qu_',
-    '4dodTbLt3lt8g5CKhAMBlnZMuNMXg',
-    'gg5PDC5LshmqBBSLRIFLSGsurBJVWb',
-  ];
-  window.NIMBOOK_CONFIG = {
-    owner: 'lucianomendozaoficial-dev',
-    repo: 'nimbook',
-    branch: 'main',
-    token: partes.join(''),
-  };
-})();
+window.NIMBOOK_CONFIG = {
+  supabaseUrl: 'https://jnewregdsxppdzfdvsqb.supabase.co',
+  supabaseKey: 'sb_publishable_9d8K0f5M894ijPc49OznyQ_OeubQgYQ',
+  storageBucket: 'zuma-media',
+};

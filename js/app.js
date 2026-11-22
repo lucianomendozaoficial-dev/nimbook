@@ -343,15 +343,32 @@ async function boot() {
   }
 
   const cfg = window.NIMBOOK_DEV_CONFIG || window.NIMBOOK_CONFIG || null;
-  if (!cfg?.owner || !cfg?.repo) {
+  if (!cfg?.supabaseUrl || !cfg?.supabaseKey) {
     showBootError('Zuma no está disponible en este momento. Volvé a intentarlo en unos minutos.');
     return;
   }
 
+  // Al pasar de GitHub a Supabase, la base arranca vacía: cerramos las sesiones
+  // viejas y borramos los documentos cacheados una sola vez en producción.
+  function resetLocalDataOnce() {
+    if (cfg.local) return;
+    const EPOCH = 'zuma-supabase-v1';
+    const EPOCH_KEY = 'nb.data.epoch.v1';
+    try {
+      if (localStorage.getItem(EPOCH_KEY) === EPOCH) return;
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('nb.doc.') || key === 'nb.session.v2' || key === 'nb.cdn.v1') {
+          localStorage.removeItem(key);
+        }
+      }
+      localStorage.setItem(EPOCH_KEY, EPOCH);
+    } catch { /* noop */ }
+  }
+  resetLocalDataOnce();
+
   attach({
     ...cfg,
     readBase: cfg.readBase || (cfg.local ? cfg.mediaBase || '.' : ''),
-    apiBase: cfg.apiBase || '',
   });
 
   if (!readSession()) {

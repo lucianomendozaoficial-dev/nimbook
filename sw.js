@@ -1,10 +1,10 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    sw.js â€” permite instalar Zuma y usarla sin conexiÃ³n.
    Estrategia: primero la red (para recibir siempre los cambios) y, si no
    hay conexiÃ³n, lo Ãºltimo guardado en cachÃ©.
    ========================================================================== */
 
-const CACHE = 'nimbookgr-v8';
+const CACHE = 'nimbookgr-v9';
 const SHELL = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const SHELL = [
   './css/pages.css',
   './css/ios.css',
   './js/app.js',
+  './js/vendor/supabase.js',
   './assets/logo/zuma-logo-192.png',
   './assets/logo/zuma-logo-512.png',
 ];

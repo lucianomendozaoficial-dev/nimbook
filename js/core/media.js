@@ -1,8 +1,10 @@
 /* ==========================================================================
-   media.js — compresión, subida (API con token) y lectura (CDN)
+   media.js — compresión, subida a Supabase Storage y lectura
    ========================================================================== */
 import { el, uid } from './util.js';
-import { fetchImageUrl, fetchImageFallback, putBinary, deleteDoc } from './net.js';
+import {
+  fetchImageUrl, fetchImageFallback, putBinary, deleteImage,
+} from './net.js';
 
 export const MAX_INPUT = 25 * 1024 * 1024;
 export const MAX_OUTPUT = 1.4 * 1024 * 1024;
@@ -66,13 +68,13 @@ export async function uploadImage(file, folderKey = 'posts', { maxSize = 1600 } 
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const name = `${Date.now().toString(36)}-${uid('').slice(1, 7)}.jpg`;
   const path = `${folder}/${name}`;
-  await putBinary(path, bytes, 'Zuma: imagen', null);
-  return { path, type: 'image/jpeg', width, height, size: bytes.length };
+  const url = await putBinary(path, bytes, 'Zuma: imagen');
+  return { path: url, type: 'image/jpeg', width, height, size: bytes.length };
 }
 
 export async function deleteMedia(path) {
   if (!path) return;
-  await deleteDoc(path, 'Zuma: borrar imagen').catch(() => {});
+  await deleteImage(path).catch(() => {});
 }
 
 /** Descarga una imagen de la app (publicación, historia o venta). */

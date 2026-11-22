@@ -168,8 +168,7 @@ export function messagesPage(username = '') {
   }
 
   /* ------------------- lectura automática por link público ---------------- */
-  // Cada 5 segundos se leen el hilo y la bandeja por raw.githubusercontent /
-  // jsDelivr (lectura pública): no se usa el token y no se gasta la API.
+  // Cada 5 segundos se leen el hilo y la bandeja desde Supabase.
 
   function inboxSignature(list) {
     return (list || []).map((row) => `${row.threadId}:${row.lastAt}:${row.unread}`).join('|');

@@ -1,30 +1,41 @@
 /* ==========================================================================
-   net.js — capa de datos de Zuma
+   net.js — capa de datos de Zuma sobre Supabase.
 
-   LECTURA: por jsDelivr (CDN de GitHub), sin token y sin gastar la API.
-   ESCRITURA: solo con la API de GitHub y el token, en cola, con reintentos
-   ante 409 (alguien más escribió el archivo) y agrupando cambios.
+   - Documentos JSON en la tabla `zuma_docs` (path + data jsonb).
+   - Imágenes nuevas en Supabase Storage (bucket público `zuma-media`).
+   - La cola, la caché y los eventos de escritura se mantienen igual que antes
+     para que las páginas y acciones no cambien.
    ========================================================================== */
-import { b64Encode, b64EncodeText, b64DecodeText } from './gh.js';
 
-const cfg = { owner: '', repo: '', branch: 'main', token: '', proxy: '', readBase: '', apiBase: '' };
+const cfg = {
+  supabaseUrl: '',
+  supabaseKey: '',
+  storageBucket: 'zuma-media',
+  readBase: '',
+};
+
+let sb = null;
+let sbSignature = '';
 
 export function configure(next) {
   Object.assign(cfg, next);
+  const signature = `${cfg.supabaseUrl}|${cfg.supabaseKey}|${cfg.storageBucket}`;
+  if (signature !== sbSignature) {
+    sb = null;
+    sbSignature = signature;
+  }
   return cfg;
 }
+
 export function config() {
   return cfg;
-}
-export function hasToken() {
-  return Boolean(cfg.token);
 }
 
 /* ------------------------------- caché ---------------------------------- */
 
 const MEM = new Map(); // path -> { doc, at }
-const PREFIX = 'nb.doc.v6:';
-const BUCKET = 30_000; // 30 s de caché en el CDN
+const PREFIX = 'nb.doc.v7:';
+const BUCKET = 30_000;
 let version = 0;
 const listeners = new Set();
 
@@ -58,7 +69,6 @@ function lsSet(path, entry) {
   try {
     localStorage.setItem(PREFIX + path, JSON.stringify(entry));
   } catch {
-    // sin espacio: limpiamos lo más viejo
     try {
       const keys = Object.keys(localStorage).filter((key) => key.startsWith(PREFIX));
       keys.slice(0, 20).forEach((key) => localStorage.removeItem(key));
@@ -83,181 +93,172 @@ export function cachePut(path, doc) {
   lsSet(path, entry);
 }
 
+/* ------------------------------- Supabase -------------------------------- */
+
+function client() {
+  if (!cfg.supabaseUrl || !cfg.supabaseKey) {
+    throw new Error('Falta configurar Supabase en config.js.');
+  }
+  if (!window.supabase?.createClient) {
+    throw new Error('No se cargó el cliente de Supabase (js/vendor/supabase.js).');
+  }
+  if (!sb) {
+    sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
+  }
+  return sb;
+}
+
+function fail(error, fallback = 'No se pudo conectar con la base de datos.') {
+  const err = new Error(error?.message || fallback);
+  err.status = error?.code || error?.status || 0;
+  err.details = error?.details || '';
+  return err;
+}
+
 /* ------------------------------- lectura -------------------------------- */
 
-function stampFor(fresh) {
-  const bucket = Math.floor(Date.now() / BUCKET);
-  if (fresh) return `${bucket}-${version}-${Math.random().toString(36).slice(2, 8)}`;
-  return String(bucket);
-}
-
-/** URL de lectura de datos: raw de GitHub (sin caché de rama). */
-export function cdnUrl(path, { fresh = false } = {}) {
+/**
+ * URL de una imagen. Las nuevas son URLs absolutas de Supabase Storage.
+ * En modo local se sirven desde la carpeta del proyecto; en producción,
+ * cualquier ruta relativa se resuelve contra el mismo sitio.
+ */
+export function fetchImageUrl(path) {
+  if (!path) return '';
+  if (/^(blob:|data:|https?:)/i.test(path)) return path;
   if (cfg.readBase) {
     const base = cfg.readBase.replace(/\/$/, '');
-    return `${base}/${path}?v=${stampFor(fresh)}`;
+    return `${base}/${path}`;
   }
-  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${path}?v=${stampFor(fresh)}`;
+  return path;
 }
 
-/** Respaldo por si raw falla: jsDelivr (puede estar algo atrasado). */
-function fallbackUrl(path) {
-  if (cfg.readBase) return null;
-  return `https://cdn.jsdelivr.net/gh/${cfg.owner}/${cfg.repo}@${cfg.branch}/${path}`;
+export function fetchImageFallback() {
+  return '';
 }
 
 export async function fetchDoc(path, { fresh = false, maxAge = BUCKET } = {}) {
   const memory = MEM.get(path);
   if (!fresh && memory && Date.now() - memory.at < maxAge) return memory.doc;
 
-  const sources = [cdnUrl(path, { fresh }), fallbackUrl(path)].filter(Boolean);
-  let lastError = null;
-  let notFound = 0;
-
-  for (const url of sources) {
-    try {
-      const res = await fetch(url, { cache: 'no-store' });
-      if (res.status === 404) { notFound += 1; continue; }
-      if (!res.ok) throw new Error(`${res.status}`);
-      const text = await res.text();
-      let doc = null;
-      if (text.trim()) {
-        try { doc = JSON.parse(text); } catch { doc = null; }
-      }
-      cachePut(path, doc);
-      return doc;
-    } catch (err) {
-      lastError = err;
+  try {
+    const { data, error } = await client()
+      .from('zuma_docs')
+      .select('data')
+      .eq('path', path)
+      .limit(1);
+    if (error) throw fail(error, `No se pudo leer ${path}.`);
+    if (!data?.length) {
+      cachePut(path, null);
+      return null;
     }
+    const doc = data[0].data ?? null;
+    cachePut(path, doc);
+    return doc;
+  } catch (err) {
+    const cached = cachePeek(path);
+    if (cached !== undefined) return cached;
+    throw err;
   }
-
-  if (notFound === sources.length) {
-    cachePut(path, null);
-    return null;
-  }
-
-  const cached = cachePeek(path);
-  if (cached !== undefined) return cached;
-  throw lastError || new Error('No se pudo leer ' + path);
-}
-
-export function fetchImageUrl(path) {
-  if (!path) return '';
-  // Vistas previas locales (blob:) o imágenes ya absolutas: se usan tal cual.
-  if (/^(blob:|data:|https?:)/i.test(path)) return path;
-  if (cfg.readBase) {
-    const base = cfg.readBase.replace(/\/$/, '');
-    return `${base}/${path}`;
-  }
-  return `https://cdn.jsdelivr.net/gh/${cfg.owner}/${cfg.repo}@${cfg.branch}/${path}`;
-}
-
-/** Respaldo directo para una imagen (si el CDN falla). */
-export function fetchImageFallback(path) {
-  if (!path || cfg.readBase) return '';
-  if (/^(blob:|data:|https?:)/i.test(path)) return '';
-  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${path}`;
 }
 
 /* ------------------------------- escritura ------------------------------- */
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function apiUrl(path) {
-  if (cfg.apiBase) return `${cfg.apiBase.replace(/\/$/, '')}/repos/${cfg.owner}/${cfg.repo}/contents/${path}`;
-  if (cfg.proxy) return `${cfg.proxy.replace(/\/$/, '')}/contents/${path}`;
-  return `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`;
-}
-
-async function api(path, { method = 'GET', body } = {}) {
-  const headers = { Accept: 'application/vnd.github+json' };
-  if (cfg.token) headers.Authorization = `Bearer ${cfg.token}`;
-  if (body) headers['Content-Type'] = 'application/json';
-  if (!cfg.proxy && !cfg.apiBase) headers['X-GitHub-Api-Version'] = '2022-11-28';
-
-  const res = await fetch(apiUrl(path), {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    cache: 'no-store',
-  });
-  if (res.status === 404) return { missing: true };
-  if (res.status === 401 || res.status === 403) {
-    const error = new Error('No pudimos guardar los cambios. Inténtalo más tarde.');
-    error.status = res.status;
-    throw error;
-  }
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    const error = new Error(data?.message || `No se pudo guardar (${res.status})`);
-    error.status = res.status;
-    throw error;
-  }
-  return res.json();
-}
-
 export async function readRemote(path) {
-  const data = await api(path);
-  if (data.missing) return { sha: null, doc: null };
-  const text = b64DecodeText(data.content || '');
-  let doc = null;
-  if (text.trim()) {
-    try { doc = JSON.parse(text); } catch { doc = null; }
+  const { data, error } = await client()
+    .from('zuma_docs')
+    .select('data,updated_at')
+    .eq('path', path)
+    .limit(1);
+  if (error) throw fail(error, `No se pudo leer ${path}.`);
+  if (!data?.length) return { sha: null, doc: null };
+  return { sha: data[0].updated_at, doc: data[0].data ?? null };
+}
+
+export async function putRemote(path, doc, sha = null) {
+  const updatedAt = new Date().toISOString();
+  const table = client().from('zuma_docs');
+
+  if (!sha) {
+    const { data, error } = await table
+      .insert({ path, data: doc, updated_at: updatedAt })
+      .select('updated_at');
+    if (error) {
+      const err = fail(error, 'No se pudieron guardar los cambios.');
+      if (error.code === '23505') err.status = 409;
+      throw err;
+    }
+    return data?.[0]?.updated_at || updatedAt;
   }
-  return { sha: data.sha, doc };
+
+  const { data, error } = await client()
+    .from('zuma_docs')
+    .update({ data: doc, updated_at: updatedAt })
+    .eq('path', path)
+    .eq('updated_at', sha)
+    .select('updated_at');
+  if (error) throw fail(error, 'No se pudieron guardar los cambios.');
+  if (!data?.length) {
+    const conflict = new Error('El documento cambió mientras guardábamos.');
+    conflict.status = 409;
+    throw conflict;
+  }
+  return data[0].updated_at || updatedAt;
 }
 
-export async function putRemote(path, doc, sha, message) {
-  const body = {
-    message: message || 'Zuma: cambios',
-    content: b64EncodeText(`${JSON.stringify(doc, null, 2)}\n`),
-    branch: cfg.branch,
-  };
-  if (sha) body.sha = sha;
-  const data = await api(path, { method: 'PUT', body });
-  return data?.content?.sha || null;
+export async function deleteRemote(path) {
+  const { error } = await client()
+    .from('zuma_docs')
+    .delete()
+    .eq('path', path);
+  if (error) throw fail(error, 'No se pudo borrar.');
+  return true;
 }
 
-export async function deleteRemote(path, sha, message) {
-  return api(path, {
-    method: 'DELETE',
-    body: { message: message || 'Zuma: borrar', sha, branch: cfg.branch },
+export async function putBinary(path, bytes, message = 'Zuma: imagen') {
+  const bucket = cfg.storageBucket || 'zuma-media';
+  const storage = client().storage.from(bucket);
+  const { error } = await storage.upload(path, bytes, {
+    contentType: 'image/jpeg',
+    cacheControl: '31536000',
+    upsert: false,
   });
+  if (error) throw fail(error, 'No se pudo subir la imagen.');
+  const { data } = storage.getPublicUrl(path);
+  return data?.publicUrl || '';
 }
 
-export async function putBinary(path, bytes, message, sha = null) {
-  const body = { message: message || 'Zuma: imagen', content: b64Encode(bytes), branch: cfg.branch };
-  if (sha) body.sha = sha;
-  const data = await api(path, { method: 'PUT', body });
-  return data?.content?.sha || null;
+/** Borra una imagen de Storage a partir de su URL pública. */
+export async function deleteImage(url) {
+  if (!url || !/^https?:/i.test(url)) return false;
+  const bucket = cfg.storageBucket || 'zuma-media';
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const index = String(url).indexOf(marker);
+  if (index < 0) return false;
+  const key = String(url).slice(index + marker.length);
+  const { error } = await client().storage.from(bucket).remove([key]);
+  if (error) throw fail(error, 'No se pudo borrar la imagen.');
+  return true;
 }
 
 export async function deleteDoc(path, message = 'Zuma: borrar') {
-  const { sha } = await readRemote(path);
-  if (!sha) return false;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    try {
-      await deleteRemote(path, sha, message);
-      forget(path);
-      bumpVersion();
-      return true;
-    } catch (err) {
-      if (err.status === 409 && attempt < 3) {
-        await sleep(300 + Math.random() * 250);
-        const again = await readRemote(path);
-        if (!again.sha) return false;
-        continue;
-      }
-      throw err;
-    }
-  }
-  return false;
+  await deleteRemote(path);
+  forget(path);
+  bumpVersion();
+  return true;
 }
 
 /* --------------------------------- cola --------------------------------- */
 
-const queues = new Map(); // path -> { ops: [], timer, running, message, waiters }
-const RETRIES = 5;
+const queues = new Map();
+const RETRIES = 4;
 
 function applyOps(doc, ops) {
   let next = doc === null || doc === undefined ? null : structuredClone(doc);
@@ -272,9 +273,8 @@ function applyOps(doc, ops) {
 }
 
 /**
- * Encola una modificación de un documento JSON.
- * `updater` recibe el documento actual (o null) y devuelve el nuevo (o undefined
- * para no tocarlo). Las actualizaciones se agrupan y se suben juntas.
+ * Encola una modificación de un documento JSON de Supabase.
+ * Se agrupan las escrituras del mismo path y se reflejan en la caché al instante.
  */
 export function queueDoc(path, updater, { message = 'Zuma: cambios', delay = 2000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -286,7 +286,6 @@ export function queueDoc(path, updater, { message = 'Zuma: cambios', delay = 200
     queue.ops.push({ updater, resolve, reject });
     queue.message = message;
 
-    // reflejar ya en la caché local (la interfaz no espera a la red)
     const current = cachePeek(path);
     if (current !== undefined) {
       try {
@@ -302,7 +301,6 @@ export function queueDoc(path, updater, { message = 'Zuma: cambios', delay = 200
   });
 }
 
-/** Escritura inmediata (sin agrupar) para operaciones que necesitan confirmación. */
 export async function writeNow(path, updater, { message = 'Zuma: cambios' } = {}) {
   await queueDoc(path, updater, { message, delay: 0 });
   return cachePeek(path);
@@ -336,9 +334,9 @@ async function flushDoc(path, ops, message, retries) {
       return;
     }
 
-    for (let attempt = 0; ; attempt += 1) {
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
-        sha = await putRemote(path, next, sha, message);
+        sha = await putRemote(path, next, sha);
         cachePut(path, next);
         bumpVersion();
         ops.forEach((op) => op.resolve(next));
@@ -347,7 +345,9 @@ async function flushDoc(path, ops, message, retries) {
       } catch (err) {
         if (err.status === 409 && attempt < retries) {
           await sleep(300 + Math.random() * 250 + attempt * 250);
-          ({ sha, doc } = await readRemote(path));
+          const fresh = await readRemote(path);
+          sha = fresh.sha;
+          doc = fresh.doc;
           const merged = applyOps(doc, ops);
           if (merged === undefined) {
             ops.forEach((op) => op.resolve(doc));

@@ -3,7 +3,7 @@
    ========================================================================== */
 import { el, clear, timeAgo, formatCount, nowISO } from './core/util.js';
 import { icon } from './core/icons.js';
-import { configure, fetchDoc, queueDoc, cdnUrl } from './core/net.js';
+import { configure, fetchDoc, queueDoc } from './core/net.js';
 import { P } from './core/paths.js';
 import { mediaImg } from './core/media.js';
 import { verifyPassword } from './core/crypto.js';
@@ -20,11 +20,9 @@ const SESSION_KEY = 'nb.session.v2';
 
 const cfg = window.NIMBOOK_DEV_CONFIG || window.NIMBOOK_CONFIG || {};
 configure({
-  owner: cfg.owner,
-  repo: cfg.repo,
-  branch: cfg.branch || 'main',
-  token: cfg.token,
-  apiBase: cfg.apiBase || '',
+  supabaseUrl: cfg.supabaseUrl,
+  supabaseKey: cfg.supabaseKey,
+  storageBucket: cfg.storageBucket || 'zuma-media',
   readBase: cfg.local ? (cfg.mediaBase || '.') : '',
 });
 
@@ -278,7 +276,7 @@ function renderGate(message = '') {
     el('p', { class: 'pn-gate-sub', text: 'Acceso para el equipo de Zuma. Entrá con una cuenta administradora para ver usuarios, publicaciones e insignias.' }),
     form,
     el('p', { class: 'pn-gate-note' },
-      'Este panel escribe en el repositorio con el token de config.js. Usalo solo desde un dispositivo de confianza.'),
+      'Este panel escribe en Supabase con la clave publicable de config.js. Usalo solo desde un dispositivo de confianza.'),
     el('div', { class: 'pn-gate-links' },
       el('a', { class: 'pn-btn', href: 'index.html' }, icon('home', 16), 'Abrir Zuma'))));
   setTimeout(() => username.focus(), 80);
@@ -289,7 +287,7 @@ function renderConfigError() {
   root.appendChild(el('div', { class: 'pn-gate' },
     el('img', { class: 'pn-gate-logo', src: 'assets/logo/zuma-logo-128.png', alt: 'Zuma' }),
     el('h1', { text: 'Falta configurar Zuma' }),
-    el('p', { class: 'pn-gate-sub', text: 'No encontramos owner, repo o token en config.js. Revisá ese archivo y recargá.' }),
+    el('p', { class: 'pn-gate-sub', text: 'No encontramos la URL o la clave de Supabase en config.js. Revisá ese archivo y recargá.' }),
     el('div', { class: 'pn-gate-links' },
       el('a', { class: 'pn-btn', href: 'index.html' }, icon('home', 16), 'Abrir Zuma'))));
 }
@@ -554,7 +552,7 @@ function render() {
     content,
     el('div', { class: 'pn-footer' },
       el('div', { text: 'Zuma · panel de control del equipo' }),
-      el('div', { text: `Última carga: ${new Date(state.loadedAt || Date.now()).toLocaleString('es-AR')} · lectura por link público, escritura con el token de config.js` })));
+      el('div', { text: `Última carga: ${new Date(state.loadedAt || Date.now()).toLocaleString('es-AR')} · datos y escrituras en Supabase` })));
 
   paintContent();
 }
@@ -616,8 +614,16 @@ function openUserModal(user) {
       el('div', { class: 'pn-user-actions' },
         el('a', { class: 'pn-btn sm', href: `index.html#/u/${user.username}`, target: '_blank', rel: 'noopener' },
           icon('user', 15), 'Abrir perfil en Zuma'),
-        el('a', { class: 'pn-btn sm', href: cdnUrl(P.user(user.id), { fresh: true }), target: '_blank', rel: 'noopener' },
-          icon('link', 15), 'Ver JSON')),
+        el('button', {
+          class: 'pn-btn sm', type: 'button',
+          onclick: async () => {
+            const doc = await fetchDoc(P.user(user.id), { fresh: true });
+            const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank', 'noopener');
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          },
+        }, icon('link', 15), 'Ver JSON')),
       el('div', { class: 'pn-section-title', text: 'Sus publicaciones' }),
       postsWrap));
 
@@ -648,7 +654,7 @@ function openUserModal(user) {
 /* ---------------------------------- boot ---------------------------------- */
 
 async function boot() {
-  if (!cfg.owner || !cfg.repo) {
+  if (!cfg.supabaseUrl || !cfg.supabaseKey) {
     renderConfigError();
     return;
   }

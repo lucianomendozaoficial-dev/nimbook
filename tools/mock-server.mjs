@@ -63,12 +63,8 @@ async function statFile(rel, base = ROOT) {
 }
 
 const MOCK_CONFIG = {
-  owner: 'mock',
-  repo: 'NimbookGR',
-  branch: 'main',
-  token: 'mock-token',
-  apiBase: '/api',
   mediaBase: '.',
+  storageBucket: 'zuma-media',
 };
 
 /* ---------------- almacenamiento para la API de Git (deploy) -------------- */
@@ -81,12 +77,14 @@ let headTree = null;
 function injectConfig(html) {
   const script = `<script>
 try {
-  // Modo local: la app usa los archivos de esta carpeta (datos de prueba).
-  window.NIMBOOK_DEV_CONFIG = ${JSON.stringify({
+  // Modo local: la app usa Supabase emulado y los archivos de esta carpeta.
+  window.NIMBOOK_DEV_CONFIG = Object.assign(${JSON.stringify({
     ...MOCK_CONFIG,
     local: true,
-  })};
-  window.__NIMBOOK_API_BASE__ = '/api';
+  })}, {
+    supabaseUrl: location.origin + '/sb',
+    supabaseKey: 'mock-publishable-key',
+  });
   window.__NIMBOOK_MEDIA_BASE__ = '.';
   // sesión de demostración solo a propósito con ?demo=1
   if (/demo=1/.test(location.search)) {
@@ -100,6 +98,142 @@ try {
 } catch (e) {}
 </script>`;
   return html.replace('</head>', `${script}\n</head>`);
+}
+
+/* ---------------------------- Supabase emulado --------------------------- */
+
+function dataRel(raw) {
+  const rel = String(raw || '').replace(/^\/+/, '');
+  if (!rel.startsWith('data/')) throw new Error('ruta de datos inválida');
+  return rel;
+}
+
+function dataFile(rel) {
+  return safeJoin(dataRel(rel), ROOT);
+}
+
+async function readDataDoc(rel) {
+  try {
+    return JSON.parse(await fs.readFile(dataFile(rel), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function writeDataDoc(rel, doc, updatedAt = new Date().toISOString()) {
+  const file = dataFile(rel);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+  const when = new Date(updatedAt);
+  if (!Number.isNaN(when.getTime())) await fs.utimes(file, when, when);
+}
+
+async function handleSupabase(req, res, url) {
+  const pathname = url.pathname.replace(/^\/sb/, '');
+
+  if (pathname === '/rest/v1/zuma_docs' || pathname === '/rest/v1/zuma_docs/') {
+    const filter = url.searchParams.get('path') || '';
+    const rel = filter.startsWith('eq.') ? filter.slice(3) : '';
+
+    if (req.method === 'GET') {
+      if (!rel) return send(res, 200, []);
+      const doc = await readDataDoc(rel);
+      if (doc === null) return send(res, 200, []);
+      let updated = new Date().toISOString();
+      try { updated = (await fs.stat(dataFile(rel))).mtime.toISOString(); } catch { /* noop */ }
+      const select = url.searchParams.get('select') || '*';
+      const row = {};
+      if (select === '*' || select.includes('path')) row.path = rel;
+      if (select === '*' || select.includes('data')) row.data = doc;
+      if (select === '*' || select.includes('updated_at')) row.updated_at = updated;
+      return send(res, 200, [row]);
+    }
+
+    if (req.method === 'POST' || req.method === 'PATCH') {
+      const body = await readJson(req);
+      const rows = Array.isArray(body) ? body : [body];
+      const upsert = url.searchParams.has('on_conflict');
+      const representation = String(req.headers.prefer || '').includes('return=representation');
+
+      if (req.method === 'PATCH') {
+        const current = rel ? await readDataDoc(rel) : null;
+        if (!current) return send(res, 200, []);
+        const expected = (url.searchParams.get('updated_at') || '').replace(/^eq\./, '');
+        let currentUpdated = new Date().toISOString();
+        try { currentUpdated = (await fs.stat(dataFile(rel))).mtime.toISOString(); } catch { /* noop */ }
+        if (expected && expected !== currentUpdated) return send(res, 200, []);
+        const row = rows[0] || {};
+        const updatedAt = row.updated_at || new Date().toISOString();
+        await writeDataDoc(rel, row.data ?? current, updatedAt);
+        return send(res, 200, representation ? [{ path: rel, data: row.data ?? current, updated_at: updatedAt }] : '');
+      }
+
+      const out = [];
+      for (const row of rows) {
+        if (!row || typeof row !== 'object' || !row.path) continue;
+        if (!upsert && await statFile(row.path)) {
+          return send(res, 409, {
+            code: '23505',
+            message: 'duplicate key value violates unique constraint "zuma_docs_pkey"',
+            details: null,
+            hint: null,
+          });
+        }
+        const updatedAt = row.updated_at || new Date().toISOString();
+        await writeDataDoc(row.path, row.data ?? null, updatedAt);
+        out.push({ path: row.path, data: row.data ?? null, updated_at: updatedAt });
+      }
+      return send(res, 201, representation ? out : '', {
+        Prefer: 'return=representation',
+      });
+    }
+
+    if (req.method === 'DELETE') {
+      if (rel) await fs.rm(dataFile(rel), { force: true });
+      return send(res, 204, '');
+    }
+  }
+
+  if (pathname.startsWith('/storage/v1/object/public/')) {
+    const rest = pathname.slice('/storage/v1/object/public/'.length);
+    const [bucket, ...parts] = rest.split('/');
+    const key = parts.join('/');
+    if (bucket !== 'zuma-media' || !key.startsWith('media/')) {
+      return send(res, 404, { message: 'No encontrado' });
+    }
+    try {
+      const body = await fs.readFile(safeJoin(key, ROOT));
+      const ext = path.extname(key).toLowerCase();
+      return send(res, 200, body, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    } catch {
+      return send(res, 404, { message: 'No encontrado' });
+    }
+  }
+
+  if (pathname.startsWith('/storage/v1/object/')) {
+    const rest = pathname.slice('/storage/v1/object/'.length);
+    const [bucket, ...parts] = rest.split('/');
+    const key = parts.join('/');
+    if (bucket !== 'zuma-media' || !key.startsWith('media/')) {
+      return send(res, 400, { message: 'bucket o ruta inválida' });
+    }
+
+    if (req.method === 'DELETE') {
+      const body = await readJson(req);
+      const prefixes = Array.isArray(body?.prefixes) ? body.prefixes : [];
+      await Promise.all(prefixes.map((prefix) => fs.rm(safeJoin(prefix, ROOT), { force: true })));
+      return send(res, 200, []);
+    }
+
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const file = safeJoin(key, ROOT);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, Buffer.concat(chunks));
+    return send(res, 200, { Key: `${bucket}/${key}` });
+  }
+
+  return send(res, 404, { message: 'No encontrado' });
 }
 
 /* ------------------------------ API GitHub ------------------------------- */
@@ -360,6 +494,9 @@ const server = http.createServer(async (req, res) => {
     return send(res, 204, '');
   }
   try {
+    if (url.pathname.startsWith('/sb/')) {
+      return await handleSupabase(req, res, url);
+    }
     if (url.pathname.startsWith('/api/')) {
       return await handleApi(req, res, url);
     }

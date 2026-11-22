@@ -122,7 +122,7 @@ export function menuPage() {
       title,
       body: el('div', { class: 'menu-info' },
         el('p', { text }),
-        el('p', { class: 'muted small', text: 'Zuma guarda los datos en tu repositorio de GitHub y los lee por su enlace público.' })),
+        el('p', { class: 'muted small', text: 'Zuma guarda los datos en Supabase y los lee con su clave publicable.' })),
       size: 'sm',
     });
   }
@@ -241,7 +241,7 @@ export function menuPage() {
           sub: 'Hecho para compartir con tu gente',
           control: el('span', { class: 'chip', text: 'v2' }),
           onClick: () => openInfo('Acerca de Zuma',
-            'Zuma es una red social hecha con JavaScript puro y tu repositorio de GitHub como base de datos. Sin servidores propios: lectura por link público y escritura con tu token.'),
+            'Zuma es una red social hecha con JavaScript puro, publicada en GitHub Pages y con Supabase como base de datos. Sin servidores propios: lectura y escritura con la clave publicable de Supabase.'),
         }),
         item({
           iconName: 'logout', color: 'gray', title: 'Cerrar sesión',
