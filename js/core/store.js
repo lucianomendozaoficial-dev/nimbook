@@ -713,7 +713,7 @@ export function searchPeople(query, limit = 20) {
       : full.verification?.type;
     if (verification) score += 24;
     if (isFollowing(state.me?.id, full.id)) score += 45;
-    if (relationWith(state.me?.id, full.id) === 'mutual') score += 35;
+    if (isFollowing(full.id, state.me?.id)) score += 35;
     score -= Math.min(30, username.length);
     scored.push({ user: full, score });
   }
