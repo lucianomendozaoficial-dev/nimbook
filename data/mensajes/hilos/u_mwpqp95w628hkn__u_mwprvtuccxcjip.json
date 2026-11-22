@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "thread": {
+    "id": "u_mwpqp95w628hkn__u_mwprvtuccxcjip",
+    "memberIds": [
+      "u_mwpqp95w628hkn",
+      "u_mwprvtuccxcjip"
+    ],
+    "messages": [
+      {
+        "id": "m_mws2r80ndgwspd",
+        "fromId": "u_mwpqp95w628hkn",
+        "text": "hola",
+        "createdAt": "2026-11-22T16:52:07.127Z"
+      }
+    ],
+    "updatedAt": "2026-11-22T16:52:07.127Z"
+  }
+}
