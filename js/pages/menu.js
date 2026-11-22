@@ -166,10 +166,6 @@ export function menuPage() {
           sub: 'Lo que pasó en las últimas 24 horas', href: '#/historias',
         }),
         item({
-          iconName: 'users', color: 'green', title: 'Seguidores',
-          sub: `${countFollowers(me.id)} personas`, href: '#/seguidores',
-        }),
-        item({
           iconName: 'user-plus', color: 'blue', title: 'Siguiendo',
           sub: `${countFollowing(me.id)} personas`, href: '#/seguidores/siguiendo',
         }),
