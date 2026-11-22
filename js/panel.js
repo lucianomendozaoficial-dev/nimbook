@@ -13,7 +13,9 @@ import {
 } from './components/verified-badge.js';
 
 /* Cuentas que pueden abrir el panel. Editá esta lista si cambia el equipo. */
-const ADMIN_USERNAMES = ['lucianomdz', 'lucianomdz.ok', 'eltuty', 'nico.gimenez'];
+const BASE_ADMINS = ['lucianomdz', 'lucianomdz.ok', 'eltuty'];
+const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const ADMIN_USERNAMES = IS_LOCAL ? [...BASE_ADMINS, 'nico.gimenez'] : BASE_ADMINS;
 const SESSION_KEY = 'nb.session.v2';
 
 const cfg = window.NIMBOOK_DEV_CONFIG || window.NIMBOOK_CONFIG || {};

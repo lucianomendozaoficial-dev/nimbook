@@ -93,7 +93,7 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 
 `panel.html` es una página aparte para el equipo. Muestra los usuarios, sus datos y sus publicaciones, y permite asignar o quitar la insignia de verificación. Lee los archivos por el link público y escribe con el token de `config.js`.
 
-- Se entra con una cuenta de administrador. La lista está al principio de `js/panel.js` (`ADMIN_USERNAMES`): por defecto `lucianomdz`, `lucianomdz.ok`, `eltuty` y `nico.gimenez` (esta última es la cuenta demo local). Cambiala por las cuentas del equipo.
+- Se entra con una cuenta de administrador. La lista está al principio de `js/panel.js` (`ADMIN_USERNAMES`): por defecto `lucianomdz`, `lucianomdz.ok` y `eltuty`. En local se agrega `nico.gimenez` para poder probar el panel con los datos demo. Cambiala por las cuentas del equipo.
 - Si no hay una sesión de administrador, el panel muestra un acceso con usuario y contraseña; verifica la contraseña con el mismo PBKDF2 de la app.
 - Pestañas: **Usuarios** (buscar, ver ficha, asignar insignia), **Publicaciones** y **Insignias** (explicación y cuentas verificadas).
 - La insignia se guarda en `usuarios/<id>.json` (`verification: { type, at }`) y en `usuarios/index.json` (`verification: "celeste" | "morado" | "dorado"`) para que el muro y las listas la muestren sin descargar la ficha completa.
