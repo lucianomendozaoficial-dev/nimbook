@@ -1,4 +1,18 @@
 {
   "version": 1,
-  "groups": []
+  "groups": [
+    {
+      "id": "g_mws6ly596pkl3o",
+      "type": "channel",
+      "name": "Zuma",
+      "description": "Canal oficial de ZUMA",
+      "privacy": "public",
+      "cover": null,
+      "ownerId": "u_mwprvtuccxcjip",
+      "memberIds": [
+        "u_mwprvtuccxcjip"
+      ],
+      "createdAt": "2026-11-22T18:39:59.517Z"
+    }
+  ]
 }
