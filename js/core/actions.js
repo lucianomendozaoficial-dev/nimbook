@@ -767,6 +767,8 @@ export async function sendMessage(toUserId, text, { silent = false } = {}) {
     pending: true,
   };
   const stamp = message.createdAt;
+  // Al archivo se guarda sin las marcas locales (pending/localOnly).
+  const persisted = { id: message.id, fromId: me.id, text: clean, createdAt: stamp };
   const inboxEntry = {
     threadId,
     withId: toUserId,
@@ -794,7 +796,7 @@ export async function sendMessage(toUserId, text, { silent = false } = {}) {
         version: 1,
         thread: { id: threadId, memberIds: [me.id, toUserId], messages: [] },
       };
-      data.thread.messages = [...(data.thread.messages || []), message].slice(-400);
+      data.thread.messages = [...(data.thread.messages || []), persisted].slice(-400);
       data.thread.updatedAt = stamp;
       return data;
     }, { delay: 200, message: 'Zuma: mensaje' });
