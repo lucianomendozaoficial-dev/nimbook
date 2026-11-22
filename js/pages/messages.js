@@ -1,20 +1,22 @@
 /* ==========================================================================
    pages/messages.js — mensajes privados (bandeja + chat 1:1)
    ========================================================================== */
-import { el, clear, timeAgo, dayLabel, clockTime } from '../core/util.js';
+import { el, clear, timeAgo, dayLabel, clockTime, money } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
   state, displayName, userById, userByUsername, loadUser, loadInbox, loadThread,
-  messagesOf, threadIdFor, inboxSorted, searchPeople,
+  messagesOf, threadIdFor, inboxSorted, searchPeople, loadShopItem,
 } from '../core/store.js';
 import { avatarEl, openModal, toast } from '../core/ui.js';
+import { mediaImg } from '../core/media.js';
 import { sendMessage, markThreadRead } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
+import { onTyping, sendTyping } from '../core/realtime.js';
 import { verifiedBadge } from '../components/verified-badge.js';
 import { emojiButton } from '../components/emoji-picker.js';
 
-export function messagesPage(username = '') {
+export function messagesPage(username = '', routeQuery = {}) {
   const root = el('div');
   const messenger = el('div', { class: 'messenger' });
   const listItems = el('div', { class: 'msgr-items' });
@@ -29,6 +31,25 @@ export function messagesPage(username = '') {
   let pollBusy = false;
   let sending = false;
   let syncTimer = null;
+  let replyContext = null;
+  let initialItemApplied = false;
+  let chatSub = null;
+  let typingSentAt = 0;
+  let typingClearTimer = null;
+  const initialItemId = String(routeQuery.item || '');
+
+  const offTyping = onTyping((data) => {
+    if (!activePartner || !chatSub) return;
+    if (data.toId !== state.me?.id || data.fromId !== activePartner.id) return;
+    chatSub.textContent = 'escribiendo…';
+    chatSub.classList.add('typing');
+    clearTimeout(typingClearTimer);
+    typingClearTimer = setTimeout(() => {
+      if (!chatSub) return;
+      chatSub.textContent = 'Mensaje privado';
+      chatSub.classList.remove('typing');
+    }, 2600);
+  });
 
   const POLL_MS = 5000;
 
@@ -121,6 +142,19 @@ export function messagesPage(username = '') {
       }, icon('edit', 16), 'Nuevo mensaje')));
   }
 
+  function quotedNode(reply) {
+    if (!reply) return null;
+    return el('div', { class: 'msg-reply' },
+      el('span', { class: 'msg-reply-thumb' },
+        reply.image
+          ? mediaImg(reply.image, { alt: reply.title || 'Publicación' })
+          : icon(reply.kind === 'shop' ? 'shop' : 'message', 16)),
+      el('div', { class: 'msg-reply-copy' },
+        el('div', { class: 'msg-reply-label', text: reply.kind === 'shop' ? 'Publicación de Shop' : 'Mensaje citado' }),
+        el('div', { class: 'msg-reply-title', text: reply.title || reply.text || 'Publicación' }),
+        reply.price ? el('div', { class: 'msg-reply-price', text: money(reply.price, reply.currency || 'ARS') }) : null));
+  }
+
   function messageRow(message, partner) {
     const mine = message.fromId === state.me?.id;
     return el('div', {
@@ -129,6 +163,7 @@ export function messagesPage(username = '') {
     },
     mine ? null : avatarEl(userById(message.fromId) || partner, 'xs'),
     el('div', { class: 'bubble' },
+      quotedNode(message.replyTo),
       el('span', { class: 'msg-text', text: message.text }),
       el('span', {
         class: 'stamp',
@@ -272,6 +307,13 @@ export function messagesPage(username = '') {
     messenger.classList.add('show-chat');
     activeId = partner.id;
     activePartner = partner;
+    replyContext = null;
+    typingSentAt = 0;
+    clearTimeout(typingClearTimer);
+    if (chatSub) {
+      chatSub.textContent = 'Mensaje privado';
+      chatSub.classList.remove('typing');
+    }
 
     const refreshBtn = el('button', {
       class: 'btn-icon', type: 'button', title: 'Actualizar conversación', 'aria-label': 'Actualizar',
@@ -284,6 +326,8 @@ export function messagesPage(username = '') {
       },
     }, icon('refresh', 19));
 
+    const chatSubNode = el('div', { class: 'ch-sub', text: 'Mensaje privado' });
+    chatSub = chatSubNode;
     const head = el('header', { class: 'chat-head' },
       el('button', {
         class: 'btn-icon chat-list-btn', type: 'button',
@@ -295,7 +339,7 @@ export function messagesPage(username = '') {
         el('div', { class: 'ch-name-row' },
           el('a', { class: 'ch-name', href: `#/u/${partner.username}`, text: displayName(partner) }),
           verifiedBadge(partner, { size: 15 })),
-        el('div', { class: 'ch-sub', text: 'Mensaje privado' })),
+        chatSubNode),
       el('a', {
         class: 'btn-icon', href: `#/u/${partner.username}`, title: 'Ver perfil', 'aria-label': 'Ver perfil',
       }, icon('user', 19)),
@@ -311,7 +355,29 @@ export function messagesPage(username = '') {
       class: 'send', type: 'submit', 'aria-label': 'Enviar', disabled: true,
     }, icon('send', 18));
 
+    const replyBar = el('div', { class: 'chat-reply-bar hide' });
+    const setReplyContext = (context) => {
+      replyContext = context || null;
+      clear(replyBar);
+      replyBar.classList.toggle('hide', !replyContext);
+      if (!replyContext) return;
+      replyBar.append(
+        el('span', { class: 'chat-reply-thumb' },
+          replyContext.image
+            ? mediaImg(replyContext.image, { alt: replyContext.title || 'Publicación' })
+            : icon('shop', 17)),
+        el('div', { class: 'chat-reply-copy' },
+          el('div', { class: 'chat-reply-label', text: 'Respondiendo a esta publicación' }),
+          el('div', { class: 'chat-reply-title', text: replyContext.title || 'Publicación de Shop' }),
+          replyContext.price ? el('div', { class: 'chat-reply-price', text: money(replyContext.price, replyContext.currency || 'ARS') }) : null),
+        el('button', {
+          class: 'btn-icon chat-reply-close', type: 'button', 'aria-label': 'Quitar respuesta',
+          onclick: () => setReplyContext(null),
+        }, icon('x', 16)));
+    };
+
     const form = el('form', { class: 'chat-input' },
+      replyBar,
       el('div', { class: 'box' },
         emojiButton(textarea, { className: 'chat-emoji', title: 'Agregar emoji' }),
         textarea),
@@ -322,7 +388,14 @@ export function messagesPage(username = '') {
       textarea.style.height = `${Math.min(120, textarea.scrollHeight)}px`;
       sendBtn.disabled = !textarea.value.trim();
     };
-    textarea.addEventListener('input', grow);
+    textarea.addEventListener('input', () => {
+      grow();
+      const now = Date.now();
+      if (textarea.value.trim() && now - typingSentAt > 1400) {
+        typingSentAt = now;
+        sendTyping(state.me?.id, partner.id);
+      }
+    });
 
     textarea.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && !event.shiftKey) {
@@ -337,12 +410,15 @@ export function messagesPage(username = '') {
       if (!text || sending) return;
       sending = true;
       sendBtn.disabled = true;
+      const context = replyContext;
       textarea.value = '';
+      replyContext = null;
+      setReplyContext(null);
       grow();
       try {
         // Se llama sin esperar: el mensaje ya se pinta al instante y la red
         // confirma en segundo plano.
-        const saved = sendMessage(partner.id, text);
+        const saved = sendMessage(partner.id, text, { replyTo: context });
         renderChatBody(partner);
         requestAnimationFrame(() => {
           chatBody.scrollTop = chatBody.scrollHeight;
@@ -353,6 +429,7 @@ export function messagesPage(username = '') {
         renderList();
       } catch (err) {
         textarea.value = text;
+        if (context) setReplyContext(context);
         grow();
         playSound('error');
         renderChatBody(partner);
@@ -369,6 +446,21 @@ export function messagesPage(username = '') {
 
     chatPane.append(head, chatBody, form);
     renderChatBody(partner);
+    if (!initialItemApplied && initialItemId) {
+      initialItemApplied = true;
+      loadShopItem(initialItemId, { force: true }).then((item) => {
+        if (destroyed || activeId !== partner.id || !item) return;
+        if (item.sellerId && item.sellerId !== partner.id) return;
+        setReplyContext({
+          kind: 'shop',
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          currency: item.currency,
+          image: item.cover || item.media?.[0]?.url || '',
+        });
+      }).catch(() => {});
+    }
     requestAnimationFrame(() => {
       chatBody.scrollTop = chatBody.scrollHeight;
       if (window.matchMedia('(min-width: 768px)').matches) textarea.focus();
@@ -471,6 +563,8 @@ export function messagesPage(username = '') {
     },
     destroy() {
       destroyed = true;
+      offTyping();
+      clearTimeout(typingClearTimer);
       stopPolling();
       clearTimeout(syncTimer);
       document.removeEventListener('visibilitychange', onVisibility);

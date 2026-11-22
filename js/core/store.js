@@ -675,16 +675,52 @@ export function storiesGrouped(viewerId) {
 }
 
 export function searchPeople(query, limit = 20) {
-  const q = String(query || '').trim().toLowerCase();
-  if (!q) return [];
-  const norm = (value) => String(value || '').toLowerCase();
-  return state.userIndex
-    .filter((user) => norm(user.username).includes(q)
-      || norm(user.firstName).includes(q)
-      || norm(user.lastName).includes(q)
-      || norm(user.name).includes(q))
+  const raw = String(query || '').trim().toLowerCase();
+  if (!raw) return [];
+  const norm = (value) => String(value || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const q = norm(raw);
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+
+  const scored = [];
+  for (const entry of state.userIndex) {
+    const full = state.users.get(entry.id) || entry;
+    const username = norm(full.username);
+    const name = norm(displayName(full));
+    const first = norm(full.firstName);
+    const last = norm(full.lastName);
+    const bio = norm(full.bio);
+    const location = norm(full.location);
+    const haystack = `${username} ${name} ${first} ${last} ${bio} ${location}`;
+    if (!tokens.every((token) => haystack.includes(token))) continue;
+
+    let score = 0;
+    if (username === q || name === q) score += 1200;
+    else if (username.startsWith(q)) score += 900;
+    else if (name.startsWith(q)) score += 800;
+    else if (username.includes(q)) score += 620;
+    else if (name.includes(q)) score += 540;
+    else score += 300;
+    for (const token of tokens) {
+      if (username === token) score += 180;
+      else if (username.startsWith(token)) score += 140;
+      else if (name.split(/\s+/).some((part) => part.startsWith(token))) score += 110;
+      else if (haystack.includes(token)) score += 30;
+    }
+    const verification = typeof full.verification === 'string'
+      ? full.verification
+      : full.verification?.type;
+    if (verification) score += 24;
+    if (isFollowing(state.me?.id, full.id)) score += 45;
+    if (relationWith(state.me?.id, full.id) === 'mutual') score += 35;
+    score -= Math.min(30, username.length);
+    scored.push({ user: full, score });
+  }
+  return scored
+    .sort((a, b) => b.score - a.score || String(a.user.username).localeCompare(String(b.user.username)))
     .slice(0, limit)
-    .map((user) => state.users.get(user.id) || user);
+    .map((row) => row.user);
 }
 
 /* --------------------------------- shop ---------------------------------- */

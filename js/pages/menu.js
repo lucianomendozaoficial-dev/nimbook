@@ -48,6 +48,38 @@ export function menuPage() {
   const me = state.me;
   const root = el('div', { class: 'menu-page' });
 
+  /* ------------------------------ contacto -------------------------------- */
+
+  function openContact() {
+    const phone = '+54 11 5118-6792';
+    const whatsapp = 'https://wa.me/541151186792?text=Hola%20Luciano%2C%20te%20escribo%20desde%20Zuma.';
+    const instagram = 'https://www.instagram.com/lucianomdz.ok';
+    const api = openModal({
+      title: 'Contactar a Luciano',
+      size: 'sm',
+      body: el('div', { class: 'contact-card' },
+        el('p', { class: 'muted small', text: '¿Dudas, ideas o algo que mejorar? Escribime por WhatsApp o Instagram.' }),
+        el('a', {
+          class: 'contact-option whatsapp', href: whatsapp, target: '_blank', rel: 'noopener noreferrer',
+        },
+        el('span', { class: 'contact-option-icon' }, icon('whatsapp', 24)),
+        el('span', { class: 'contact-option-body' },
+          el('span', { class: 'contact-option-label', text: 'WhatsApp' }),
+          el('span', { class: 'contact-option-value', text: phone })),
+        icon('chevron-right', 18, { cls: 'dim' })),
+        el('a', {
+          class: 'contact-option instagram', href: instagram, target: '_blank', rel: 'noopener noreferrer',
+        },
+        el('span', { class: 'contact-option-icon' }, icon('instagram', 24)),
+        el('span', { class: 'contact-option-body' },
+          el('span', { class: 'contact-option-label', text: 'Instagram' }),
+          el('span', { class: 'contact-option-value', text: '@lucianomdz.ok' })),
+        icon('chevron-right', 18, { cls: 'dim' })),
+        el('p', { class: 'muted tiny', style: { textAlign: 'center', margin: '6px 0 0' }, text: 'También podés escribirle a @soporte desde Zuma.' })),
+    });
+    return api;
+  }
+
   /* ---------------------------- eliminar cuenta --------------------------- */
 
   function openDeleteAccount() {
@@ -194,6 +226,13 @@ export function menuPage() {
         item({
           iconName: 'search', color: 'gray', title: 'Buscar',
           sub: 'Personas, ventas y grupos', href: '#/buscar',
+        }),
+      ]),
+
+      section('Contacto', [
+        item({
+          iconName: 'whatsapp', color: 'green', title: 'Contactar a Luciano',
+          sub: 'WhatsApp · +54 11 5118-6792', onClick: openContact,
         }),
       ]),
 

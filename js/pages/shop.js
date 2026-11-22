@@ -523,7 +523,7 @@ export function shopItemPage(id) {
       actions.append(
         el('button', {
           class: 'btn primary', type: 'button',
-          onclick: () => navigate(`/mensajes/${seller.username}`),
+          onclick: () => navigate(`/mensajes/${seller.username}?item=${encodeURIComponent(current.id)}`),
         }, icon('message', 16), 'Enviar mensaje'),
         el('a', { class: 'btn', href: `#/u/${seller.username}` }, icon('user', 16), 'Ver perfil'));
     }

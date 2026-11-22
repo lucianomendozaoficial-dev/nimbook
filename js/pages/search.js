@@ -25,6 +25,39 @@ function normalize(value) {
   return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+function highlight(text, query) {
+  const source = String(text || '');
+  const raw = String(query || '').trim();
+  if (!raw) return source;
+  const tokens = [...new Set(raw.split(/\s+/).filter((token) => token.length >= 2))];
+  if (!tokens.length) return source;
+  const escaped = tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const regex = new RegExp(`(${escaped.join('|')})`, 'ig');
+  const fragment = document.createDocumentFragment();
+  let cursor = 0;
+  for (const match of source.matchAll(regex)) {
+    if (match.index > cursor) fragment.append(source.slice(cursor, match.index));
+    fragment.append(el('mark', { class: 'search-highlight', text: match[0] }));
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < source.length) fragment.append(source.slice(cursor));
+  return fragment;
+}
+
+const EXPLORE_FALLBACK = ['Fotografía', 'Mendoza', 'Programación', 'Trekking', 'Música', 'Diseño'];
+
+function exploreTags() {
+  const tags = new Set();
+  for (const group of state.groups) {
+    if (group.category) tags.add(group.category);
+  }
+  for (const item of state.shopItems.values()) {
+    if (item.category) tags.add(shopCategoryLabel(item.category));
+  }
+  for (const tag of EXPLORE_FALLBACK) tags.add(tag);
+  return [...tags].filter(Boolean).slice(0, 8);
+}
+
 function readRecent() {
   try {
     const list = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
@@ -48,8 +81,8 @@ export function searchPage(initial = '') {
   let recent = readRecent();
 
   const input = el('input', {
-    type: 'search', placeholder: 'Personas, ventas, grupos…',
-    'aria-label': 'Buscar', value: query,
+    type: 'search', placeholder: 'Buscá personas, ventas o grupos…',
+    'aria-label': 'Buscar', value: query, enterkeyhint: 'search',
   });
   const clearBtn = el('button', {
     class: 'search-clear', type: 'button', 'aria-label': 'Borrar búsqueda',
@@ -100,12 +133,16 @@ export function searchPage(initial = '') {
 
   input.addEventListener('input', debounce(() => {
     setQuery(input.value);
-  }, 220));
+  }, 150));
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       setQuery(input.value, { remember: true });
       recent = readRecent();
+    }
+    if (event.key === 'Escape') {
+      input.value = '';
+      setQuery('');
     }
   });
   input.addEventListener('blur', () => {
@@ -114,18 +151,28 @@ export function searchPage(initial = '') {
       recent = readRecent();
     }
   });
+  function onKeydown(event) {
+    if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+    event.preventDefault();
+    input.focus();
+  }
+  document.addEventListener('keydown', onKeydown);
 
   /* -------------------------------- piezas -------------------------------- */
 
   function personRow(person) {
     const relation = relationWith(state.me?.id, person.id);
-    return el('div', { class: 'search-row' },
+    return el('div', { class: 'search-row search-person' },
       el('a', { href: `#/u/${person.username}` }, avatarEl(person, 'md')),
       el('div', { class: 'grow', style: { minWidth: '0' } },
         el('div', { class: 'name-row' },
-          el('a', { href: `#/u/${person.username}`, class: 'post-name', text: displayName(person) }),
+          el('a', { href: `#/u/${person.username}`, class: 'post-name' }, highlight(fullName(person) || displayName(person), query)),
           verifiedBadge(person, { size: 15 })),
-        el('div', { class: 'muted small', text: fullName(person) })),
+        el('div', { class: 'search-person-sub' },
+          highlight(`@${person.username}`, query),
+          person.location ? el('span', { text: ` · ${person.location}` }) : null),
+        person.bio ? el('div', { class: 'search-person-bio', text: person.bio }) : null),
       relation === 'self' ? el('span', { class: 'chip', text: 'Vos' }) : followButton(person));
   }
 
@@ -134,7 +181,7 @@ export function searchPage(initial = '') {
       el('span', { class: 'search-thumb' },
         item.cover ? mediaImg(item.cover, { alt: item.title }) : icon('shop', 20)),
       el('div', { class: 'grow', style: { minWidth: '0' } },
-        el('div', { class: 'post-name', text: item.title }),
+        el('div', { class: 'post-name' }, highlight(item.title, query)),
         el('div', {
           class: 'muted small',
           text: `${money(item.price, item.currency)} · ${shopCategoryLabel(item.category)} · ${item.location || 'Sin ubicación'}`,
@@ -148,7 +195,7 @@ export function searchPage(initial = '') {
         group.cover ? mediaImg(group.cover, { alt: group.name })
           : icon((group.type || 'group') === 'channel' ? 'radio' : 'groups', 20)),
       el('div', { class: 'grow', style: { minWidth: '0' } },
-        el('div', { class: 'post-name', text: group.name }),
+        el('div', { class: 'post-name' }, highlight(group.name, query)),
         el('div', {
           class: 'muted small',
           text: `${formatCount(group.memberIds?.length || 0)} ${(group.type || 'group') === 'channel' ? 'seguidores' : 'miembros'} · ${group.privacy === 'private' ? 'Privado' : 'Público'}`,
@@ -207,6 +254,20 @@ export function searchPage(initial = '') {
         chips);
     }
 
+    const tags = exploreTags();
+    if (tags.length) {
+      const explore = el('div', { class: 'search-explore' },
+        ...tags.map((tag) => el('button', {
+          class: 'search-explore-chip', type: 'button',
+          onclick: () => setQuery(tag, { remember: true }),
+        }, icon('search', 13), el('span', { text: tag }))));
+      wrap.append(
+        el('div', { class: 'search-block-head', style: { marginTop: '16px' } },
+          el('span', { class: 'search-block-title', text: 'Explorar' }),
+          el('span', { class: 'muted tiny', text: 'Tocá una categoría' })),
+        explore);
+    }
+
     const suggestions = followSuggestions(state.me?.id, 4);
     if (suggestions.length) {
       wrap.appendChild(block('Personas que quizás conozcas',
@@ -244,14 +305,28 @@ export function searchPage(initial = '') {
     });
 
     if (!people.length && !products.length && !groups.length) {
-      results.appendChild(el('div', { class: 'card' },
+      const tips = exploreTags().slice(0, 5);
+      results.appendChild(el('div', { class: 'card search-no-results' },
         emptyState({
           iconName: 'search',
           title: `Sin resultados para “${query}”`,
-          description: 'Probá con el nombre, el apellido, el usuario, un producto o un grupo.',
-        })));
+          description: 'Probá con un nombre, un apellido, un @usuario, una categoría o una ciudad.',
+        }),
+        tips.length
+          ? el('div', { class: 'search-suggestions' },
+            el('span', { class: 'muted small', text: 'Intentá con:' }),
+            ...tips.map((tag) => el('button', {
+              class: 'recent-chip', type: 'button', text: tag,
+              onclick: () => setQuery(tag, { remember: true }),
+            })))
+          : null));
       return;
     }
+
+    const total = people.length + products.length + groups.length;
+    results.appendChild(el('div', { class: 'search-summary' },
+      el('span', { class: 'strong', text: `${formatCount(total)} ${total === 1 ? 'resultado' : 'resultados'}` }),
+      el('span', { class: 'muted small', text: `para “${query}”` })));
 
     const showPeople = tab === 'all' ? people.slice(0, 4) : people;
     const showProducts = tab === 'all' ? products.slice(0, 3) : products;
@@ -289,8 +364,9 @@ export function searchPage(initial = '') {
   root.append(
     el('div', { class: 'page-head search-head' },
       el('div', { class: 'grow' },
-        el('h1', { text: 'Buscar' }),
-        el('p', { class: 'muted small', text: 'Personas, ventas de Shop y grupos.' }))),
+        el('h1', { text: 'Buscar en Zuma' }),
+        el('p', { class: 'muted small', text: 'Buscador inteligente: nombres, @usuarios, categorías, ciudades, Shop y grupos.' })),
+      el('span', { class: 'search-shortcut', title: 'Atajo para buscar' }, el('kbd', { text: '/' }))),
     el('div', { class: 'page-card search-hero' },
       el('div', { class: 'search-big' },
         icon('search', 20),
@@ -304,10 +380,13 @@ export function searchPage(initial = '') {
   return {
     el: root,
     onData(topic) {
-      if (topic === 'shop' || topic === 'groups' || topic === 'follow') render();
+      if (['shop', 'groups', 'follow', 'people', 'feed', 'post', 'user', 'support'].includes(topic)) {
+        if (root.isConnected) render();
+      }
     },
     destroy() {
       window.removeEventListener('hashchange', onHashChange);
+      document.removeEventListener('keydown', onKeydown);
     },
   };
 }

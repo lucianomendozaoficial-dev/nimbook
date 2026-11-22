@@ -13,10 +13,36 @@ let channel = null;
 let local = null;
 const pending = [];
 const remoteListeners = new Set();
+const typingListeners = new Set();
 
 export function onRemoteDoc(fn) {
   remoteListeners.add(fn);
   return () => remoteListeners.delete(fn);
+}
+
+export function onTyping(fn) {
+  typingListeners.add(fn);
+  return () => typingListeners.delete(fn);
+}
+
+function emitTyping(data) {
+  for (const fn of typingListeners) {
+    try { fn(data); } catch { /* noop */ }
+  }
+}
+
+export function sendTyping(fromId, toId) {
+  if (!fromId || !toId) return;
+  const payload = { fromId, toId, at: Date.now() };
+  if (local) {
+    try { local.postMessage({ type: 'typing', ...payload }); } catch { /* noop */ }
+  }
+  if (channel) {
+    try {
+      const sent = channel.send({ type: 'broadcast', event: 'typing', payload });
+      sent?.catch?.(() => {});
+    } catch { /* noop */ }
+  }
 }
 
 async function applyIncoming(path) {
@@ -63,6 +89,10 @@ export function initRealtime() {
     try {
       local = new BroadcastChannel('zuma-live');
       local.onmessage = (event) => {
+        if (event.data?.type === 'typing') {
+          emitTyping(event.data);
+          return;
+        }
         const path = event.data?.path;
         if (path) applyIncoming(path);
       };
@@ -79,6 +109,10 @@ export function initRealtime() {
     channel.on('broadcast', { event: 'doc' }, (message) => {
       const path = message?.payload?.path;
       if (typeof path === 'string' && path.startsWith('data/')) applyIncoming(path);
+    });
+    channel.on('broadcast', { event: 'typing' }, (message) => {
+      const payload = message?.payload;
+      if (payload?.fromId && payload?.toId) emitTyping(payload);
     });
     channel.subscribe((status) => {
       ready = status === 'SUBSCRIBED';

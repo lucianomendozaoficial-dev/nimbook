@@ -961,13 +961,23 @@ function withInboxEntry(doc, entry, mode = 'mine') {
 }
 
 /** Envía un mensaje privado. Las dos personas leen el mismo archivo de hilo. */
-export async function sendMessage(toUserId, text, { silent = false } = {}) {
+export async function sendMessage(toUserId, text, { silent = false, replyTo = null } = {}) {
   const me = requireMe();
   const other = state.users.get(toUserId) || await loadUser(toUserId);
   if (!other) throw new ValidationError('No encontramos a esa persona.');
   const clean = String(text || '').trim();
   if (!clean) throw new ValidationError('Escribí un mensaje.');
   if (clean.length > 4000) throw new ValidationError('El mensaje es demasiado largo.');
+
+  const quoted = replyTo && typeof replyTo === 'object' ? {
+    kind: replyTo.kind === 'shop' ? 'shop' : 'message',
+    id: String(replyTo.id || '').slice(0, 80),
+    title: String(replyTo.title || '').slice(0, 140),
+    text: String(replyTo.text || '').slice(0, 240),
+    price: Number(replyTo.price) || 0,
+    currency: String(replyTo.currency || 'ARS').slice(0, 8),
+    image: String(replyTo.image || '').slice(0, 600),
+  } : null;
 
   const threadId = threadIdFor(me.id, toUserId);
   const message = {
@@ -976,10 +986,11 @@ export async function sendMessage(toUserId, text, { silent = false } = {}) {
     text: clean,
     createdAt: nowISO(),
     pending: true,
+    replyTo: quoted,
   };
   const stamp = message.createdAt;
   // Al archivo se guarda sin las marcas locales (pending/localOnly).
-  const persisted = { id: message.id, fromId: me.id, text: clean, createdAt: stamp };
+  const persisted = { id: message.id, fromId: me.id, text: clean, createdAt: stamp, replyTo: quoted };
   const baseEntry = {
     threadId,
     lastText: clean.slice(0, 140),

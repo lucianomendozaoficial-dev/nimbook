@@ -958,6 +958,10 @@ function render() {
           catch (err) { state.note = err.message || 'No se pudo actualizar.'; state.noteType = 'error'; }
           render();
         }, { iconName: 'refresh' }),
+        btn('Bloquear', () => {
+          sessionStorage.removeItem(PANEL_GATE_KEY);
+          location.reload();
+        }, { iconName: 'lock' }),
         el('a', { class: 'pn-btn primary', href: 'index.html' }, icon('home', 16), 'Abrir Zuma'))),
     renderStats(),
     renderTabs(),
@@ -1065,11 +1069,67 @@ function openUserModal(user) {
 
 /* ---------------------------------- boot ---------------------------------- */
 
-async function boot() {
-  if (!cfg.supabaseUrl || !cfg.supabaseKey) {
-    renderConfigError();
-    return;
-  }
+const PANEL_GATE_KEY = 'zuma.panel.gate.v1';
+const PANEL_PASSWORD_HASH = '49bc022918338091e19626ee39d696f739aaca4da35a3a6dd3c26863b3d2e5ae';
+
+async function sha256(text) {
+  if (!window.crypto?.subtle) return '';
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function renderPanelGate(message = '') {
+  clear(root);
+  const password = el('input', {
+    class: 'input', type: 'password', inputmode: 'numeric',
+    autocomplete: 'current-password', placeholder: 'Contraseña de verificación',
+    maxlength: '32',
+  });
+  const error = el('p', { class: 'pn-gate-error', text: message });
+  const submit = el('button', { class: 'pn-btn primary block', type: 'submit', text: 'Entrar al panel' });
+  const form = el('form', {
+    onsubmit: async (event) => {
+      event.preventDefault();
+      submit.disabled = true;
+      submit.textContent = 'Verificando…';
+      error.textContent = '';
+      try {
+        const hash = await sha256(password.value.trim());
+        if (hash !== PANEL_PASSWORD_HASH) {
+          error.textContent = 'Contraseña incorrecta.';
+          submit.disabled = false;
+          submit.textContent = 'Entrar al panel';
+          password.select();
+          return;
+        }
+        sessionStorage.setItem(PANEL_GATE_KEY, '1');
+        startPanel();
+      } catch {
+        error.textContent = 'No se pudo verificar la contraseña.';
+        submit.disabled = false;
+        submit.textContent = 'Entrar al panel';
+      }
+    },
+  },
+  el('div', { class: 'field' },
+    el('label', { text: 'Contraseña de verificación' }),
+    password),
+  error,
+  submit);
+
+  root.append(el('div', { class: 'pn-gate' },
+    el('img', { class: 'pn-gate-logo', src: 'assets/logo/zuma-logo-128.png', alt: 'Zuma' }),
+    el('h1', { text: 'Panel de control' }),
+    el('p', { class: 'pn-gate-sub', text: 'Acceso del equipo. Ingresá la contraseña de verificación para continuar.' }),
+    form,
+    el('p', { class: 'pn-gate-note', text: 'La sesión queda abierta solo en esta pestaña. Si la cerrás, vuelve a pedir la contraseña.' }),
+    el('div', { class: 'pn-gate-links' },
+      el('a', { class: 'pn-btn', href: 'index.html' }, icon('home', 16), 'Abrir Zuma'))));
+  setTimeout(() => password.focus(), 80);
+}
+
+async function startPanel() {
   state.me = { id: 'panel', name: 'Equipo Zuma', username: 'equipo' };
   initRealtime();
   let supportRefreshTimer = null;
@@ -1096,6 +1156,18 @@ async function boot() {
       el('p', { class: 'pn-gate-sub', text: err.message || 'Revisá la conexión con Supabase.' }),
       el('a', { class: 'pn-btn primary', href: 'index.html' }, icon('home', 16), 'Abrir Zuma')));
   }
+}
+
+async function boot() {
+  if (!cfg.supabaseUrl || !cfg.supabaseKey) {
+    renderConfigError();
+    return;
+  }
+  if (sessionStorage.getItem(PANEL_GATE_KEY) !== '1') {
+    renderPanelGate();
+    return;
+  }
+  await startPanel();
 }
 
 boot();

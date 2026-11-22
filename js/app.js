@@ -218,7 +218,7 @@ function pageFor(route) {
     case 'group': return groupPage(route.params.id);
     case 'shop': return shopPage();
     case 'shopitem': return shopItemPage(route.params.id);
-    case 'messages': return messagesPage(route.params.username || '');
+    case 'messages': return messagesPage(route.params.username || '', route.query || {});
     case 'stories': return storiesPage();
     case 'storycompose': return storyComposerPage();
     case 'verification': return verificationPage();
@@ -259,6 +259,7 @@ function renderRoute(route) {
     return;
   }
   lastKey = key;
+  document.body.dataset.route = route.name;
   withViewTransition(() => {
     currentPage?.destroy?.();
     shell.setLayout(layoutFor(route));

@@ -53,7 +53,7 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - **Galería propia**: las fotos importadas del dispositivo quedan guardadas y comprimidas en el navegador (IndexedDB), así después las elegís desde la galería de Zuma sin abrir el selector del sistema cada vez.
 - **Insignias de verificación**: se puede **pedir** la celeste o la morada con DNI, fecha de nacimiento, país y ciudad. La celeste cuesta **$10.000/mes** y la morada **$18.000/mes**; la dorada no está a la venta (solo equipo y aliados). Soporte revisa y aprueba desde el panel.
 - **Soporte**: perfil oficial **@soporte**, chat privado con los usuarios, avisos publicados desde el panel y **reportes de cuentas con motivo**. Todo aparece en la pestaña **Soporte** del panel.
-- **Panel de control** (`panel.html`): abre **directo, sin login**, y permite ver usuarios, publicaciones, datos, insignias, solicitudes de verificación, reportes y el chat de soporte.
+- **Panel de control** (`panel.html`): pide una **contraseña de verificación** al entrar y permite ver usuarios, publicaciones, datos, insignias, solicitudes de verificación, reportes y el chat de soporte.
 - **Actualizar Zuma** en el menú: borra la caché, desregistra el service worker y recarga para ver los cambios sin Ctrl+R.
 - **Descargar imágenes** de publicaciones e historias desde el menú de la publicación o el visor.
 - **Eliminar cuenta** desde el menú: pide la contraseña, avisa que es permanente y borra perfil, publicaciones, historias, ventas, conversaciones y vínculos.
@@ -62,9 +62,10 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - **Contacto de la venta**: al publicar se puede activar el contacto y elegir **WhatsApp** o **Instagram** (con sus logos). En la ficha aparecen esos botones y, para quien no quiera usarlos, el chat privado de Zuma.
 - **Ventas en el muro**: cada tanto aparece una venta de Shop mezclada en «Para ti», sin importar a quién sigas, con la **marca de agua de Zuma** y la etiqueta «Venta» para que se note que es de Shop.
 - **Mensajes privados estilo WhatsApp** (solo el estilo): bandeja con contador de no leídos, burbujas verdes/blancas, separadores de fecha, hora dentro del mensaje y chat uno a uno. **Tiempo real** con Supabase Realtime: el mensaje aparece al instante, sin esperar 5 segundos. Los sonidos avisan cuando llega un mensaje y no tenés ese chat abierto.
+- **Escribiendo…** en el chat y **respuesta citada**: si abrís el chat desde una venta de Shop, la publicación queda citada arriba del mensaje, como en WhatsApp.
 - **Emojis** en el chat, los comentarios y al crear publicaciones, con selector por categorías y recientes.
 - **Grupos y canales personalizables**: portada, color, emoji, descripción, categoría, reglas, privacidad y edición para el dueño. El canal usa el mismo editor.
-- **Todo en tiempo real**: publicaciones, reacciones, comentarios, grupos, historias, Shop, notificaciones y mensajes se actualizan solos entre dispositivos con Supabase Realtime; si el canal se cae, queda un sondeo de respaldo.
+- **Todo en tiempo real**: publicaciones, reacciones, comentarios, grupos, historias, Shop, notificaciones, soporte y mensajes se actualizan solos entre dispositivos con Supabase Realtime; si el canal se cae, queda un sondeo de respaldo.
 - Reacciones con un toque (me gusta) o manteniendo apretado (6 opciones), comentarios y respuestas, compartir y guardar.
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
@@ -77,8 +78,9 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - Estado civil y datos personales editables desde «Mi perfil».
 - Notificaciones con campana y contador.
 - Perfiles con portada, foto, biografía y pestañas (publicaciones, seguidores, fotos, **Shop** e información); botón para compartir el perfil.
-- **Buscador con pestañas** (Todo, Personas, Shop, Grupos), sugerencias y búsquedas recientes.
-- **Menú rediseñado** con el perfil, las secciones de la app, **Actualizar Zuma**, **Panel de control**, **Insignias de verificación** y la zona de privacidad y cuenta.
+- **Buscador con pestañas** (Todo, Personas, Shop, Grupos), ranking inteligente, coincidencias resaltadas, etiquetas para explorar, sugerencias y búsquedas recientes.
+- **Contactar a Luciano** desde el menú: WhatsApp **+54 11 5118-6792** e Instagram **@lucianomdz.ok**.
+- **Menú rediseñado** con el perfil, las secciones de la app, **Actualizar Zuma**, **Contactar**, **Panel de control**, **Insignias de verificación** y la zona de privacidad y cuenta.
 - Modo claro / oscuro / automático, toasts, menús, visor de imágenes.
 
 **Diseño**
@@ -99,13 +101,13 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
  
 ## Panel de control
 
-`panel.html` es una página aparte para el equipo. **Abre directamente, sin login**, y permite ver usuarios, datos, publicaciones y asignar o quitar la insignia de verificación. Lee y escribe en Supabase con la clave publicable de `config.js`.
+`panel.html` es una página aparte para el equipo. Pide una **contraseña de verificación** al entrar (se guarda solo en la pestaña) y permite ver usuarios, datos, publicaciones y asignar o quitar la insignia de verificación. Lee y escribe en Supabase con la clave publicable de `config.js`.
 
 - Pestañas: **Usuarios** (buscar, ver ficha, asignar insignia), **Publicaciones**, **Insignias** y **Soporte** (solicitudes de verificación, reportes, chat de @soporte y publicar avisos).
 - La insignia se guarda en `usuarios/<id>.json` (`verification: { type, at }`) y en `usuarios/index.json` (`verification: "celeste" | "morado" | "dorado"`) para que el muro y las listas la muestren sin descargar la ficha completa.
 - En **Soporte** se aprueban o rechazan solicitudes, se resuelven reportes y se responde el chat como @soporte. El perfil de soporte se crea solo la primera vez que se abre el panel.
 
-> El panel no tiene login: cualquiera que conozca la URL puede ver y modificar los datos, porque las políticas RLS actuales permiten escribir con la clave publicable. Para una comunidad grande hay que pasar el login a Supabase Auth y cerrar las políticas por usuario. No compartas el enlace del panel.
+> El panel tiene una contraseña de verificación, pero se comprueba en el navegador y el código es público. No reemplaza a Supabase Auth: para una comunidad grande hay que cerrar el panel con autenticación real y políticas por usuario. No compartas el enlace ni la contraseña.
 
 ---
 
@@ -256,13 +258,13 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Concurrencia | Cola por documento + bloqueo optimista con `updated_at` y reintentos |
 | Caché | Memoria + `localStorage` por documento (30 s en memoria) |
 | Cuota | La del plan de Supabase; ya no se gasta la API de GitHub para datos |
-| Tiempo real | Supabase Realtime Broadcast: cada escritura avisa a los demás dispositivos; el chat tiene sondeo de respaldo cada 5 s |
+| Tiempo real | Supabase Realtime Broadcast: cada escritura avisa a los demás dispositivos, más indicador de “escribiendo…”; el chat tiene sondeo de respaldo cada 5 s |
 | Chat en vivo | Realtime instantáneo + sonido si el chat no está abierto; el sondeo queda como respaldo |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
 | Historias | Cámara 9:16; la galería propia guarda copias comprimidas en IndexedDB y las fotos se eligen desde ahí |
 | Verificación | Tres niveles; **solicitud paga** celeste $10.000/mes y morada $18.000/mes (dorada solo por invitación). Guarda DNI, nacimiento, país y ciudad en `soporte/verificaciones.json` |
 | Soporte | Perfil @soporte, chat privado, reportes de cuentas y avisos publicados desde el panel |
-| Panel | `panel.html` + `js/panel.js`, lectura y escritura en Supabase; **sin login** |
+| Panel | `panel.html` + `js/panel.js`, contraseña de verificación en el navegador; lectura y escritura en Supabase |
 | Eliminar cuenta | Verifica la contraseña y borra perfil, posts, historias, ventas, conversaciones y vínculos; el aviso indica que no se puede deshacer |
 | Imágenes | `canvas` → JPEG, máx. 1600 px y ~1,4 MB; las nuevas van a Supabase Storage |
 | Vídeos | **No soportados** (por diseño); solo imágenes |
@@ -273,11 +275,11 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - La `service_role` de Supabase **nunca** va en el navegador ni en `config.js`: solo se usa desde el SQL Editor o scripts privados.
 - Los mensajes privados se guardan como JSON en Supabase: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Alguien con la clave publicable y las políticas actuales podría leer la tabla. Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
 - La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, la app ofrece elegir una foto de la galería.
-- El trámite de verificación guarda DNI y fecha de nacimiento en Supabase. Como el panel no tiene login, cualquiera con el enlace puede ver esos datos; para producción conviene cerrar el panel con autenticación.
+- El trámite de verificación guarda DNI y fecha de nacimiento en Supabase. El panel pide una contraseña de verificación, pero se comprueba en el navegador; no es autenticación real. Para producción conviene cerrar el panel con Supabase Auth.
 - La **dorada** no está a la venta; solo la asigna el equipo.
 - La galería propia solo contiene las fotos que el usuario importó desde el dispositivo; el navegador no permite leer toda la galería del teléfono sin permiso.
 - Al eliminar una cuenta se borran sus documentos JSON, pero las imágenes ya subidas a Storage y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar.
-- El panel de control no tiene login por decisión de producto: cualquiera con el enlace puede ver y modificar datos. No lo uses como bóveda de datos; si el proyecto crece, hay que pasar el login a Supabase Auth.
+- La contraseña del panel viaja y se comprueba en el cliente: alguien con experiencia puede saltearla leyendo el código. No la uses como única protección de datos sensibles.
 - Si dos personas escriben a la vez, la app relee y reintenta; en el peor caso avisa para volver a intentarlo.
 
 ---

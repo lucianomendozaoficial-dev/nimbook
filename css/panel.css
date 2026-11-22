@@ -349,3 +349,6 @@ html[data-theme="dark"] .pn-status.resolved { background: #143526; color: #75e6a
   .pn-support-fields { grid-template-columns: 1fr; }
   .pn-support-price { margin-left: 0; }
 }
+
+.pn-gate .pn-btn.block { width: 100%; justify-content: center; }
+.pn-gate .pn-gate-error:empty { display: none; }
