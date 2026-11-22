@@ -26,6 +26,14 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 | --- | --- |
 | ![Shop](docs/zuma/shop.jpg) | ![Producto](docs/zuma/shop-producto.jpg) |
 
+| Venta de Shop en el muro | Contacto de la venta |
+| --- | --- |
+| ![Venta en el muro](docs/zuma/venta-en-muro.jpg) | ![Contacto](docs/zuma/contacto-venta.jpg) |
+
+| Cómo se agrega el contacto | Venta en el móvil |
+| --- | --- |
+| ![Formulario de contacto](docs/zuma/contacto-formulario.jpg) | ![Venta móvil](docs/zuma/venta-movil.jpg) |
+
 | Mensajes privados | Chat en el móvil |
 | --- | --- |
 | ![Mensajes](docs/zuma/mensajes.jpg) | ![Chat móvil](docs/zuma/mensajes-movil.jpg) |
@@ -38,8 +46,10 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 - Registro e inicio de sesión (contraseñas cifradas con PBKDF2-SHA256).
 - Publicaciones con texto, hasta 10 fotos, sentimiento, ubicación y privacidad (público / seguidores / solo yo).
 - Muro con orden tipo Facebook: lo tuyo, lo de las personas que seguís y lo de tus grupos tiene prioridad, pero **no queda en orden cronológico**; se mezcla en bloques con publicaciones de gente que no seguís (marcadas como «Sugerencia para ti») y se evita que aparezcan dos publicaciones seguidas de la misma persona. Pestañas **Para ti** y **Siguiendo**, y al cargar más se agrega al final sin desordenar lo que ya estabas viendo.
-- **Shop**: mercado con productos de la gente de Zuma, búsqueda y categorías, publicación con fotos, precio, estado y ubicación, ficha con vendedor, botón para escribirle, marcar como vendido y eliminar lo propio.
-- **Mensajes privados**: bandeja con conversaciones y contador de no leídos, chat uno a uno (enviar, actualizar, buscar gente para escribirle), aviso en la campana y atajo desde el perfil y desde Shop.
+- **Shop**: mercado con productos de la gente de Zuma, búsqueda y categorías, publicación con fotos, precio, estado y ubicación, ficha con vendedor, botón para escribirle, marcar como vendido y eliminar lo propio. El botón **Vender algo** queda flotante.
+- **Contacto de la venta**: al publicar se puede activar el contacto y elegir **WhatsApp** o **Instagram** (con sus logos). En la ficha aparecen esos botones y, para quien no quiera usarlos, el chat privado de Zuma.
+- **Ventas en el muro**: cada tanto aparece una venta de Shop mezclada en «Para ti», sin importar a quién sigas, con la **marca de agua de Zuma** y la etiqueta «Venta» para que se note que es de Shop.
+- **Mensajes privados**: bandeja con conversaciones y contador de no leídos, chat uno a uno (enviar, actualizar, buscar gente para escribirle), aviso en la campana y atajo desde el perfil y desde Shop. El mensaje se ve al instante y el chat se actualiza solo **cada 5 segundos leyendo el link público** (raw/CDN), sin gastar la API de GitHub.
 - Reacciones con un toque (me gusta) o manteniendo apretado (6 opciones), comentarios y respuestas, compartir y guardar.
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
@@ -86,7 +96,7 @@ data/
   grupos.json                  grupos y canales (tipo, dueño y miembros)
   historias.json               historias activas (se limpian a las 24 h)
   tienda/index.json            productos de Shop: id, vendedor, foto, precio y estado
-  tienda/<producto>.json       ficha completa (descripción y fotos)
+  tienda/<producto>.json       ficha completa (descripción, fotos y contacto opcional)
   mensajes/bandejas/<usuario>.json   conversaciones de cada persona y no leídos
   mensajes/hilos/<a>__<b>.json  mensajes del chat entre dos personas
 media/
@@ -97,7 +107,9 @@ media/
 enlace de `raw.githubusercontent.com` (sin token) y las escrituras van por la API
 con el token, en cola. Un mensaje nuevo se guarda en el hilo compartido
 `mensajes/hilos/<id-menor>__<id-mayor>.json` y en las dos bandejas: la mía queda
-sin pendientes y la de la otra persona suma un no leído.
+sin pendientes y la de la otra persona suma un no leído. Mientras un chat está
+abierto, se leen el hilo y la bandeja cada 5 segundos por ese link público: el
+token solo se usa al enviar, marcar leído o publicar.
 
 **Regla de oro:** una publicación nunca guarda sus comentarios ni sus reacciones adentro.
 El «me gusta» escribe primero en `likes/<usuario>.json` y después, si se puede, suma el contador del post.
@@ -211,6 +223,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Concurrencia | Cola por archivo + reintentos ante `409` / `sha` inválido |
 | Caché | Memoria + `localStorage` por archivo con `ETag` y `sha` |
 | Cuota | ~5 000 peticiones/hora con token; los `304` no cuentan |
+| Chat en vivo | Sondeo cada 5 s por `raw.githubusercontent.com` (sin token); el token solo se usa al escribir |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
 | Imágenes | `canvas` → JPEG, máx. 1600 px y ~1,4 MB, nombre único |
 | Vídeos | **No soportados** (por diseño); solo imágenes |

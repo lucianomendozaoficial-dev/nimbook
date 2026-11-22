@@ -19,9 +19,15 @@ export function messagesPage(username = '') {
   const chatPane = el('section', { class: 'msgr-chat' });
 
   let activeId = null;
+  let activePartner = null;
   let query = '';
   let chatBody = null;
   let destroyed = false;
+  let pollTimer = null;
+  let pollBusy = false;
+  let sending = false;
+
+  const POLL_MS = 5000;
 
   const searchInput = el('input', {
     type: 'search', placeholder: 'Buscar en mensajes', 'aria-label': 'Buscar en mensajes',
@@ -112,10 +118,16 @@ export function messagesPage(username = '') {
 
   function messageRow(message, partner) {
     const mine = message.fromId === state.me?.id;
-    return el('div', { class: `msg${mine ? ' me' : ''}` },
-      mine ? null : avatarEl(userById(message.fromId) || partner, 'xs'),
-      el('div', { class: 'bubble', text: message.text }),
-      el('span', { class: 'stamp', text: clockTime(message.createdAt) }));
+    return el('div', {
+      class: `msg${mine ? ' me' : ''}${message.pending ? ' pending' : ''}`,
+      'data-message-id': message.id,
+    },
+    mine ? null : avatarEl(userById(message.fromId) || partner, 'xs'),
+    el('div', { class: 'bubble', text: message.text }),
+    el('span', {
+      class: 'stamp',
+      text: message.pending ? 'enviando…' : clockTime(message.createdAt),
+    }));
   }
 
   function renderChatBody(partner) {
@@ -152,10 +164,74 @@ export function messagesPage(username = '') {
     renderChatBody(partner);
   }
 
+  /* ------------------- lectura automática por link público ---------------- */
+  // Cada 5 segundos se leen el hilo y la bandeja por raw.githubusercontent /
+  // jsDelivr (lectura pública): no se usa el token y no se gasta la API.
+
+  function inboxSignature(list) {
+    return (list || []).map((row) => `${row.threadId}:${row.lastAt}:${row.unread}`).join('|');
+  }
+
+  function stopPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(pollNow, POLL_MS);
+  }
+
+  async function pollNow() {
+    if (destroyed || document.hidden || pollBusy || sending) return;
+    const me = state.me;
+    if (!me) return;
+    pollBusy = true;
+    try {
+      if (activePartner) {
+        const threadId = threadIdFor(me.id, activePartner.id);
+        const before = messagesOf(threadId);
+        const beforeIds = new Set(before.map((message) => message.id));
+        await loadThread(threadId, { force: true });
+        const after = messagesOf(threadId);
+        const changed = after.length !== before.length
+          || after.some((message) => !beforeIds.has(message.id));
+        if (changed) {
+          const incoming = after.some((message) => (
+            message.fromId !== me.id && !message.pending && !beforeIds.has(message.id)
+          ));
+          const atBottom = !chatBody
+            || chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 90;
+          renderChatBody(activePartner);
+          if (incoming) await markThreadRead(activePartner.id).catch(() => {});
+          if (atBottom || incoming) {
+            requestAnimationFrame(() => {
+              if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+            });
+          }
+        }
+      }
+
+      const inboxBefore = inboxSignature(state.inbox);
+      await loadInbox(me.id, { fresh: true }).catch(() => {});
+      if (inboxSignature(state.inbox) !== inboxBefore) renderList();
+    } catch {
+      /* se reintenta en el próximo ciclo */
+    } finally {
+      pollBusy = false;
+    }
+  }
+
+  function onVisibility() {
+    if (!document.hidden && !destroyed) pollNow();
+  }
+  document.addEventListener('visibilitychange', onVisibility);
+
   function renderChat(partner) {
     clear(chatPane);
     messenger.classList.add('show-chat');
     activeId = partner.id;
+    activePartner = partner;
 
     const refreshBtn = el('button', {
       class: 'btn-icon', type: 'button', title: 'Actualizar conversación', 'aria-label': 'Actualizar',
@@ -213,25 +289,37 @@ export function messagesPage(username = '') {
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const text = textarea.value.trim();
-      if (!text) return;
+      if (!text || sending) return;
+      sending = true;
       sendBtn.disabled = true;
       textarea.value = '';
       grow();
       try {
-        await sendMessage(partner.id, text);
+        // Se llama sin esperar: el mensaje ya se pinta al instante y la red
+        // confirma en segundo plano.
+        const saved = sendMessage(partner.id, text);
+        renderChatBody(partner);
+        requestAnimationFrame(() => {
+          chatBody.scrollTop = chatBody.scrollHeight;
+        });
         playSound('send');
+        await saved;
         renderChatBody(partner);
         renderList();
       } catch (err) {
         textarea.value = text;
         grow();
         playSound('error');
+        renderChatBody(partner);
         toast(err.message || 'No se pudo enviar el mensaje.', { type: 'error' });
+      } finally {
+        sending = false;
+        grow();
+        requestAnimationFrame(() => {
+          chatBody.scrollTop = chatBody.scrollHeight;
+          textarea.focus();
+        });
       }
-      requestAnimationFrame(() => {
-        chatBody.scrollTop = chatBody.scrollHeight;
-        textarea.focus();
-      });
     });
 
     chatPane.append(head, chatBody, form);
@@ -315,7 +403,7 @@ export function messagesPage(username = '') {
 
     if (activeId) {
       const partner = userById(activeId);
-      if (!partner) { renderEmptyPane(); return; }
+      if (!partner) { renderEmptyPane(); startPolling(); return; }
       renderChat(partner);
       await reloadThread(partner, { force: true });
       await markThreadRead(partner.id).catch(() => {});
@@ -323,6 +411,7 @@ export function messagesPage(username = '') {
     } else {
       renderEmptyPane();
     }
+    startPolling();
   }
 
   init();
@@ -332,6 +421,10 @@ export function messagesPage(username = '') {
     onData(topic) {
       if (topic === 'messages' || topic === 'me') renderList();
     },
-    destroy() { destroyed = true; },
+    destroy() {
+      destroyed = true;
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibility);
+    },
   };
 }

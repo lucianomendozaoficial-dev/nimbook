@@ -598,6 +598,33 @@ const shopEntry = (item) => ({
   createdAt: item.createdAt,
 });
 
+/** Valida y normaliza el contacto de una venta (WhatsApp o Instagram). */
+function normalizeContact(contact) {
+  if (!contact || !contact.type) return null;
+  const type = contact.type === 'instagram' ? 'instagram' : contact.type === 'whatsapp' ? 'whatsapp' : null;
+  if (!type) throw new ValidationError('Elegí WhatsApp o Instagram para el contacto.');
+  const raw = String(contact.value || '').trim();
+
+  if (type === 'whatsapp') {
+    const digits = raw.replace(/\D/g, '').replace(/^0+/, '');
+    if (digits.length < 8 || digits.length > 15) {
+      throw new ValidationError('Escribí el WhatsApp con código de país (ej. 54 9 11 5555 1234).');
+    }
+    return { type, value: digits };
+  }
+
+  const handle = raw
+    .replace(/^@+/, '')
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
+    .replace(/[/?#].*$/, '')
+    .trim()
+    .toLowerCase();
+  if (!/^[a-z0-9._]{2,30}$/.test(handle)) {
+    throw new ValidationError('Escribí un usuario de Instagram válido (sin espacios).');
+  }
+  return { type, value: handle };
+}
+
 function validateListing({ title, price }) {
   const cleanTitle = norm(title);
   if (cleanTitle.length < 4) throw new ValidationError('Poné un título de al menos 4 letras.');
@@ -609,7 +636,7 @@ function validateListing({ title, price }) {
 
 export async function createListing({
   title = '', description = '', price = 0, currency = 'ARS', category = 'otros',
-  condition = 'usado', location = '', media = [],
+  condition = 'usado', location = '', media = [], contact = null,
 } = {}) {
   const me = requireMe();
   const checked = validateListing({ title, price });
@@ -624,6 +651,7 @@ export async function createListing({
     condition: String(condition || 'usado'),
     location: norm(location).slice(0, 60),
     media: (media || []).slice(0, 8),
+    contact: normalizeContact(contact),
     status: 'available',
     createdAt: nowISO(),
     updatedAt: nowISO(),
@@ -663,6 +691,7 @@ export async function updateListing(id, patch = {}) {
     next.price = checked.price;
   }
   if ('media' in patch) next.media = (patch.media || []).slice(0, 8);
+  if ('contact' in patch) next.contact = normalizeContact(patch.contact);
   if ('status' in patch) next.status = patch.status === 'sold' ? 'sold' : 'available';
 
   state.shopItems.set(id, next);
@@ -735,6 +764,7 @@ export async function sendMessage(toUserId, text, { silent = false } = {}) {
     fromId: me.id,
     text: clean,
     createdAt: nowISO(),
+    pending: true,
   };
   const stamp = message.createdAt;
   const inboxEntry = {
@@ -745,40 +775,65 @@ export async function sendMessage(toUserId, text, { silent = false } = {}) {
     lastFromId: me.id,
   };
 
-  // 1) el hilo es la fuente de verdad: si esto falla, el mensaje no se envía
-  await queueDoc(P.thread(threadId), (doc) => {
-    const data = doc?.thread ? doc : {
-      version: 1,
-      thread: { id: threadId, memberIds: [me.id, toUserId], messages: [] },
-    };
-    data.thread.messages = [...(data.thread.messages || []), message].slice(-400);
-    data.thread.updatedAt = stamp;
-    return data;
-  }, { delay: 200, message: 'Zuma: mensaje' });
-
-  const cached = state.threads.get(threadId);
-  if (cached) cached.messages = [...cached.messages, message].slice(-400);
+  // 1) se muestra al instante (después la red confirma en segundo plano)
+  const beforeThread = state.threads.get(threadId);
+  const beforeInboxEntry = state.inbox.find((row) => row.threadId === threadId) || null;
+  if (beforeThread) beforeThread.messages = [...beforeThread.messages, message].slice(-400);
   else state.threads.set(threadId, { threadId, messages: [message], loaded: true, at: Date.now() });
-
-  // 2) bandejas: la mía queda sin pendientes, la de la otra persona suma uno
   state.inbox = [
     { ...inboxEntry, unread: 0 },
     ...state.inbox.filter((row) => row.threadId !== threadId),
   ];
   state.ui.unreadMessages = countUnreadMessages(state.inbox);
-
-  await Promise.all([
-    queueDoc(P.inbox(me.id), (doc) => withInboxEntry(doc, inboxEntry, 'mine'), {
-      delay: 400, message: 'Zuma: mensajes',
-    }).catch(() => {}),
-    queueDoc(P.inbox(toUserId), (doc) => withInboxEntry(doc, inboxEntry, 'inbox'), {
-      delay: 400, message: 'Zuma: mensajes',
-    }).catch(() => {}),
-  ]);
-
-  if (!silent) notifySoon(toUserId, { type: 'message', actorId: me.id });
   notify('messages');
-  return message;
+
+  try {
+    // 2) el hilo es la fuente de verdad: si esto falla, se revierte
+    await queueDoc(P.thread(threadId), (doc) => {
+      const data = doc?.thread ? doc : {
+        version: 1,
+        thread: { id: threadId, memberIds: [me.id, toUserId], messages: [] },
+      };
+      data.thread.messages = [...(data.thread.messages || []), message].slice(-400);
+      data.thread.updatedAt = stamp;
+      return data;
+    }, { delay: 200, message: 'Zuma: mensaje' });
+
+    // Ya está guardado: deja de estar "enviando", pero se conserva en memoria
+    // hasta que el link público lo devuelva (evita que un sondeo viejo lo borre).
+    const stored = state.threads.get(threadId)?.messages?.find((row) => row.id === message.id);
+    if (stored) {
+      stored.pending = false;
+      stored.localOnly = true;
+    }
+    notify('messages');
+
+    // 3) bandejas: la mía queda sin pendientes, la de la otra persona suma uno
+    await Promise.all([
+      queueDoc(P.inbox(me.id), (doc) => withInboxEntry(doc, inboxEntry, 'mine'), {
+        delay: 400, message: 'Zuma: mensajes',
+      }).catch(() => {}),
+      queueDoc(P.inbox(toUserId), (doc) => withInboxEntry(doc, inboxEntry, 'inbox'), {
+        delay: 400, message: 'Zuma: mensajes',
+      }).catch(() => {}),
+    ]);
+
+    if (!silent) notifySoon(toUserId, { type: 'message', actorId: me.id });
+    notify('messages');
+    return message;
+  } catch (err) {
+    // se deshace el mensaje optimista para no mostrar algo que no se guardó
+    const current = state.threads.get(threadId);
+    if (current) {
+      current.messages = current.messages.filter((row) => row.id !== message.id);
+      if (!current.messages.length && !beforeThread) state.threads.delete(threadId);
+    }
+    state.inbox = state.inbox.filter((row) => row.threadId !== threadId);
+    if (beforeInboxEntry) state.inbox = [beforeInboxEntry, ...state.inbox];
+    state.ui.unreadMessages = countUnreadMessages(state.inbox);
+    notify('messages');
+    throw err;
+  }
 }
 
 /** Marca como leída la conversación con alguien (mi bandeja). */
@@ -787,9 +842,11 @@ export async function markThreadRead(otherUserId) {
   if (!me || !otherUserId) return;
   const threadId = threadIdFor(me.id, otherUserId);
   const entry = state.inbox.find((row) => row.threadId === threadId);
-  if (!entry || !entry.unread) return;
+  if (!entry || (!entry.unread && entry.readLocally)) return;
 
-  state.inbox = state.inbox.map((row) => (row.threadId === threadId ? { ...row, unread: 0 } : row));
+  state.inbox = state.inbox.map((row) => (
+    row.threadId === threadId ? { ...row, unread: 0, readLocally: true } : row
+  ));
   state.ui.unreadMessages = countUnreadMessages(state.inbox);
 
   await queueDoc(P.inbox(me.id), (doc) => {

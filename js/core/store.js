@@ -278,11 +278,39 @@ export async function loadShopItem(id, { force = false } = {}) {
 export async function loadInbox(userId, { fresh = false } = {}) {
   if (!userId) return [];
   const doc = await docJson(P.inbox(userId), { fresh });
-  const list = Array.isArray(doc?.threads) ? doc.threads : [];
-  if (userId === state.me?.id) {
-    state.inbox = list;
-    state.ui.unreadMessages = countUnreadMessages(list);
+  const fetched = Array.isArray(doc?.threads) ? doc.threads : null;
+  if (userId !== state.me?.id) return fetched || [];
+
+  const local = state.inbox;
+  let list;
+
+  if (!fetched) {
+    // 404 (todavía no existe) o error de red: no borrar lo que ya se ve.
+    list = local;
+  } else {
+    const byThread = new Map(fetched.map((entry) => [entry.threadId, entry]));
+    list = fetched.map((entry) => {
+      const localEntry = local.find((row) => row.threadId === entry.threadId);
+      if (!localEntry) return entry;
+      if (new Date(localEntry.lastAt || 0) > new Date(entry.lastAt || 0)) return localEntry;
+      const sameMoment = String(localEntry.lastAt || '') === String(entry.lastAt || '');
+      if (localEntry.readLocally && sameMoment && entry.unread) {
+        return { ...entry, unread: 0, readLocally: true };
+      }
+      if (!entry.unread) return { ...entry, readLocally: false };
+      return entry;
+    });
+
+    // Mensajes recién enviados que todavía no aparecen en el archivo público.
+    const now = Date.now();
+    for (const localEntry of local) {
+      if (byThread.has(localEntry.threadId)) continue;
+      if (now - new Date(localEntry.lastAt || 0).getTime() < 120000) list.unshift(localEntry);
+    }
   }
+
+  state.inbox = list;
+  state.ui.unreadMessages = countUnreadMessages(list);
   const partners = list.map((entry) => entry.withId).filter(Boolean);
   if (partners.length) await ensureUsers(partners.slice(0, 24));
   return list;
@@ -291,9 +319,35 @@ export async function loadInbox(userId, { fresh = false } = {}) {
 export async function loadThread(threadId, { force = false } = {}) {
   if (!threadId) return null;
   const cached = state.threads.get(threadId);
-  if (cached?.loaded && !force && Date.now() - (cached.at || 0) < 20000) return cached;
+  if (cached?.loaded && !force && Date.now() - (cached.at || 0) < 15000) return cached;
+
   const doc = await docJson(P.thread(threadId), { fresh: force });
-  const messages = Array.isArray(doc?.thread?.messages) ? doc.thread.messages : [];
+  const fetched = Array.isArray(doc?.thread?.messages) ? doc.thread.messages : null;
+
+  // Si la lectura falla, conservar lo que ya había: mejor un chat viejo que vacío.
+  if (!fetched) {
+    if (cached?.messages?.length) {
+      cached.at = Date.now();
+      return cached;
+    }
+    const empty = { threadId, messages: [], loaded: true, at: Date.now() };
+    state.threads.set(threadId, empty);
+    return empty;
+  }
+
+  // Un mensaje recién enviado puede tardar unos segundos en el link público:
+  // se mantiene al final hasta que una lectura lo confirme.
+  const fetchedIds = new Set(fetched.map((message) => message.id));
+  const pending = (cached?.messages || [])
+    .filter((message) => (message.pending || message.localOnly) && !fetchedIds.has(message.id))
+    .map((message) => ({ ...message, pending: false, localOnly: true }));
+  const messages = [
+    ...fetched.map((message) => (message.pending || message.localOnly
+      ? { ...message, pending: false, localOnly: false }
+      : message)),
+    ...pending,
+  ].slice(-400);
+
   const entry = { threadId, messages, loaded: true, at: Date.now() };
   state.threads.set(threadId, entry);
   const authors = messages.map((message) => message.fromId).filter(Boolean);

@@ -4,12 +4,13 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, feedOrder, displayName, loadFeedPage, refreshAll,
+  state, feedOrder, displayName, loadFeedPage, refreshAll, shopListings,
 } from '../core/store.js';
 import { avatarEl, emptyState, toast } from '../core/ui.js';
 import { emptyFeedIllustration } from '../core/illustrations.js';
 import { mountStories } from '../components/stories.js';
 import { postCard } from '../components/postcard.js';
+import { shopFeedCard } from '../components/shop-feed-card.js';
 import { navigate } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
 
@@ -17,6 +18,14 @@ const MODES = [
   { id: 'foryou', label: 'Para ti' },
   { id: 'following', label: 'Siguiendo' },
 ];
+
+function seededRandom(seed) {
+  let value = (Number(seed) || 1) >>> 0;
+  return () => {
+    value = (value * 1664525 + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+}
 
 export function feedPage() {
   const root = el('div');
@@ -29,6 +38,7 @@ export function feedPage() {
 
   let cards = [];
   let shown = new Set();
+  let shownShop = new Set();
   let busy = false;
   let mode = sessionStorage.getItem('zuma.feedMode') === 'following' ? 'following' : 'foryou';
   let seed = Number(sessionStorage.getItem('zuma.feedSeed') || 0) || Math.floor(Math.random() * 9999) + 1;
@@ -96,6 +106,7 @@ export function feedPage() {
     cards.forEach((card) => card.destroy?.());
     cards = [];
     shown = new Set();
+    shownShop = new Set();
   }
 
   function emptyCard() {
@@ -135,19 +146,60 @@ export function feedPage() {
     list.appendChild(card.el);
   }
 
+  /**
+   * Algunas ventas de Shop se cuelan en «Para ti» aunque no sigas al vendedor.
+   * Es a propósito inestable: cambia con la sesión y a veces no aparece ninguna.
+   */
+  function shopPicks() {
+    if (mode !== 'foryou') return [];
+    const listings = shopListings({ includeSold: false })
+      .filter((item) => item.sellerId !== state.me?.id);
+    if (!listings.length) return [];
+    const random = seededRandom(seed * 31 + 7);
+    if (random() > 0.82) return [];
+    const picks = [listings[Math.floor(random() * listings.length)]];
+    if (listings.length > 2 && random() < 0.4) {
+      const rest = listings.filter((item) => item.id !== picks[0].id);
+      picks.push(rest[Math.floor(random() * rest.length)]);
+    }
+    return picks;
+  }
+
   function renderList({ append = false } = {}) {
     if (!append) {
       teardown();
       clear(list);
     }
     const order = feedOrder(state.me?.id, seed, { mode });
-    const pending = order.filter((entry) => !shown.has(entry.post.id));
 
     if (!append && !order.length) {
       list.appendChild(emptyCard());
-    } else {
-      for (const entry of pending) addCard(entry);
+      renderMore();
+      return;
     }
+
+    const picks = append ? [] : shopPicks();
+    const slots = picks.length > 1 ? [2, 8] : [3];
+    const insertAt = new Map();
+    picks.forEach((item, index) => insertAt.set(slots[index] ?? 3, item));
+
+    order.forEach((entry, index) => {
+      const shopItem = insertAt.get(index);
+      if (shopItem && !shownShop.has(shopItem.id)) {
+        list.appendChild(shopFeedCard(shopItem));
+        shownShop.add(shopItem.id);
+      }
+      if (!shown.has(entry.post.id)) addCard(entry);
+    });
+
+    // Si el muro tiene menos publicaciones que el lugar elegido, la venta va al final.
+    for (const [index, shopItem] of insertAt) {
+      if (index >= order.length && !shownShop.has(shopItem.id)) {
+        list.appendChild(shopFeedCard(shopItem));
+        shownShop.add(shopItem.id);
+      }
+    }
+
     renderMore();
   }
 
@@ -206,7 +258,7 @@ export function feedPage() {
     el: root,
     onData(topic) {
       if (topic === 'feed' || topic === 'me' || topic === 'post'
-        || topic === 'follow' || topic === 'ready') {
+        || topic === 'follow' || topic === 'ready' || topic === 'shop') {
         renderList();
       }
     },

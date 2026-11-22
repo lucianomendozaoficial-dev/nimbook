@@ -23,6 +23,40 @@ function backButton(fallback = '/inicio') {
   }, icon('arrow-left', 17), 'Volver');
 }
 
+function formatPhone(value) {
+  const digits = String(value || '');
+  if (digits.startsWith('549') && digits.length === 13) {
+    return `+54 9 ${digits.slice(3, 5)} ${digits.slice(5, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.startsWith('54') && digits.length === 12) {
+    return `+54 ${digits.slice(2, 4)} ${digits.slice(4, 8)}-${digits.slice(8)}`;
+  }
+  return `+${digits}`;
+}
+
+function contactCard(current, mine) {
+  const contact = current.contact;
+  if (mine || !contact?.type || !contact.value) return null;
+  const isWhatsApp = contact.type === 'whatsapp';
+  const text = `Hola, vi tu venta en Zuma Shop: ${current.title}`;
+  const href = isWhatsApp
+    ? `https://wa.me/${contact.value}?text=${encodeURIComponent(text)}`
+    : `https://instagram.com/${contact.value}`;
+  return el('div', { class: 'shop-contact-card' },
+    el('div', { class: 'shop-contact-card-title', text: 'Contacto del vendedor' }),
+    el('div', { class: 'shop-contact-card-row' },
+      el('a', {
+        class: `btn shop-contact-btn ${isWhatsApp ? 'whatsapp' : 'instagram'}`,
+        href, target: '_blank', rel: 'noopener noreferrer',
+      }, icon(isWhatsApp ? 'whatsapp' : 'instagram', 19),
+      isWhatsApp ? 'WhatsApp' : 'Instagram'),
+      el('span', {
+        class: 'shop-contact-value',
+        text: isWhatsApp ? formatPhone(contact.value) : `@${contact.value}`,
+      })),
+    el('div', { class: 'muted tiny', text: 'También podés escribirle por el chat privado de Zuma.' }));
+}
+
 function listingCard(item) {
   const sold = item.status === 'sold';
   return el('a', {
@@ -83,6 +117,55 @@ export function openListingForm(existing = null, onDone = null) {
   });
   description.value = existing?.description || '';
 
+  /* ------------------------------ contacto ------------------------------ */
+  let contactType = existing?.contact?.type || null;
+  const contactSwitch = el('button', {
+    class: `switch${contactType ? ' on' : ''}`, type: 'button', role: 'switch',
+    'aria-checked': contactType ? 'true' : 'false', 'aria-label': 'Agregar contacto',
+  });
+  const contactOptions = el('div', { class: 'shop-contact-opts' });
+  const contactLabel = el('label', { text: 'Número de WhatsApp' });
+  const contactInput = el('input', {
+    class: 'input', maxlength: '60', value: existing?.contact?.value || '',
+    placeholder: 'Ej. 54 9 11 5555 1234',
+  });
+  const contactBox = el('div', { class: `shop-contact-box${contactType ? '' : ' hide'}` },
+    contactOptions,
+    el('div', { class: 'field' }, contactLabel, contactInput),
+    el('span', {
+      class: 'field-hint',
+      text: 'Se muestra en la venta para que te contacten directo. Después pueden escribirte por el chat privado.',
+    }));
+
+  function paintContact() {
+    contactSwitch.classList.toggle('on', Boolean(contactType));
+    contactSwitch.setAttribute('aria-checked', contactType ? 'true' : 'false');
+    contactBox.classList.toggle('hide', !contactType);
+    contactLabel.textContent = contactType === 'instagram' ? 'Usuario de Instagram' : 'Número de WhatsApp';
+    contactInput.placeholder = contactType === 'instagram'
+      ? 'Ej. @tu.usuario'
+      : 'Ej. 54 9 11 5555 1234';
+    clear(contactOptions);
+    for (const option of [{ id: 'whatsapp', label: 'WhatsApp' }, { id: 'instagram', label: 'Instagram' }]) {
+      const active = contactType === option.id;
+      contactOptions.appendChild(el('button', {
+        class: `shop-contact-opt ${option.id}${active ? ' active' : ''}`.trim(), type: 'button',
+        'aria-pressed': active ? 'true' : 'false',
+        onclick: () => {
+          contactType = option.id;
+          paintContact();
+          contactInput.focus();
+        },
+      }, icon(option.id, 20), el('span', { text: option.label })));
+    }
+  }
+
+  contactSwitch.addEventListener('click', () => {
+    contactType = contactType ? null : 'whatsapp';
+    paintContact();
+    if (contactType) setTimeout(() => contactInput.focus(), 40);
+  });
+
   const thumbs = el('div', { class: 'shop-form-thumbs' });
   const error = el('div', { class: 'field-error hide' });
 
@@ -137,6 +220,26 @@ export function openListingForm(existing = null, onDone = null) {
       error.classList.remove('hide');
       return;
     }
+    if (contactType) {
+      const value = contactInput.value.trim();
+      if (!value) {
+        error.textContent = contactType === 'whatsapp'
+          ? 'Escribí el número de WhatsApp o desactivá el contacto.'
+          : 'Escribí el usuario de Instagram o desactivá el contacto.';
+        error.classList.remove('hide');
+        return;
+      }
+      if (contactType === 'whatsapp' && value.replace(/\D/g, '').length < 8) {
+        error.textContent = 'Escribí el WhatsApp con código de país (ej. 54 9 11 5555 1234).';
+        error.classList.remove('hide');
+        return;
+      }
+      if (contactType === 'instagram' && !/^@?[a-zA-Z0-9._]{2,30}$/.test(value)) {
+        error.textContent = 'Escribí un usuario de Instagram válido (sin espacios).';
+        error.classList.remove('hide');
+        return;
+      }
+    }
 
     submit.disabled = true;
     submit.textContent = 'Guardando…';
@@ -160,6 +263,7 @@ export function openListingForm(existing = null, onDone = null) {
         location: location.value,
         description: description.value,
         media,
+        contact: contactType ? { type: contactType, value: contactInput.value } : null,
       };
 
       const item = editing
@@ -192,7 +296,14 @@ export function openListingForm(existing = null, onDone = null) {
       el('div', { class: 'field grow' }, el('label', { text: 'Estado' }), condition)),
     el('div', { class: 'field' }, el('label', { text: 'Ubicación' }), location),
     el('div', { class: 'field' }, el('label', { text: 'Descripción' }), description),
-    el('p', { class: 'muted small', text: `Vas a publicar como ${displayName(me)}. Cualquiera puede escribirte desde Shop.` }),
+    el('div', { class: 'shop-contact-field' },
+      el('div', { class: 'shop-contact-head' },
+        el('div', { class: 'grow' },
+          el('div', { class: 'strong', text: 'Agregar contacto' }),
+          el('div', { class: 'muted small', text: 'WhatsApp o Instagram para que te escriban directo.' })),
+        contactSwitch),
+      contactBox),
+    el('p', { class: 'muted small', text: `Vas a publicar como ${displayName(me)}. También pueden escribirte por el chat privado de Zuma.` }),
     error);
 
   const api = openModal({
@@ -203,6 +314,7 @@ export function openListingForm(existing = null, onDone = null) {
   });
 
   renderThumbs();
+  paintContact();
   setTimeout(() => title.focus(), 80);
   return api;
 }
@@ -210,7 +322,7 @@ export function openListingForm(existing = null, onDone = null) {
 /* -------------------------------- listado -------------------------------- */
 
 export function shopPage() {
-  const root = el('div');
+  const root = el('div', { class: 'shop-page' });
   let query = '';
   let category = 'all';
 
@@ -284,20 +396,16 @@ export function shopPage() {
   }
 
   root.append(
-    el('div', { class: 'page-head' },
-      el('div', { class: 'grow' },
-        el('h1', { text: 'Shop' }),
-        el('p', { class: 'muted small', text: 'Comprá y vendé con la gente de Zuma, cerca de casa.' })),
-      el('button', {
-        class: 'btn primary sm', type: 'button',
-        onclick: () => openListingForm(null, (item) => navigate(`/tienda/${item.id}`)),
-      }, icon('plus', 16), 'Vender algo')),
     el('div', { class: 'page-card shop-toolbar' },
       el('div', { class: 'shop-search-row' },
         el('div', { class: 'search-inline grow' }, icon('search', 18), searchInput),
         counter)),
     chips,
-    grid);
+    grid,
+    el('button', {
+      class: 'shop-fab', type: 'button', 'aria-label': 'Vender algo en Shop',
+      onclick: () => openListingForm(null, (item) => navigate(`/tienda/${item.id}`)),
+    }, icon('plus', 22), el('span', { class: 'shop-fab-label', text: 'Vender algo' })));
 
   renderChips();
   renderGrid();
@@ -455,6 +563,7 @@ export function shopItemPage(id) {
         el('div', { class: 'grow' },
           el('div', { class: 'shop-seller-name', text: displayName(seller) }),
           el('div', { class: 'muted small', text: 'Vendedor en Shop' }))),
+      contactCard(current, mine),
       current.description
         ? el('div', { class: 'shop-desc' },
           el('div', { class: 'shop-desc-title', text: 'Descripción' }),
