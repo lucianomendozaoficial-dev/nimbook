@@ -17,7 +17,9 @@
     "shareOf": null,
     "groupId": null,
     "createdAt": "2026-11-22T18:36:39.706Z",
-    "reactions": {},
+    "reactions": {
+      "like": 1
+    },
     "commentsCount": 0
   }
 }
