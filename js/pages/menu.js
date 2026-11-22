@@ -59,6 +59,16 @@ export function menuPage() {
       el('div', { class: 'page-card' },
         el('div', { class: 'menu-section' }, 'Comunidad'),
         row({ iconName: 'groups', title: 'Grupos y canales', sub: 'Tus comunidades y canales', href: '#/grupos' }),
+        row({
+          iconName: 'shop', title: 'Shop', sub: 'Comprá y vendé con tu gente', href: '#/tienda',
+        }),
+        row({
+          iconName: 'message', title: 'Mensajes',
+          sub: state.ui.unreadMessages
+            ? `${state.ui.unreadMessages} sin leer`
+            : 'Conversaciones privadas',
+          href: '#/mensajes',
+        }),
         row({ iconName: 'bell', title: 'Notificaciones', sub: 'Lo último que pasó', href: '#/notificaciones' }),
         row({ iconName: 'search', title: 'Buscar', sub: 'Personas, publicaciones y grupos', href: '#/buscar' })),
       el('div', { class: 'page-card' },

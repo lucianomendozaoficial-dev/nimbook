@@ -211,7 +211,12 @@ export function profilePage(username, { preview = false } = {}) {
         }, icon('edit', 16), 'Editar perfil'),
         el('a', { class: 'btn', href: `#/u/${state.me.username}` }, icon('user', 16), 'Ver como público'));
     } else {
-      actions.append(followButton(user, { size: 'lg', onChange: () => render() }));
+      actions.append(
+        followButton(user, { size: 'lg', onChange: () => render() }),
+        el('button', {
+          class: 'btn', type: 'button',
+          onclick: () => navigate(`/mensajes/${user.username}`),
+        }, icon('message', 16), 'Mensaje'));
     }
 
     return el('div', { class: 'profile-header' },

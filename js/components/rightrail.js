@@ -4,7 +4,8 @@
 import { el, clear } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, followingOf, followSuggestions, mutualFollowers, countFollowers,
+  state, displayName, userById, followingOf, followSuggestions, mutualFollowers,
+  countFollowers, inboxSorted,
 } from '../core/store.js';
 import { avatarEl } from '../core/ui.js';
 import { followButton } from './follow-button.js';
@@ -49,6 +50,38 @@ export function mountRightRail() {
           class: 'rail-item', href: '#/seguidores/siguiendo',
           style: { color: 'var(--brand)', fontWeight: '600' },
         }, el('span', { class: 'name', text: `Ver las ${following.length} personas que seguís` })));
+      }
+    }
+
+    const conversations = inboxSorted(state.inbox).slice(0, 4);
+    if (conversations.length) {
+      root.appendChild(el('div', { class: 'rail-sep' }));
+      root.appendChild(el('div', { class: 'rail-title' },
+        el('span', { text: 'Mensajes' }),
+        el('a', {
+          class: 'link small', href: '#/mensajes',
+          style: { fontSize: '13px', fontWeight: '600' },
+        }, 'Ver todos')));
+      for (const entry of conversations) {
+        const person = userById(entry.withId);
+        if (!person) continue;
+        root.appendChild(el('a', {
+          class: 'rail-item', href: `#/mensajes/${person.username}`, title: entry.lastText || '',
+        },
+        avatarEl(person, 'sm'),
+        el('div', { class: 'grow', style: { minWidth: '0' } },
+          el('div', {
+            style: {
+              fontSize: '14.5px', fontWeight: '600', overflow: 'hidden',
+              textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            },
+            text: displayName(person),
+          }),
+          el('div', {
+            class: 'dim tiny',
+            style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+            text: entry.lastFromId === me.id ? `Vos: ${entry.lastText || ''}` : (entry.lastText || ''),
+          }))));
       }
     }
 

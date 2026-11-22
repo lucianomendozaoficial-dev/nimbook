@@ -28,8 +28,15 @@ export const state = {
   stories: [],
   notifications: [],
 
+  shopIndex: [],           // [{ id, sellerId, title, price, ... }]
+  shopItems: new Map(),    // id -> ficha completa del producto
+
+  inbox: [],               // [{ threadId, withId, lastText, lastAt, lastFromId, unread }]
+  threads: new Map(),      // threadId -> { messages, loaded, at }
+
   ui: {
     unreadNotifs: 0,
+    unreadMessages: 0,
     lastSync: 0,
     online: true,
   },
@@ -80,6 +87,19 @@ export function attach(cfg) {
     if (state.me && path === P.followers(state.me.id)) {
       const doc = cachePeek(path);
       state.followers = new Set(doc?.followers || []);
+    }
+    if (path === P.shopIndex) {
+      const doc = cachePeek(path);
+      state.shopIndex = doc?.items || [];
+    }
+    if (path.startsWith('data/tienda/') && path !== P.shopIndex) {
+      const doc = cachePeek(path);
+      if (doc?.item) state.shopItems.set(doc.item.id, doc.item);
+    }
+    if (state.me && path === P.inbox(state.me.id)) {
+      const doc = cachePeek(path);
+      state.inbox = Array.isArray(doc?.threads) ? doc.threads : [];
+      state.ui.unreadMessages = countUnreadMessages(state.inbox);
     }
     notify('write', { path });
   });
@@ -157,7 +177,30 @@ export async function loadFeedPage({ reset = false } = {}) {
     posts.push(...batch.filter(Boolean));
   }
   await ensureUsers(posts.map((post) => post.authorId));
-  notify('feed');
+  // Sin aviso: quien llama decide cuándo volver a pintar el muro (así "cargar
+  // más" agrega publicaciones al final sin reordenar las que ya se veían).
+  return posts.length;
+}
+
+/**
+ * Carga unas pocas publicaciones de gente que no seguís para que el muro tenga
+ * contenido mezclado desde la primera pantalla. Son lecturas por CDN: no gastan
+ * la API de GitHub.
+ */
+export async function loadDiscoveryPage(viewerId, limit = 8) {
+  if (!viewerId) return 0;
+  const candidates = state.feedIndex
+    .filter((entry) => entry.authorId !== viewerId && !isFollowing(viewerId, entry.authorId))
+    .filter((entry) => !state.posts.has(entry.id))
+    .slice(0, limit);
+  if (!candidates.length) return 0;
+
+  const posts = [];
+  for (let i = 0; i < candidates.length; i += 6) {
+    const batch = await Promise.all(candidates.slice(i, i + 6).map((entry) => loadPost(entry.id)));
+    posts.push(...batch.filter(Boolean));
+  }
+  await ensureUsers(posts.map((post) => post.authorId));
   return posts.length;
 }
 
@@ -192,6 +235,8 @@ export async function loadNotifications(userId) {
   const doc = await docJson(P.notifications(userId));
   state.notifications = (doc?.items || []).slice(0, 60);
   state.ui.unreadNotifs = state.notifications.filter((item) => !item.read).length;
+  const actors = [...new Set(state.notifications.map((item) => item.actorId).filter(Boolean))];
+  if (actors.length) await ensureUsers(actors.slice(0, 30));
   return state.notifications;
 }
 
@@ -207,6 +252,79 @@ export async function loadStories() {
   state.stories = (doc?.stories || []).filter((story) =>
     story.createdAt && now - new Date(story.createdAt).getTime() < 24 * 3600 * 1000);
   return state.stories;
+}
+
+/* -------------------------------- tienda --------------------------------- */
+
+export async function loadShopIndex({ fresh = false } = {}) {
+  const doc = await docJson(P.shopIndex, { fresh });
+  state.shopIndex = Array.isArray(doc?.items) ? doc.items : [];
+  return state.shopIndex;
+}
+
+export async function loadShopItem(id, { force = false } = {}) {
+  if (!id) return null;
+  if (!force && state.shopItems.has(id)) return state.shopItems.get(id);
+  const doc = await docJson(P.shopItem(id), { fresh: force });
+  if (doc?.item) {
+    state.shopItems.set(id, doc.item);
+    return doc.item;
+  }
+  return state.shopItems.get(id) || null;
+}
+
+/* ------------------------------- mensajes -------------------------------- */
+
+export async function loadInbox(userId, { fresh = false } = {}) {
+  if (!userId) return [];
+  const doc = await docJson(P.inbox(userId), { fresh });
+  const list = Array.isArray(doc?.threads) ? doc.threads : [];
+  if (userId === state.me?.id) {
+    state.inbox = list;
+    state.ui.unreadMessages = countUnreadMessages(list);
+  }
+  const partners = list.map((entry) => entry.withId).filter(Boolean);
+  if (partners.length) await ensureUsers(partners.slice(0, 24));
+  return list;
+}
+
+export async function loadThread(threadId, { force = false } = {}) {
+  if (!threadId) return null;
+  const cached = state.threads.get(threadId);
+  if (cached?.loaded && !force && Date.now() - (cached.at || 0) < 20000) return cached;
+  const doc = await docJson(P.thread(threadId), { fresh: force });
+  const messages = Array.isArray(doc?.thread?.messages) ? doc.thread.messages : [];
+  const entry = { threadId, messages, loaded: true, at: Date.now() };
+  state.threads.set(threadId, entry);
+  const authors = messages.map((message) => message.fromId).filter(Boolean);
+  if (authors.length) await ensureUsers([...new Set(authors)].slice(0, 24));
+  return entry;
+}
+
+export function threadOf(threadId) {
+  return state.threads.get(threadId) || null;
+}
+
+export function messagesOf(threadId) {
+  return threadOf(threadId)?.messages || [];
+}
+
+export function countUnreadMessages(list = state.inbox) {
+  return (list || []).reduce((total, entry) => total + (Number(entry?.unread) || 0), 0);
+}
+
+export function inboxSorted(list = state.inbox) {
+  return [...(list || [])].sort((a, b) => new Date(b.lastAt || 0) - new Date(a.lastAt || 0));
+}
+
+/** Id del hilo compartido entre dos personas (las dos leen el mismo archivo). */
+export function threadIdFor(a, b) {
+  return [a, b].filter(Boolean).sort().join('__');
+}
+
+export function conversationWith(userId) {
+  const threadId = threadIdFor(state.me?.id, userId);
+  return state.inbox.find((entry) => entry.threadId === threadId) || null;
 }
 
 export async function loadComments(postId, { force = false } = {}) {
@@ -433,6 +551,62 @@ export function searchPeople(query, limit = 20) {
     .map((user) => state.users.get(user.id) || user);
 }
 
+/* --------------------------------- shop ---------------------------------- */
+
+export const SHOP_CATEGORIES = [
+  { id: 'tecnologia', label: 'Tecnología' },
+  { id: 'hogar', label: 'Hogar' },
+  { id: 'moda', label: 'Moda' },
+  { id: 'vehiculos', label: 'Vehículos' },
+  { id: 'deportes', label: 'Deportes' },
+  { id: 'arte', label: 'Arte y diseño' },
+  { id: 'servicios', label: 'Servicios' },
+  { id: 'otros', label: 'Otros' },
+];
+
+export const SHOP_CONDITIONS = [
+  { id: 'nuevo', label: 'Nuevo' },
+  { id: 'como-nuevo', label: 'Como nuevo' },
+  { id: 'usado', label: 'Usado' },
+  { id: 'repuestos', label: 'Para repuestos' },
+];
+
+export const shopCategoryLabel = (category) =>
+  SHOP_CATEGORIES.find((item) => item.id === category)?.label || 'Otros';
+
+export const shopConditionLabel = (condition) =>
+  SHOP_CONDITIONS.find((item) => item.id === condition)?.label || '';
+
+const normText = (value) => String(value || '')
+  .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** Publicaciones de Shop filtradas (búsqueda, categoría y vendedor). */
+export function shopListings({ query = '', category = 'all', includeSold = true, sellerId = null } = {}) {
+  const q = normText(query).trim();
+  return state.shopIndex
+    .filter((item) => item && item.id)
+    .filter((item) => includeSold || item.status !== 'sold')
+    .filter((item) => category === 'all' || item.category === category)
+    .filter((item) => !sellerId || item.sellerId === sellerId)
+    .filter((item) => !q
+      || normText(item.title).includes(q)
+      || normText(item.location).includes(q)
+      || normText(shopCategoryLabel(item.category)).includes(q))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+}
+
+export function shopItemById(id) {
+  const full = state.shopItems.get(id);
+  const light = state.shopIndex.find((item) => item.id === id);
+  if (full && light) return { ...light, ...full };
+  return full || light || null;
+}
+
+export function shopBySeller(userId) {
+  return shopListings({ sellerId: userId }).filter((item) => item.status !== 'sold');
+}
+
+
 /* --------------------------- orden del muro ------------------------------ */
 
 const hashSeed = (text) => {
@@ -444,54 +618,155 @@ const hashSeed = (text) => {
   return Math.abs(hash);
 };
 
-/**
- * Mezcla tipo Facebook: lo nuevo pesa más, lo de las personas que seguís tiene
- * prioridad y lo que tiene más movimiento sube un poco. Un azar estable por
- * sesión evita que el orden quede siempre igual.
- */
-export function rankedFeed(viewerId, seed = 1) {
-  const now = Date.now();
-  const scored = [...state.posts.values()]
-    .filter((post) => canSeePost(post, viewerId))
-    .map((post) => {
-      const hours = Math.max(0, (now - new Date(post.createdAt).getTime()) / 3600000);
-      const recency = 1 / (1 + hours / 7);
-      const followed = isFollowing(viewerId, post.authorId) ? 1.45 : 1;
-      const mine = post.authorId === viewerId ? 1.2 : 1;
-      const reactions = Object.values(post.reactions || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
-      const engagement = 1 + Math.log1p(reactions + (post.commentsCount || 0) * 2) * 0.16;
-      const jitter = 0.82 + (hashSeed(post.id + ':' + seed) % 100) / 260;
-      return { post, score: recency * followed * mine * engagement * jitter };
-    })
-    .sort((a, b) => b.score - a.score);
+function seededRandom(seed) {
+  let value = (Number(seed) || 1) >>> 0;
+  return () => {
+    value = (value * 1664525 + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+}
 
-  const newest = scored.reduce((best, item) => (
-    !best || new Date(item.post.createdAt) > new Date(best.post.createdAt) ? item : best), null);
-  if (newest) {
-    const index = scored.indexOf(newest);
-    const target = Math.min(2, Math.floor(scored.length / 3));
-    if (index > target) {
-      scored.splice(index, 1);
-      scored.splice(target, 0, newest);
+const byScore = (a, b) => b.score - a.score;
+
+/** Mueve el orden dentro de bloques chicos: da variedad sin perder lo relevante. */
+function softShuffle(list, seed, window = 3) {
+  if (list.length < 3) return [...list];
+  const random = seededRandom(seed);
+  const out = [...list];
+  for (let start = 1; start < out.length; start += window) {
+    const slice = out.slice(start, start + window);
+    for (let i = slice.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(random() * (i + 1));
+      [slice[i], slice[j]] = [slice[j], slice[i]];
+    }
+    out.splice(start, slice.length, ...slice);
+  }
+  return out;
+}
+
+/** Mete una publicación de descubrimiento cada `every` publicaciones prioritarias. */
+function interleave(primary, secondary, every = 3) {
+  const out = [];
+  let next = 0;
+  for (let i = 0; i < primary.length; i += 1) {
+    out.push(primary[i]);
+    const canInsert = next < secondary.length && i >= 1 && (i + 1) % every === 0;
+    if (canInsert) {
+      out.push(secondary[next]);
+      next += 1;
     }
   }
-  return scored.map((item) => item.post);
+  while (next < secondary.length) {
+    out.push(secondary[next]);
+    next += 1;
+  }
+  return out;
 }
+
+/** Evita dos publicaciones seguidas de la misma persona. */
+function avoidSameAuthorStreak(list) {
+  const out = [...list];
+  for (let i = 1; i < out.length; i += 1) {
+    if (out[i].post.authorId !== out[i - 1].post.authorId) continue;
+    const limit = Math.min(out.length, i + 4);
+    for (let j = i + 1; j < limit; j += 1) {
+      if (out[j].post.authorId !== out[i - 1].post.authorId) {
+        [out[i], out[j]] = [out[j], out[i]];
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function feedScore(post, viewerId, seed, now) {
+  const created = Date.parse(post.createdAt) || now;
+  const hours = Math.max(0, (now - created) / 3_600_000);
+  const recency = 1 / Math.pow(1 + hours / 9, 1.15);
+  const reactions = Object.values(post.reactions || {})
+    .reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const engagement = 1 + Math.log1p(reactions + (Number(post.commentsCount) || 0) * 2.4) * 0.17;
+  const mine = post.authorId === viewerId;
+  const followed = !mine && isFollowing(viewerId, post.authorId);
+  const group = post.groupId ? state.groups.find((item) => item.id === post.groupId) : null;
+  const inMyGroup = Boolean(group && viewerId && (group.memberIds || []).includes(viewerId));
+  const affinity = mine ? 1.3 : followed ? 1.55 : inMyGroup ? 1.12 : 1;
+  const mediaBonus = (post.media || []).length ? 1.03 : 1;
+  const jitter = 0.9 + (hashSeed(`${post.id}:${seed}`) % 100) / 500;
+  return {
+    post,
+    mine,
+    followed,
+    inMyGroup,
+    score: recency * engagement * affinity * mediaBonus * jitter,
+  };
+}
+
+/**
+ * Orden del muro estilo Facebook:
+ * — lo tuyo, lo de las personas que seguís y lo de tus grupos tiene prioridad;
+ * — esa prioridad NO queda en orden cronológico: se mezcla en bloques chicos;
+ * — entre medio entran publicaciones de gente que no seguís (marcadas como
+ *   sugerencia), para que el muro siempre tenga cosas nuevas;
+ * — se evita que aparezcan dos publicaciones seguidas de la misma persona.
+ *
+ * @returns {Array<{post: object, suggested: boolean}>}
+ */
+export function feedOrder(viewerId, seed = 1, { mode = 'foryou' } = {}) {
+  const now = Date.now();
+  const entries = [...state.posts.values()]
+    .filter((post) => canSeePost(post, viewerId))
+    .map((post) => feedScore(post, viewerId, seed, now));
+
+  if (mode === 'following') {
+    return entries
+      .filter((entry) => entry.mine || entry.followed)
+      .sort((a, b) => new Date(b.post.createdAt) - new Date(a.post.createdAt))
+      .map((entry) => ({ post: entry.post, suggested: false }));
+  }
+
+  const priority = entries.filter((entry) => entry.mine || entry.followed || entry.inMyGroup);
+  const discovery = entries.filter((entry) => !entry.mine && !entry.followed && !entry.inMyGroup);
+
+  if (!priority.length) {
+    return softShuffle([...discovery].sort(byScore), seed + 7, 4)
+      .map((entry) => ({ post: entry.post, suggested: true }));
+  }
+
+  const primary = softShuffle([...priority].sort(byScore), seed, 4);
+  const secondary = softShuffle([...discovery].sort(byScore), seed + 7, 4);
+  return avoidSameAuthorStreak(interleave(primary, secondary, 3)).map((entry) => ({
+    post: entry.post,
+    suggested: !entry.mine && !entry.followed && !entry.inMyGroup,
+  }));
+}
+
+/** Compatibilidad: sólo la lista de publicaciones. */
+export function rankedFeed(viewerId, seed = 1, options = {}) {
+  return feedOrder(viewerId, seed, options).map((entry) => entry.post);
+}
+
 /* --------------------------------- arranque ------------------------------ */
 
 export async function bootData() {
-  await Promise.all([loadUserIndex({ fresh: true }), loadFeedIndex({ fresh: true })]);
+  await Promise.all([
+    loadUserIndex({ fresh: true }),
+    loadFeedIndex({ fresh: true }),
+    loadShopIndex({ fresh: true }),
+  ]);
   if (state.me) {
     await Promise.all([
       loadLikes(state.me.id),
       loadFollowing(state.me.id),
       loadFollowers(state.me.id),
       loadNotifications(state.me.id),
+      loadInbox(state.me.id),
       loadGroups(),
       loadStories(),
     ]);
   }
   await loadFeedPage({ reset: true });
+  await loadDiscoveryPage(state.me?.id);
   state.ready = true;
   notify('ready');
 }
@@ -501,6 +776,7 @@ export async function refreshAll() {
   await Promise.all([
     loadUserIndex({ fresh: true }),
     loadFeedIndex({ fresh: true }),
+    loadShopIndex({ fresh: true }),
     loadGroups(),
     loadStories(),
   ]);
@@ -510,8 +786,10 @@ export async function refreshAll() {
       loadFollowing(state.me.id),
       loadFollowers(state.me.id),
       loadNotifications(state.me.id),
+      loadInbox(state.me.id),
     ]);
   }
   await loadFeedPage({ reset: true });
+  await loadDiscoveryPage(state.me?.id);
   notify('refresh');
 }

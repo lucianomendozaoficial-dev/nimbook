@@ -5,7 +5,7 @@ import { queueDoc, writeNow, deleteDoc, newId, nowISO, forget } from './net.js';
 import { P } from './paths.js';
 import {
   state, notify, loadUserIndex, loadUser, loadPost, loadComments,
-  isFollowing, followingIdsOf,
+  isFollowing, followingIdsOf, threadIdFor, countUnreadMessages, loadShopItem,
 } from './store.js';
 import { hashPassword, verifyPassword } from './crypto.js';
 import { ValidationError } from './auth.js';
@@ -20,8 +20,9 @@ const norm = (value) => String(value || '').trim().replace(/\s+/g, ' ');
 async function notifySoon(userId, payload) {
   if (!userId || userId === state.me?.id) return;
   // Solo avisamos de personas que la otra persona sigue (las de "nuevo
-  // seguidor" siempre llegan, para que sepa quién lo empezó a seguir).
-  if (payload.type !== 'follow') {
+  // seguidor" siempre llegan, para que sepa quién lo empezó a seguir; los
+  // mensajes privados también, porque son para esa persona).
+  if (payload.type !== 'follow' && payload.type !== 'message') {
     try {
       const following = await followingIdsOf(userId);
       if (!following.includes(state.me.id)) return;
@@ -579,6 +580,227 @@ export async function deleteStory(storyId) {
     return data;
   }, { delay: 0, message: 'Zuma: borrar historia' });
   notify('stories');
+}
+
+/* ---------------------------------- shop --------------------------------- */
+
+const shopEntry = (item) => ({
+  id: item.id,
+  sellerId: item.sellerId,
+  title: item.title,
+  price: item.price,
+  currency: item.currency,
+  category: item.category,
+  condition: item.condition,
+  location: item.location,
+  cover: item.media?.[0]?.path || null,
+  status: item.status || 'available',
+  createdAt: item.createdAt,
+});
+
+function validateListing({ title, price }) {
+  const cleanTitle = norm(title);
+  if (cleanTitle.length < 4) throw new ValidationError('Poné un título de al menos 4 letras.');
+  const amount = Number(price);
+  if (!Number.isFinite(amount) || amount < 0) throw new ValidationError('Poné un precio válido.');
+  if (amount > 99_999_999) throw new ValidationError('Ese precio es demasiado alto.');
+  return { title: cleanTitle.slice(0, 90), price: Math.round(amount) };
+}
+
+export async function createListing({
+  title = '', description = '', price = 0, currency = 'ARS', category = 'otros',
+  condition = 'usado', location = '', media = [],
+} = {}) {
+  const me = requireMe();
+  const checked = validateListing({ title, price });
+  const item = {
+    id: newId('l'),
+    sellerId: me.id,
+    title: checked.title,
+    description: String(description || '').trim().slice(0, 1500),
+    price: checked.price,
+    currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'ARS',
+    category: String(category || 'otros'),
+    condition: String(condition || 'usado'),
+    location: norm(location).slice(0, 60),
+    media: (media || []).slice(0, 8),
+    status: 'available',
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+  };
+
+  await queueDoc(P.shopItem(item.id), () => ({ version: 1, item }), {
+    delay: 0, message: 'Zuma: nuevo producto',
+  });
+
+  const entry = shopEntry(item);
+  await queueDoc(P.shopIndex, (doc) => {
+    const data = doc && Array.isArray(doc.items) ? doc : { version: 1, items: [] };
+    data.items = [entry, ...data.items.filter((row) => row.id !== entry.id)].slice(0, 500);
+    return data;
+  }, { delay: 0, message: 'Zuma: tienda' });
+
+  state.shopItems.set(item.id, item);
+  state.shopIndex = [entry, ...state.shopIndex.filter((row) => row.id !== item.id)].slice(0, 500);
+  notify('shop');
+  return item;
+}
+
+export async function updateListing(id, patch = {}) {
+  const me = requireMe();
+  let current = state.shopItems.get(id);
+  if (!current) {
+    const light = state.shopIndex.find((row) => row.id === id);
+    current = (await loadShopItem(id)) || (light ? { ...light } : null);
+  }
+  if (!current) throw new ValidationError('No encontramos ese producto.');
+  if (current.sellerId !== me.id) throw new ValidationError('Ese producto no es tuyo.');
+
+  const next = { ...current, ...patch, id, sellerId: me.id, updatedAt: nowISO() };
+  if ('title' in patch || 'price' in patch) {
+    const checked = validateListing({ title: next.title, price: next.price });
+    next.title = checked.title;
+    next.price = checked.price;
+  }
+  if ('media' in patch) next.media = (patch.media || []).slice(0, 8);
+  if ('status' in patch) next.status = patch.status === 'sold' ? 'sold' : 'available';
+
+  state.shopItems.set(id, next);
+
+  await queueDoc(P.shopItem(id), () => ({ version: 1, item: next }), {
+    delay: 300, message: 'Zuma: editar producto',
+  });
+
+  const entry = shopEntry(next);
+  state.shopIndex = state.shopIndex.map((row) => (row.id === id ? { ...row, ...entry } : row));
+  await queueDoc(P.shopIndex, (doc) => {
+    if (!doc?.items) return undefined;
+    return {
+      ...doc,
+      items: doc.items.map((row) => (row.id === id ? { ...row, ...entry } : row)),
+    };
+  }, { delay: 400, message: 'Zuma: tienda' }).catch(() => {});
+
+  notify('shop');
+  return next;
+}
+
+export async function setListingStatus(id, status) {
+  return updateListing(id, { status: status === 'sold' ? 'sold' : 'available' });
+}
+
+export async function deleteListing(id) {
+  const me = requireMe();
+  const item = state.shopItems.get(id) || state.shopIndex.find((row) => row.id === id);
+  if (!item) return;
+  if (item.sellerId !== me.id) throw new ValidationError('Ese producto no es tuyo.');
+
+  state.shopIndex = state.shopIndex.filter((row) => row.id !== id);
+  state.shopItems.delete(id);
+  forget(P.shopItem(id));
+
+  await queueDoc(P.shopIndex, (doc) => {
+    if (!doc?.items) return undefined;
+    return { ...doc, items: doc.items.filter((row) => row.id !== id) };
+  }, { delay: 0, message: 'Zuma: borrar producto' });
+  await deleteDoc(P.shopItem(id), 'Zuma: borrar producto').catch(() => {});
+  notify('shop');
+}
+
+/* ------------------------------- mensajes -------------------------------- */
+
+function withInboxEntry(doc, entry, mode = 'mine') {
+  const data = doc && Array.isArray(doc.threads) ? doc : { version: 1, threads: [] };
+  const previous = data.threads.find((row) => row.threadId === entry.threadId);
+  const unread = mode === 'inbox'
+    ? (Number(previous?.unread) || 0) + 1
+    : 0;
+  const next = { ...entry, unread };
+  data.threads = [next, ...data.threads.filter((row) => row.threadId !== entry.threadId)].slice(0, 100);
+  return data;
+}
+
+/** Envía un mensaje privado. Las dos personas leen el mismo archivo de hilo. */
+export async function sendMessage(toUserId, text, { silent = false } = {}) {
+  const me = requireMe();
+  const other = state.users.get(toUserId) || await loadUser(toUserId);
+  if (!other) throw new ValidationError('No encontramos a esa persona.');
+  const clean = String(text || '').trim();
+  if (!clean) throw new ValidationError('Escribí un mensaje.');
+  if (clean.length > 4000) throw new ValidationError('El mensaje es demasiado largo.');
+
+  const threadId = threadIdFor(me.id, toUserId);
+  const message = {
+    id: newId('m'),
+    fromId: me.id,
+    text: clean,
+    createdAt: nowISO(),
+  };
+  const stamp = message.createdAt;
+  const inboxEntry = {
+    threadId,
+    withId: toUserId,
+    lastText: clean.slice(0, 140),
+    lastAt: stamp,
+    lastFromId: me.id,
+  };
+
+  // 1) el hilo es la fuente de verdad: si esto falla, el mensaje no se envía
+  await queueDoc(P.thread(threadId), (doc) => {
+    const data = doc?.thread ? doc : {
+      version: 1,
+      thread: { id: threadId, memberIds: [me.id, toUserId], messages: [] },
+    };
+    data.thread.messages = [...(data.thread.messages || []), message].slice(-400);
+    data.thread.updatedAt = stamp;
+    return data;
+  }, { delay: 200, message: 'Zuma: mensaje' });
+
+  const cached = state.threads.get(threadId);
+  if (cached) cached.messages = [...cached.messages, message].slice(-400);
+  else state.threads.set(threadId, { threadId, messages: [message], loaded: true, at: Date.now() });
+
+  // 2) bandejas: la mía queda sin pendientes, la de la otra persona suma uno
+  state.inbox = [
+    { ...inboxEntry, unread: 0 },
+    ...state.inbox.filter((row) => row.threadId !== threadId),
+  ];
+  state.ui.unreadMessages = countUnreadMessages(state.inbox);
+
+  await Promise.all([
+    queueDoc(P.inbox(me.id), (doc) => withInboxEntry(doc, inboxEntry, 'mine'), {
+      delay: 400, message: 'Zuma: mensajes',
+    }).catch(() => {}),
+    queueDoc(P.inbox(toUserId), (doc) => withInboxEntry(doc, inboxEntry, 'inbox'), {
+      delay: 400, message: 'Zuma: mensajes',
+    }).catch(() => {}),
+  ]);
+
+  if (!silent) notifySoon(toUserId, { type: 'message', actorId: me.id });
+  notify('messages');
+  return message;
+}
+
+/** Marca como leída la conversación con alguien (mi bandeja). */
+export async function markThreadRead(otherUserId) {
+  const me = state.me;
+  if (!me || !otherUserId) return;
+  const threadId = threadIdFor(me.id, otherUserId);
+  const entry = state.inbox.find((row) => row.threadId === threadId);
+  if (!entry || !entry.unread) return;
+
+  state.inbox = state.inbox.map((row) => (row.threadId === threadId ? { ...row, unread: 0 } : row));
+  state.ui.unreadMessages = countUnreadMessages(state.inbox);
+
+  await queueDoc(P.inbox(me.id), (doc) => {
+    if (!doc?.threads) return undefined;
+    return {
+      ...doc,
+      threads: doc.threads.map((row) => (row.threadId === threadId ? { ...row, unread: 0 } : row)),
+    };
+  }, { delay: 600, message: 'Zuma: mensajes leídos' }).catch(() => {});
+
+  notify('messages');
 }
 
 export async function loadMoreComments(postId) {

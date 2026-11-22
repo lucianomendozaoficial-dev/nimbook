@@ -181,6 +181,19 @@ export function plural(n, one, many) {
   return `${formatCount(n)} ${n === 1 ? one : many}`;
 }
 
+/** Precio en formato local: $ 12.500 o US$ 1.200. */
+export function money(value, currency = 'ARS') {
+  const amount = Number(value) || 0;
+  const code = String(currency || 'ARS').toUpperCase() === 'USD' ? 'USD' : 'ARS';
+  try {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: code, maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return code === 'USD' ? `US$ ${amount}` : `$ ${amount}`;
+  }
+}
+
 export function initials(name = '') {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '?';

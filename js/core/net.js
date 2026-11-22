@@ -143,6 +143,8 @@ export async function fetchDoc(path, { fresh = false, maxAge = BUCKET } = {}) {
 
 export function fetchImageUrl(path) {
   if (!path) return '';
+  // Vistas previas locales (blob:) o imágenes ya absolutas: se usan tal cual.
+  if (/^(blob:|data:|https?:)/i.test(path)) return path;
   if (cfg.readBase) {
     const base = cfg.readBase.replace(/\/$/, '');
     return `${base}/${path}`;
@@ -153,6 +155,7 @@ export function fetchImageUrl(path) {
 /** Respaldo directo para una imagen (si el CDN falla). */
 export function fetchImageFallback(path) {
   if (!path || cfg.readBase) return '';
+  if (/^(blob:|data:|https?:)/i.test(path)) return '';
   return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${path}`;
 }
 

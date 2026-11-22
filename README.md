@@ -16,11 +16,30 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 
 ---
 
+## Novedades: muro mezclado, Shop y mensajes privados
+
+| Muro «Para ti» | Sugerencias mezcladas en el muro |
+| --- | --- |
+| ![Muro](docs/zuma/muro-para-ti.jpg) | ![Sugerencia en el muro](docs/zuma/muro-sugerencia.jpg) |
+
+| Shop | Producto en Shop |
+| --- | --- |
+| ![Shop](docs/zuma/shop.jpg) | ![Producto](docs/zuma/shop-producto.jpg) |
+
+| Mensajes privados | Chat en el móvil |
+| --- | --- |
+| ![Mensajes](docs/zuma/mensajes.jpg) | ![Chat móvil](docs/zuma/mensajes-movil.jpg) |
+
+---
+
 ## Características
 
 **Red social**
 - Registro e inicio de sesión (contraseñas cifradas con PBKDF2-SHA256).
 - Publicaciones con texto, hasta 10 fotos, sentimiento, ubicación y privacidad (público / seguidores / solo yo).
+- Muro con orden tipo Facebook: lo tuyo, lo de las personas que seguís y lo de tus grupos tiene prioridad, pero **no queda en orden cronológico**; se mezcla en bloques con publicaciones de gente que no seguís (marcadas como «Sugerencia para ti») y se evita que aparezcan dos publicaciones seguidas de la misma persona. Pestañas **Para ti** y **Siguiendo**, y al cargar más se agrega al final sin desordenar lo que ya estabas viendo.
+- **Shop**: mercado con productos de la gente de Zuma, búsqueda y categorías, publicación con fotos, precio, estado y ubicación, ficha con vendedor, botón para escribirle, marcar como vendido y eliminar lo propio.
+- **Mensajes privados**: bandeja con conversaciones y contador de no leídos, chat uno a uno (enviar, actualizar, buscar gente para escribirle), aviso en la campana y atajo desde el perfil y desde Shop.
 - Reacciones con un toque (me gusta) o manteniendo apretado (6 opciones), comentarios y respuestas, compartir y guardar.
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
@@ -66,9 +85,19 @@ data/
   notificaciones/<usuario>.json    bandeja de cada persona
   grupos.json                  grupos y canales (tipo, dueño y miembros)
   historias.json               historias activas (se limpian a las 24 h)
+  tienda/index.json            productos de Shop: id, vendedor, foto, precio y estado
+  tienda/<producto>.json       ficha completa (descripción y fotos)
+  mensajes/bandejas/<usuario>.json   conversaciones de cada persona y no leídos
+  mensajes/hilos/<a>__<b>.json  mensajes del chat entre dos personas
 media/
-  perfiles/  portadas/  publicaciones/  historias/  grupos/
+  perfiles/  portadas/  publicaciones/  historias/  grupos/  tienda/
 ```
+
+**Shop y mensajes funcionan con la misma idea:** primero se lee el archivo por el
+enlace de `raw.githubusercontent.com` (sin token) y las escrituras van por la API
+con el token, en cola. Un mensaje nuevo se guarda en el hilo compartido
+`mensajes/hilos/<id-menor>__<id-mayor>.json` y en las dos bandejas: la mía queda
+sin pendientes y la de la otra persona suma un no leído.
 
 **Regla de oro:** una publicación nunca guarda sus comentarios ni sus reacciones adentro.
 El «me gusta» escribe primero en `likes/<usuario>.json` y después, si se puede, suma el contador del post.
@@ -177,7 +206,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Tema | Decisión |
 | --- | --- |
 | Framework | Ninguno: módulos ES nativos, DOM a mano |
-| Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/messages`), compatibles con Pages |
+| Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/tienda`, `#/tienda/producto`, `#/mensajes`, `#/mensajes/usuario`), compatibles con Pages |
 | Estado | Store propio con índices (`Map`) y selectores |
 | Concurrencia | Cola por archivo + reintentos ante `409` / `sha` inválido |
 | Caché | Memoria + `localStorage` por archivo con `ETag` y `sha` |
@@ -191,6 +220,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - Cada «me gusta» o comentario es un commit: es el precio de usar GitHub como base de datos.
 - GitHub recomienda mantener los archivos por debajo de 1 MB; para comunidades grandes conviene dividir `feed.json` por mes.
 - El token está dentro de `config.js`: usa uno limitado a este repositorio y con caducidad, y revócalo si se filtra.
+- Los mensajes privados se guardan como JSON en el repositorio: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Si el repositorio es público, alguien con el enlace podría abrir el archivo (como pasa con el resto de los datos). Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
 - Si dos personas escriben a la vez, la app reintenta automáticamente; en el peor caso avisa para volver a intentarlo.
 
 ---
@@ -217,7 +247,7 @@ js/core/media.js        compresión y subida de imágenes
 js/core/ui.js           modales, menús, toasts, visor de imágenes
 js/core/router.js       rutas por hash
 js/components/*         topbar, sidebars, compositor, tarjeta de post, historias
-js/pages/*              feed, perfil, seguidores, mensajes, notificaciones, grupos, menú…
+js/pages/*              feed, Shop, mensajes privados, perfil, seguidores, notificaciones, grupos, menú…
 assets/logo/            logo PNG en todos los tamaños + favicon
 tools/                  despliegue, emulador de GitHub, datos de ejemplo y pruebas
 ```

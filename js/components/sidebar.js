@@ -54,6 +54,15 @@ export function mountSidebar() {
       href: '#/grupos', active: route.name === 'groups' || route.name === 'group',
     }));
     root.appendChild(item({
+      iconName: 'shop', color: 'blue', label: 'Shop',
+      href: '#/tienda', active: route.name === 'shop' || route.name === 'shopitem',
+    }));
+    root.appendChild(item({
+      iconName: 'message', color: 'blue', label: 'Mensajes',
+      count: state.ui.unreadMessages || null,
+      href: '#/mensajes', active: route.name === 'messages',
+    }));
+    root.appendChild(item({
       iconName: 'bookmark', color: 'purple', label: 'Guardado',
       href: '#/guardados', active: route.name === 'saved',
     }));

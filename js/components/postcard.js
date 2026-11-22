@@ -95,17 +95,24 @@ function renderShared(post, container) {
   container.appendChild(box);
 }
 
-export function postCard(post, { onUpdate } = {}) {
+export function postCard(post, { onUpdate, suggested = false } = {}) {
   const root = el('article', { class: 'card post', 'data-post-id': post.id });
   const postData = () => state.posts.get(post.id) || post;
 
+  const suggestEl = el('div', { class: `post-suggest${suggested ? '' : ' hide'}` },
+    icon('sparkles', 14),
+    el('span', { text: 'Sugerencia para ti' }),
+    el('span', {
+      class: 'dim tiny', style: { marginLeft: 'auto' },
+      text: 'de alguien que no seguís',
+    }));
   const headEl = el('div', { class: 'post-head' });
   const textEl = el('div', { class: 'post-text' });
   const shareEl = el('div');
   const mediaEl = el('div', { class: 'post-media' });
   const statsEl = el('div', { class: 'post-stats' });
   const actionsEl = el('div', { class: 'post-actions' });
-  root.append(headEl, textEl, shareEl, mediaEl, statsEl, actionsEl);
+  root.append(suggestEl, headEl, textEl, shareEl, mediaEl, statsEl, actionsEl);
 
   let expanded = false;
   let popoverEl = null;

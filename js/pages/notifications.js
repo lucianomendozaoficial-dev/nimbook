@@ -11,7 +11,7 @@ import { emptyFriendsIllustration } from '../core/illustrations.js';
 
 const ICONS = {
   reaction: 'heart', like: 'thumbsup', comment: 'message', reply: 'reply',
-  follow: 'user-plus', share: 'share',
+  follow: 'user-plus', share: 'share', message: 'message',
 };
 
 function textFor(item) {
@@ -24,11 +24,16 @@ function textFor(item) {
     case 'reply': return `${actor} respondió a tu comentario.`;
     case 'follow': return `${actor} empezó a seguirte.`;
     case 'share': return `${actor} compartió tu publicación.`;
+    case 'message': return `${actor} te envió un mensaje privado.`;
     default: return `${actor} hizo algo nuevo.`;
   }
 }
 
 function hrefFor(item) {
+  if (item.type === 'message') {
+    const actor = userById(item.actorId);
+    if (actor?.username) return `#/mensajes/${actor.username}`;
+  }
   if (item.postId) return `#/p/${item.postId}`;
   const actor = userById(item.actorId);
   if (actor?.username) return `#/u/${actor.username}`;

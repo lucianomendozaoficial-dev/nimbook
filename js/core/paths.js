@@ -21,4 +21,12 @@ export const P = {
 
   groups: 'data/grupos.json',
   stories: 'data/historias.json',
+
+  /* Shop (mercado) */
+  shopIndex: 'data/tienda/index.json',
+  shopItem: (id) => `data/tienda/${id}.json`,
+
+  /* Mensajes privados: bandeja de cada persona e hilo compartido */
+  inbox: (userId) => `data/mensajes/bandejas/${userId}.json`,
+  thread: (threadId) => `data/mensajes/hilos/${threadId}.json`,
 };

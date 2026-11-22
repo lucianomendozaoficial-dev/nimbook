@@ -92,6 +92,7 @@ const EMPTY_DATA = {
   'data/feed/index.json': { version: 1, posts: [] },
   'data/grupos.json': { version: 1, groups: [] },
   'data/historias.json': { version: 1, stories: [] },
+  'data/tienda/index.json': { version: 1, items: [] },
 };
 
 const PLACEHOLDERS = [
@@ -102,11 +103,15 @@ const PLACEHOLDERS = [
   'data/siguiendo/.gitkeep',
   'data/seguidores/.gitkeep',
   'data/notificaciones/.gitkeep',
+  'data/tienda/.gitkeep',
+  'data/mensajes/bandejas/.gitkeep',
+  'data/mensajes/hilos/.gitkeep',
   'media/perfiles/.gitkeep',
   'media/portadas/.gitkeep',
   'media/publicaciones/.gitkeep',
   'media/historias/.gitkeep',
   'media/grupos/.gitkeep',
+  'media/tienda/.gitkeep',
 ];
 
 async function collectFiles(dir = ROOT, relBase = '', out = new Map()) {

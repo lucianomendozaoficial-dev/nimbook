@@ -14,6 +14,7 @@ export const FOLDERS = {
   covers: 'media/portadas',
   stories: 'media/historias',
   groups: 'media/grupos',
+  shop: 'media/tienda',
 };
 
 export const ACCEPTED = 'image/png,image/jpeg,image/webp,image/gif,image/avif';

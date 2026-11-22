@@ -12,6 +12,7 @@ const FILES = {
   'data/feed/index.json': { version: 1, posts: [] },
   'data/grupos.json': { version: 1, groups: [] },
   'data/historias.json': { version: 1, stories: [] },
+  'data/tienda/index.json': { version: 1, items: [] },
 };
 
 const FOLDERS = [
@@ -22,11 +23,16 @@ const FOLDERS = [
   'data/siguiendo',
   'data/seguidores',
   'data/notificaciones',
+  'data/tienda',
+  'data/mensajes',
+  'data/mensajes/bandejas',
+  'data/mensajes/hilos',
   'media/perfiles',
   'media/portadas',
   'media/publicaciones',
   'media/historias',
   'media/grupos',
+  'media/tienda',
 ];
 
 const LEGACY = [
@@ -35,7 +41,6 @@ const LEGACY = [
   'data/comentarios.json',
   'data/conversaciones.json',
   'data/solicitudes.json',
-  'data/mensajes',
   'media/chat',
 ];
 
@@ -67,12 +72,12 @@ for (const rel of LEGACY) {
   if (fs.existsSync(full)) fs.rmSync(full, { recursive: true, force: true });
 }
 
-for (const dir of ['data/likes', 'data/siguiendo', 'data/seguidores', 'data/notificaciones', 'data/comentarios']) {
+for (const dir of ['data/likes', 'data/siguiendo', 'data/seguidores', 'data/notificaciones', 'data/comentarios', 'data/mensajes/bandejas', 'data/mensajes/hilos']) {
   cleanDir(dir);
 }
 
 if (wipeMedia) {
-  for (const dir of ['media/perfiles', 'media/portadas', 'media/publicaciones', 'media/historias', 'media/grupos']) {
+  for (const dir of ['media/perfiles', 'media/portadas', 'media/publicaciones', 'media/historias', 'media/grupos', 'media/tienda']) {
     cleanDir(dir);
   }
 }

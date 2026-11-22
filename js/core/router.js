@@ -34,6 +34,16 @@ export function parseRoute(hash = window.location.hash) {
       return second
         ? { name: 'group', params: { id: second }, query }
         : { name: 'groups', params: { tab: 'grupos' }, query };
+    case 'tienda':
+    case 'shop':
+    case 'mercado':
+      return second
+        ? { name: 'shopitem', params: { id: second }, query }
+        : { name: 'shop', params: {}, query };
+    case 'mensajes':
+    case 'messages':
+    case 'chats':
+      return { name: 'messages', params: { username: second || '' }, query };
     case 'saved':
     case 'guardados':
       return { name: 'saved', params: {}, query };

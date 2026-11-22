@@ -19,6 +19,8 @@ import { profilePage } from './pages/profile.js';
 import { friendsPage } from './pages/friends.js';
 import { notificationsPage } from './pages/notifications.js';
 import { groupsPage, groupPage } from './pages/groups.js';
+import { shopPage, shopItemPage } from './pages/shop.js';
+import { messagesPage } from './pages/messages.js';
 import { savedPage } from './pages/saved.js';
 import { searchPage } from './pages/search.js';
 import { menuPage } from './pages/menu.js';
@@ -103,7 +105,8 @@ function buildShell() {
     { id: 'feed', icon: 'home', label: 'Inicio', href: '#/inicio' },
     { id: 'friends', icon: 'users', label: 'Seguidores', href: '#/seguidores' },
     { id: 'compose', icon: 'plus', label: 'Publicar', href: '#/publicar' },
-    { id: 'notifications', icon: 'bell', label: 'Avisos', href: '#/notificaciones', badge: true },
+    { id: 'shop', icon: 'shop', label: 'Shop', href: '#/tienda' },
+    { id: 'messages', icon: 'message', label: 'Mensajes', href: '#/mensajes', badge: true },
     { id: 'menu', icon: 'menu', label: 'Menú', href: '#/menu' },
   ];
   const navButtons = new Map();
@@ -129,12 +132,16 @@ function buildShell() {
       leftRail.render();
       rightRail.render();
       const route = parseRoute();
-      const active = route.name === 'group' ? 'groups'
-        : route.name === 'post' ? 'feed' : route.name;
+      const active = activeNavFor(route);
       for (const [id, link] of navButtons) link.classList.toggle('active', id === active);
-      const badge = navButtons.get('notifications')?.querySelector('.badge-dot');
-      if (badge) {
-        const count = state.ui.unreadNotifs;
+      const counts = {
+        notifications: state.ui.unreadNotifs,
+        messages: state.ui.unreadMessages,
+      };
+      for (const [id, link] of navButtons) {
+        const badge = link.querySelector('.badge-dot');
+        if (!badge) continue;
+        const count = counts[id] || 0;
         badge.textContent = count > 9 ? '9+' : String(count);
         badge.classList.toggle('hide', count === 0);
       }
@@ -152,16 +159,31 @@ function buildShell() {
 function iconFor(name) {
   const map = {
     home: 'home', users: 'users', plus: 'plus', bell: 'bell', menu: 'menu',
+    shop: 'shop', message: 'message',
   };
   return icon(map[name] || name, 24, { filled: true });
 }
 
 /* -------------------------------- rutas ---------------------------------- */
 
+/** Qué botón de la navegación queda marcado según la ruta actual. */
+function activeNavFor(route) {
+  switch (route.name) {
+    case 'group': return 'groups';
+    case 'post': return 'feed';
+    case 'shopitem': return 'shop';
+    default: return route.name;
+  }
+}
+
 function layoutFor(route) {
   switch (route.name) {
     case 'feed': return { right: true, left: true, wide: false };
     case 'post': return { right: false, left: true, wide: true };
+    case 'shop':
+    case 'shopitem':
+    case 'messages':
+      return { right: false, left: true, wide: true };
     case 'profile':
     case 'myprofile':
     case 'friends':
@@ -188,6 +210,9 @@ function pageFor(route) {
     case 'notifications': return notificationsPage();
     case 'groups': return groupsPage(route.params.tab || 'grupos');
     case 'group': return groupPage(route.params.id);
+    case 'shop': return shopPage();
+    case 'shopitem': return shopItemPage(route.params.id);
+    case 'messages': return messagesPage(route.params.username || '');
     case 'saved': return savedPage();
     case 'search': return searchPage(route.query.q || '');
     case 'menu': return menuPage();

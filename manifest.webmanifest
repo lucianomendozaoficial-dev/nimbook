@@ -27,6 +27,12 @@
       "icons": [{ "src": "assets/logo/zuma-logo-192.png", "sizes": "192x192" }]
     },
     {
+      "name": "Shop",
+      "short_name": "Shop",
+      "url": "./index.html#/tienda",
+      "icons": [{ "src": "assets/logo/zuma-logo-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Mensajes",
       "short_name": "Mensajes",
       "url": "./index.html#/mensajes",

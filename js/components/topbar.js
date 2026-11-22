@@ -14,6 +14,7 @@ const TABS = [
   { id: 'feed', icon: 'home', href: '#/inicio', label: 'Inicio' },
   { id: 'friends', icon: 'users', href: '#/seguidores', label: 'Seguidores' },
   { id: 'groups', icon: 'groups', href: '#/grupos', label: 'Grupos' },
+  { id: 'shop', icon: 'shop', href: '#/tienda', label: 'Shop' },
   { id: 'saved', icon: 'bookmark', href: '#/guardados', label: 'Guardado' },
 ];
 
@@ -71,6 +72,12 @@ export function mountTopbar() {
   const notifBadge = el('span', { class: 'badge-dot hide' });
   notifBtn.appendChild(notifBadge);
 
+  const messagesBtn = el('a', {
+    class: 'tb-btn', href: '#/mensajes', 'aria-label': 'Mensajes', title: 'Mensajes',
+  }, icon('message', 22));
+  const messagesBadge = el('span', { class: 'badge-dot hide' });
+  messagesBtn.appendChild(messagesBadge);
+
   const avatarBtn = el('button', {
     class: 'tb-btn avatar-btn', type: 'button', 'aria-label': 'Tu cuenta',
     onclick: () => openAccountMenu(avatarBtn),
@@ -80,7 +87,7 @@ export function mountTopbar() {
     el('div', { class: 'topbar-left' }, brand, searchBox),
     searchMobile,
     nav,
-    el('div', { class: 'topbar-right' }, installBtn, notifBtn, avatarBtn),
+    el('div', { class: 'topbar-right' }, installBtn, messagesBtn, notifBtn, avatarBtn),
   );
 
   function openAccountMenu(anchor) {
@@ -123,7 +130,8 @@ export function mountTopbar() {
     const route = parseRoute();
     installBtn.classList.toggle('hide', !canInstall());
     const active = route.name === 'group' ? 'groups'
-      : route.name === 'post' ? 'feed' : route.name;
+      : route.name === 'post' ? 'feed'
+        : route.name === 'shopitem' ? 'shop' : route.name;
     for (const [id, button] of tabButtons) {
       button.classList.toggle('active', id === active);
       button.setAttribute('aria-current', id === active ? 'page' : 'false');
@@ -131,6 +139,10 @@ export function mountTopbar() {
     const count = state.ui.unreadNotifs;
     notifBadge.textContent = count > 9 ? '9+' : String(count);
     notifBadge.classList.toggle('hide', count === 0);
+    const unread = state.ui.unreadMessages;
+    messagesBadge.textContent = unread > 9 ? '9+' : String(unread);
+    messagesBadge.classList.toggle('hide', unread === 0);
+    messagesBtn.classList.toggle('active', route.name === 'messages');
     avatarBtn.replaceChildren(avatarEl(state.me, 'sm'));
   }
 
