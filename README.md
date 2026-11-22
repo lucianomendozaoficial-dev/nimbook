@@ -284,8 +284,6 @@ css/pages.css           feed, perfil, mensajes, seguidores, grupos, ajustes
 js/app.js               arranque, shell y rutas
 js/vendor/supabase.js   cliente de Supabase para el navegador (sin build)
 js/core/net.js          Supabase: documentos, Storage, cola y bloqueo optimista
-js/core/gh.js           cliente legado de GitHub (solo migración/reparación)
-js/core/db.js           capa legada de GitHub (no se usa en la app)
 js/core/store.js        estado, índices y selectores
 js/core/actions.js      todas las escrituras (posts, seguidores, chats…)
 js/core/auth.js         registro, acceso y sesión
