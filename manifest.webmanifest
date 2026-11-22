@@ -33,6 +33,12 @@
       "icons": [{ "src": "assets/logo/zuma-logo-192.png", "sizes": "192x192" }]
     },
     {
+      "name": "Historias",
+      "short_name": "Historias",
+      "url": "./index.html#/historias",
+      "icons": [{ "src": "assets/logo/zuma-logo-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Mensajes",
       "short_name": "Mensajes",
       "url": "./index.html#/mensajes",

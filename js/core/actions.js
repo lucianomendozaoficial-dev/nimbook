@@ -231,11 +231,103 @@ export async function changePassword(current, next) {
   notify('me');
 }
 
+/**
+ * Elimina la cuenta y todo lo que le pertenece (posts, historias, ventas,
+ * conversaciones, seguidores y ficha). Pide la contraseña como confirmación y
+ * no se puede deshacer.
+ */
+export async function deleteAccount(password) {
+  const me = requireMe();
+  if (!me.password) throw new ValidationError('Esta cuenta no se puede eliminar desde acá.');
+  const ok = await verifyPassword(String(password || ''), me.password);
+  if (!ok) throw new ValidationError('La contraseña no es correcta.');
+
+  const myId = me.id;
+  const myPosts = state.feedIndex.filter((entry) => entry.authorId === myId).map((entry) => entry.id);
+  const myListings = state.shopIndex.filter((item) => item.sellerId === myId).map((item) => item.id);
+  const threads = state.inbox.map((entry) => ({ threadId: entry.threadId, withId: entry.withId }));
+  const followers = [...state.followers];
+  const following = [...state.following];
+
+  // 1) publicaciones
+  await Promise.all(myPosts.map((id) => deleteDoc(P.post(id), 'Zuma: eliminar cuenta').catch(() => {})));
+  await queueDoc(P.feedIndex, (doc) => (doc?.posts
+    ? { ...doc, posts: doc.posts.filter((entry) => entry.authorId !== myId) }
+    : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' }).catch(() => {});
+
+  // 2) ventas de Shop
+  await Promise.all(myListings.map((id) => deleteDoc(P.shopItem(id), 'Zuma: eliminar cuenta').catch(() => {})));
+  await queueDoc(P.shopIndex, (doc) => (doc?.items
+    ? { ...doc, items: doc.items.filter((item) => item.sellerId !== myId) }
+    : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' }).catch(() => {});
+
+  // 3) historias
+  await queueDoc(P.stories, (doc) => (doc?.stories
+    ? { ...doc, stories: doc.stories.filter((story) => story.userId !== myId) }
+    : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' }).catch(() => {});
+
+  // 4) conversaciones: se borran para las dos personas
+  await Promise.all(threads.map(async ({ threadId, withId }) => {
+    await deleteDoc(P.thread(threadId), 'Zuma: eliminar cuenta').catch(() => {});
+    if (withId) {
+      await queueDoc(P.inbox(withId), (doc) => (doc?.threads
+        ? { ...doc, threads: doc.threads.filter((row) => row.threadId !== threadId) }
+        : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' }).catch(() => {});
+    }
+  }));
+
+  // 5) archivos propios
+  for (const path of [
+    P.inbox(myId),
+    P.likes(myId),
+    P.following(myId),
+    P.followers(myId),
+    P.notifications(myId),
+  ]) {
+    await deleteDoc(path, 'Zuma: eliminar cuenta').catch(() => {});
+    forget(path);
+  }
+
+  // 6) sacar mi cuenta de las listas de otras personas
+  await Promise.all([
+    ...followers.map((id) => queueDoc(P.following(id), (doc) => (doc?.following
+      ? { ...doc, following: doc.following.filter((value) => value !== myId) }
+      : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' }).catch(() => {})),
+    ...following.map((id) => queueDoc(P.followers(id), (doc) => (doc?.followers
+      ? { ...doc, followers: doc.followers.filter((value) => value !== myId) }
+      : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' }).catch(() => {})),
+  ]);
+
+  // 7) índice y ficha (si esto falla, se avisa para poder reintentar)
+  await queueDoc(P.userIndex, (doc) => (doc?.users
+    ? { ...doc, users: doc.users.filter((user) => user.id !== myId) }
+    : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' });
+  await deleteDoc(P.user(myId), 'Zuma: eliminar cuenta');
+  forget(P.user(myId));
+
+  // 8) estado local
+  state.users.delete(myId);
+  state.userIndex = state.userIndex.filter((user) => user.id !== myId);
+  state.posts.clear();
+  state.feedIndex = [];
+  state.shopIndex = state.shopIndex.filter((item) => item.sellerId !== myId);
+  state.stories = state.stories.filter((story) => story.userId !== myId);
+  state.inbox = [];
+  state.following = new Set();
+  state.followers = new Set();
+  state.notifications = [];
+  state.likes = {};
+  state.me = null;
+  state.ui.unreadNotifs = 0;
+  state.ui.unreadMessages = 0;
+  return true;
+}
+
 /* ----------------------------- publicaciones ----------------------------- */
 
 export async function createPost({
   text = '', media = [], privacy = 'public', feeling = null, location = null,
-  shareOf = null, groupId = null,
+  shareOf = null, groupId = null, bg = null,
 } = {}) {
   const me = requireMe();
   const clean = String(text || '').trim();
@@ -255,6 +347,7 @@ export async function createPost({
     privacy: groupId ? 'public' : privacy,
     feeling: feeling || null,
     location: location || null,
+    bg: media.length ? null : (bg || null),
     shareOf: shareOf || null,
     groupId: groupId || null,
     createdAt: nowISO(),
@@ -549,7 +642,7 @@ export async function leaveGroup(groupId) {
 
 /* -------------------------------- historias ------------------------------ */
 
-export async function createStory({ image, text = '' } = {}) {
+export async function createStory({ image, text = '', font = 'clasica' } = {}) {
   const me = requireMe();
   if (!image) throw new ValidationError('Elegí una foto para tu historia.');
   const story = {
@@ -557,6 +650,7 @@ export async function createStory({ image, text = '' } = {}) {
     userId: me.id,
     image,
     text: norm(text),
+    font: String(font || 'clasica'),
     createdAt: nowISO(),
   };
   state.stories = [story, ...state.stories];

@@ -75,6 +75,35 @@ export async function deleteMedia(path) {
   await deleteDoc(path, 'Zuma: borrar imagen').catch(() => {});
 }
 
+/** Descarga una imagen de la app (publicación, historia o venta). */
+export async function downloadImage(path, filename = 'zuma.jpg') {
+  if (!path) return false;
+  const url = fetchImageUrl(path);
+  try {
+    const res = await fetch(url, { cache: 'force-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+    return true;
+  } catch {
+    // Si el navegador no deja descargar el blob, se abre la imagen original.
+    try { window.open(url, '_blank', 'noopener'); } catch { /* noop */ }
+    return false;
+  }
+}
+
+export function mediaFileName(path, fallback = 'zuma.jpg') {
+  const clean = String(path || '').split('?')[0].split('/').pop();
+  return clean && /\.[a-z0-9]{2,5}$/i.test(clean) ? clean : fallback;
+}
+
 /* --------------------------- imágenes visibles --------------------------- */
 
 const PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';

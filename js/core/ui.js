@@ -3,7 +3,7 @@
    ========================================================================== */
 import { el, $$, avatarGradient, uid, clear } from './util.js';
 import { icon } from './icons.js';
-import { mediaImg } from './media.js';
+import { mediaImg, downloadImage, mediaFileName } from './media.js';
 import { displayName, initialsOf } from './store.js';
 
 /* ------------------------------ reacciones ------------------------------ */
@@ -307,6 +307,16 @@ export function lightbox(paths, startIndex = 0) {
     onclick: () => destroy(),
   }, icon('x', 22));
 
+  const download = el('button', {
+    class: 'lb-download', type: 'button', 'aria-label': 'Descargar imagen',
+    title: 'Descargar imagen',
+    onclick: async () => {
+      const saved = await downloadImage(list[index], mediaFileName(list[index], 'zuma.jpg'));
+      toast(saved ? 'Imagen descargada' : 'Se abrió la imagen para guardarla',
+        { type: saved ? 'success' : 'info' });
+    },
+  }, icon('download', 21));
+
   const go = (delta) => {
     index = (index + delta + list.length) % list.length;
     const next = mediaImg(list[index], { alt: 'Imagen', loading: 'eager' });
@@ -325,7 +335,7 @@ export function lightbox(paths, startIndex = 0) {
     next = el('button', { class: 'lb-nav next', type: 'button', 'aria-label': 'Siguiente', onclick: (e) => { e.stopPropagation(); go(1); } }, icon('chevron-right', 24));
   }
 
-  root.append(img, close, counter, ...(prev ? [prev, next] : []));
+  root.append(img, close, download, counter, ...(prev ? [prev, next] : []));
   root.addEventListener('click', (event) => {
     if (event.target === root) destroy();
   });

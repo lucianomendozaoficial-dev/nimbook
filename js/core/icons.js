@@ -41,6 +41,8 @@ const P = {
 
   /* media y acciones */
   image: '<rect x="3" y="4" width="18" height="16" rx="2.6"/><circle cx="8.6" cy="9.5" r="1.9"/><path d="m4 17.6 4.7-4.7a1.9 1.9 0 0 1 2.6 0l6.4 6.4"/>',
+  photo: '<rect x="3" y="4" width="18" height="16" rx="2.6"/><circle cx="8.6" cy="9.5" r="1.9"/><path d="m4 17.6 4.7-4.7a1.9 1.9 0 0 1 2.6 0l6.4 6.4"/>',
+  zap: '<path d="M13 2 4 14h6l-1 8 9-12h-6z"/>',
   camera: '<path d="M4 7.6h2.7l1.2-2A1.7 1.7 0 0 1 9.4 4.8h5.2a1.7 1.7 0 0 1 1.5.8l1.2 2H20a1.7 1.7 0 0 1 1.7 1.7v9a1.7 1.7 0 0 1-1.7 1.7H4a1.7 1.7 0 0 1-1.7-1.7v-9A1.7 1.7 0 0 1 4 7.6z"/><circle cx="12" cy="13.3" r="3.7"/>',
   smile: '<circle cx="12" cy="12" r="9"/><path d="M8.4 14.1a4.3 4.3 0 0 0 7.2 0"/><circle cx="9.2" cy="9.7" r="1.15" fill="currentColor" stroke="none"/><circle cx="14.8" cy="9.7" r="1.15" fill="currentColor" stroke="none"/>',
   'map-pin': '<path d="M20 10.3c0 5.2-8 11.2-8 11.2s-8-6-8-11.2a8 8 0 1 1 16 0z"/><circle cx="12" cy="10.2" r="2.9"/>',

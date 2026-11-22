@@ -10,21 +10,15 @@ import { avatarEl, emptyState, toast } from '../core/ui.js';
 import { postCard } from '../components/postcard.js';
 import { addComment, deleteComment } from '../core/actions.js';
 import { mediaImg } from '../core/media.js';
-import { goBack } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
 
 export function postPage(postId) {
   const root = el('div');
-  const backRow = el('div', { class: 'page-back' });
   const postWrap = el('div');
   const commentsCard = el('div', { class: 'card comments-page' });
   const loading = el('div', { class: 'center', style: { padding: '40px' } }, el('span', { class: 'spinner' }));
 
-  backRow.appendChild(el('button', {
-    class: 'btn ghost sm', type: 'button', onclick: () => goBack('/inicio'),
-  }, icon('arrow-left', 17), 'Volver'));
-
-  root.append(backRow, postWrap, commentsCard);
+  root.append(postWrap, commentsCard);
   commentsCard.appendChild(loading);
 
   let card = null;

@@ -7,14 +7,8 @@ import { emptyState, openModal, toast } from '../core/ui.js';
 import { mediaImg } from '../core/media.js';
 import { createGroup, joinGroup, leaveGroup } from '../core/actions.js';
 import { postCard } from '../components/postcard.js';
-import { goBack, navigate } from '../core/router.js';
+import { navigate } from '../core/router.js';
 import { parseRoute } from '../core/router.js';
-
-function backButton(fallback = '/inicio') {
-  return el('button', {
-    class: 'btn ghost sm', type: 'button', onclick: () => goBack(fallback),
-  }, icon('arrow-left', 17), 'Volver');
-}
 
 const TABS = [
   { id: 'grupos', label: 'Grupos', type: 'group' },
@@ -125,7 +119,6 @@ export function groupsPage(tab = 'grupos') {
 
   root.append(
     el('div', { class: 'page-head' },
-      backButton(),
       el('div', { class: 'grow' },
         el('h1', { text: 'Grupos y canales' }),
         el('p', { class: 'muted small', text: 'Comunidades para compartir con tu gente.' })),
@@ -243,7 +236,7 @@ export function groupPage(id) {
     render();
   })();
 
-  root.append(el('div', { class: 'page-back' }, backButton('/grupos')), wrap);
+  root.append(wrap);
   return {
     el: root,
     onData(topic) { if (topic === 'groups' || topic === 'feed') render(); },

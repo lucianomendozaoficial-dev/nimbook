@@ -9,11 +9,12 @@ import {
 } from '../core/ui.js';
 import { REACTIONS, REACTION_ORDER, reactionIcon } from '../core/reactions.js';
 import { playSound } from '../core/sounds.js';
-import { mediaImg } from '../core/media.js';
+import { mediaImg, downloadImage, mediaFileName } from '../core/media.js';
 import { setReaction, deletePost, updatePost, toggleSavePost, createPost } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 
 const PRIVACY_ICON = { public: 'globe', followers: 'users', friends: 'users', private: 'lock', group: 'groups' };
+const BG_IDS = ['azul', 'rosa', 'verde', 'arena', 'violeta', 'oscuro'];
 
 function privacyIcon(post) {
   return PRIVACY_ICON[post.groupId ? 'group' : (post.privacy || 'public')] || 'globe';
@@ -171,6 +172,25 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
         },
       },
     ];
+    const media = (current.media || []).filter((item) => item.path);
+    if (media.length) {
+      items.push({
+        icon: 'download',
+        label: media.length === 1 ? 'Descargar foto' : 'Descargar todas las fotos',
+        onClick: async () => {
+          for (let index = 0; index < media.length; index += 1) {
+            await downloadImage(
+              media[index].path,
+              mediaFileName(media[index].path, `zuma-${current.id}-${index + 1}.jpg`),
+            );
+            if (index < media.length - 1) {
+              await new Promise((resolve) => setTimeout(resolve, 350));
+            }
+          }
+          toast('Descarga iniciada', { type: 'success' });
+        },
+      });
+    }
     if (mine) {
       items.push({ separator: true });
       items.push({ icon: 'edit', label: 'Editar publicación', onClick: () => openEdit(current) });
@@ -221,11 +241,16 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
   function renderText() {
     const current = postData();
     clear(textEl);
+    textEl.className = 'post-text';
     if (!current.text) {
       textEl.classList.add('hide');
       return;
     }
     textEl.classList.remove('hide');
+    const hasMedia = (current.media || []).length > 0;
+    if (current.bg && !hasMedia) {
+      textEl.classList.add('post-bg', `post-bg-${current.bg}`);
+    }
     textEl.classList.toggle('collapsed', !expanded && current.text.length > 320);
     textEl.innerHTML = linkify(current.text);
     if (!expanded && current.text.length > 320) {

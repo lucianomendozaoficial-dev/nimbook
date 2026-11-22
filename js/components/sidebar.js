@@ -58,6 +58,10 @@ export function mountSidebar() {
       href: '#/tienda', active: route.name === 'shop' || route.name === 'shopitem',
     }));
     root.appendChild(item({
+      iconName: 'story', color: 'purple', label: 'Historias',
+      href: '#/historias', active: route.name === 'stories' || route.name === 'storycompose',
+    }));
+    root.appendChild(item({
       iconName: 'message', color: 'blue', label: 'Mensajes',
       count: state.ui.unreadMessages || null,
       href: '#/mensajes', active: route.name === 'messages',

@@ -257,6 +257,7 @@ export function feedPage() {
   return {
     el: root,
     onData(topic) {
+      if (topic === 'stories') { stories.render(); return; }
       if (topic === 'feed' || topic === 'me' || topic === 'post'
         || topic === 'follow' || topic === 'ready' || topic === 'shop') {
         renderList();

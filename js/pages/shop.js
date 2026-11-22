@@ -12,16 +12,10 @@ import {
 } from '../core/ui.js';
 import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../core/media.js';
 import { createListing, deleteListing, setListingStatus, updateListing } from '../core/actions.js';
-import { goBack, navigate } from '../core/router.js';
+import { navigate } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
 
 const MAX_PHOTOS = 6;
-
-function backButton(fallback = '/inicio') {
-  return el('button', {
-    class: 'btn ghost sm', type: 'button', onclick: () => goBack(fallback),
-  }, icon('arrow-left', 17), 'Volver');
-}
 
 function formatPhone(value) {
   const digits = String(value || '');
@@ -57,7 +51,7 @@ function contactCard(current, mine) {
     el('div', { class: 'muted tiny', text: 'También podés escribirle por el chat privado de Zuma.' }));
 }
 
-function listingCard(item) {
+export function listingCard(item) {
   const sold = item.status === 'sold';
   return el('a', {
     class: `shop-card${sold ? ' sold' : ''}`, href: `#/tienda/${item.id}`,
@@ -588,7 +582,6 @@ export function shopItemPage(id) {
 
   function renderLoading() {
     root.append(
-      el('div', { class: 'page-back' }, backButton('/tienda')),
       el('div', { class: 'loading-row', style: { padding: '64px' } }, el('span', { class: 'spinner' })));
   }
 
@@ -598,7 +591,6 @@ export function shopItemPage(id) {
     const current = shopItemById(id);
     if (!current) {
       root.append(
-        el('div', { class: 'page-back' }, backButton('/tienda')),
         el('div', { class: 'card' }, emptyState({
           iconName: 'shop',
           title: 'No encontramos este producto',
@@ -613,9 +605,7 @@ export function shopItemPage(id) {
       renderLoading();
       return;
     }
-    root.append(
-      el('div', { class: 'page-back' }, backButton('/tienda')),
-      detail(current));
+    root.append(detail(current));
 
     // La ficha del vendedor puede no estar cargada todavía: se lee aparte.
     if (!sellerTried && current.sellerId && !state.users.has(current.sellerId)) {

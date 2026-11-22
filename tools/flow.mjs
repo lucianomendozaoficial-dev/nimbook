@@ -104,14 +104,14 @@ try {
   await sleep(300);
   await shot('f2-publicar');
   await evaluate("window.__pub = (window.__pub || 0) + 1");
-  await evaluate("document.querySelector('.compose-card .btn.primary').click()");
+  await evaluate("document.querySelector('.compose-head .btn.primary').click()");
   try {
     await waitFor("location.hash.includes('inicio')", 15000);
   } catch (err) {
     const diag = await evaluate(`({
       hash: location.hash,
       toasts: [...document.querySelectorAll('.toast')].map(n => n.textContent),
-      disabled: document.querySelector('.compose-card .btn.primary')?.disabled,
+      disabled: document.querySelector('.compose-head .btn.primary')?.disabled,
       text: document.querySelector('.compose-text')?.value,
       mark: window.__pub ?? null,
       perf: Math.round(performance.now()),

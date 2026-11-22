@@ -2,11 +2,9 @@
    pages/saved.js — publicaciones guardadas
    ========================================================================== */
 import { el, clear } from '../core/util.js';
-import { icon } from '../core/icons.js';
 import { state, loadPost } from '../core/store.js';
 import { emptyState } from '../core/ui.js';
 import { postCard } from '../components/postcard.js';
-import { goBack } from '../core/router.js';
 
 export function savedPage() {
   const root = el('div');
@@ -38,12 +36,9 @@ export function savedPage() {
     }
   }
 
-  root.append(el('div', { class: 'page-back' },
-    el('button', {
-      class: 'btn ghost sm', type: 'button', onclick: () => goBack('/inicio'),
-    }, icon('arrow-left', 17), 'Volver')),
-  el('div', { class: 'page-head' }, el('h1', { text: 'Guardado' })),
-  list);
+  root.append(
+    el('div', { class: 'page-head' }, el('h1', { text: 'Guardado' })),
+    list);
 
   render();
 

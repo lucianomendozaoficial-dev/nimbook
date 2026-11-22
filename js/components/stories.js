@@ -4,12 +4,15 @@
 import { el, clear, timeAgo, STORY_GRADIENTS, hashCode } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  state, displayName, storiesGrouped, userById, initialsOf,
+  state, displayName, storiesGrouped, initialsOf,
 } from '../core/store.js';
-import { avatarEl, openModal, toast } from '../core/ui.js';
-import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../core/media.js';
+import { avatarEl, toast } from '../core/ui.js';
+import { mediaImg, downloadImage, mediaFileName } from '../core/media.js';
 import { fetchImageUrl } from '../core/net.js';
-import { createStory, deleteStory } from '../core/actions.js';
+import { deleteStory } from '../core/actions.js';
+import { navigate } from '../core/router.js';
+import { storyFontClass } from '../core/story-fonts.js';
+import { playSound } from '../core/sounds.js';
 
 function storyGradient(seed) {
   return STORY_GRADIENTS[hashCode(seed) % STORY_GRADIENTS.length];
@@ -28,45 +31,41 @@ export function openStoryViewer(groups, startIndex = 0) {
   const card = el('div', { class: 'sv-card' });
   const bars = el('div', { class: 'sv-bars' });
   const header = el('div', { class: 'sv-head' });
-  const image = el('img', { alt: 'Historia' });
-  const caption = el('div', {
-    style: {
-      position: 'absolute', left: '16px', right: '16px', bottom: '28px', color: '#fff',
-      fontSize: '17px', fontWeight: '600', textShadow: '0 1px 6px rgba(0,0,0,.6)',
-      textAlign: 'center',
-    },
-  });
+  const image = el('img', { alt: 'Historia', class: 'sv-image' });
+  const caption = el('div', { class: 'sv-text' });
 
   const closeBtn = el('button', {
     class: 'sv-close', type: 'button', 'aria-label': 'Cerrar', onclick: () => destroy(),
   }, icon('x', 18));
 
   const prevZone = el('button', {
-    class: 'sv-nav prev', type: 'button', 'aria-label': 'Anterior', style: { background: 'transparent' },
+    class: 'sv-nav prev', type: 'button', 'aria-label': 'Anterior',
     onclick: (event) => { event.stopPropagation(); step(-1); },
   });
   const nextZone = el('button', {
-    class: 'sv-nav next', type: 'button', 'aria-label': 'Siguiente', style: { background: 'transparent' },
+    class: 'sv-nav next', type: 'button', 'aria-label': 'Siguiente',
     onclick: (event) => { event.stopPropagation(); step(1); },
   });
 
   card.append(image, bars, header, caption, prevZone, nextZone, closeBtn);
   root.appendChild(card);
 
-  function currentGroup() {
-    return groups[groupIndex];
+  function currentStory() {
+    const group = groups[groupIndex];
+    return group ? { group, story: group.stories[storyIndex] || group.stories[0] } : null;
   }
 
   function render() {
-    const group = currentGroup();
-    if (!group) { destroy(); return; }
-    const story = group.stories[storyIndex] || group.stories[0];
-    if (!story) { destroy(); return; }
+    const current = currentStory();
+    if (!current) { destroy(); return; }
+    const { group, story } = current;
 
-    image.src = '';
     image.style.background = storyGradient(story.id);
     image.src = fetchImageUrl(story.image);
+
+    caption.className = `sv-text ${storyFontClass(story.font)}`;
     caption.textContent = story.text || '';
+    caption.classList.toggle('hide', !story.text);
 
     clear(header);
     header.append(
@@ -74,6 +73,18 @@ export function openStoryViewer(groups, startIndex = 0) {
       el('div', { class: 'grow' },
         el('div', { class: 'sv-name', text: displayName(group.user) }),
         el('div', { class: 'sv-time', text: timeAgo(story.createdAt) })),
+      story.image
+        ? el('button', {
+          class: 'sv-close', type: 'button', 'aria-label': 'Descargar historia',
+          style: { position: 'static' },
+          onclick: async (event) => {
+            event.stopPropagation();
+            const ok = await downloadImage(story.image, mediaFileName(story.image, 'zuma-historia.jpg'));
+            toast(ok ? 'Historia descargada' : 'Se abrió la imagen para guardarla',
+              { type: ok ? 'success' : 'info' });
+          },
+        }, icon('download', 17))
+        : null,
       group.user.id === me.id
         ? el('button', {
           class: 'sv-close', type: 'button', 'aria-label': 'Eliminar historia',
@@ -96,7 +107,9 @@ export function openStoryViewer(groups, startIndex = 0) {
       if (i === storyIndex) {
         segment.firstChild.style.transition = 'width 6s linear';
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => { segment.firstChild.style.width = '100%'; });
+          requestAnimationFrame(() => {
+            segment.firstChild.style.width = '100%';
+          });
         });
       }
       bars.appendChild(segment);
@@ -110,7 +123,7 @@ export function openStoryViewer(groups, startIndex = 0) {
   }
 
   function step(delta) {
-    const group = currentGroup();
+    const group = groups[groupIndex];
     const nextIndex = storyIndex + delta;
     if (nextIndex < 0) {
       if (groupIndex > 0) { groupIndex -= 1; storyIndex = groups[groupIndex].stories.length - 1; }
@@ -143,71 +156,26 @@ export function openStoryViewer(groups, startIndex = 0) {
   return { close: destroy };
 }
 
-/* ------------------------------ crear historia --------------------------- */
-
-export async function createStoryFlow() {
-  const files = await openFilePicker();
-  if (!files.length) return null;
-  const problem = validateImageFile(files[0]);
-  if (problem) { toast(problem, { type: 'error' }); return null; }
-
-  const objectUrl = URL.createObjectURL(files[0]);
-  const input = el('input', {
-    class: 'input', placeholder: 'Di algo sobre tu historia…', maxlength: '80',
-  });
-  const preview = el('div', {
-    style: {
-      marginTop: '12px', borderRadius: '10px', overflow: 'hidden', background: 'var(--card-2)',
-      aspectRatio: '9 / 12', position: 'relative',
-    },
-  },
-  el('img', {
-    src: objectUrl, alt: 'Vista previa',
-    style: { width: '100%', height: '100%', objectFit: 'cover' },
-  }));
-
-  let uploading = false;
-  const publish = el('button', { class: 'btn primary block lg', type: 'button' }, 'Compartir historia');
-  const api = openModal({
-    title: 'Crear historia',
-    body: el('div', null, preview, el('div', { class: 'mt-12' }, input)),
-    footer: [publish],
-    size: 'sm',
-    onClose: () => URL.revokeObjectURL(objectUrl),
-  });
-
-  publish.addEventListener('click', async () => {
-    if (uploading) return;
-    uploading = true;
-    publish.disabled = true;
-    publish.textContent = 'Subiendo…';
-    try {
-      const record = await uploadImage(files[0], 'stories', { maxSize: 1440 });
-      await createStory({ image: record.path, text: input.value.trim() });
-      api.close();
-      toast('Historia publicada (visible 24 h)', { type: 'success' });
-    } catch (err) {
-      uploading = false;
-      publish.disabled = false;
-      publish.textContent = 'Compartir historia';
-      toast(err.message || 'No se pudo publicar la historia.', { type: 'error' });
-    }
-  });
-
-  return api;
-}
-
 /* --------------------------------- fila --------------------------------- */
 
 export function mountStories() {
   const me = state.me;
-  const root = el('div', { class: 'stories' });
+  const root = el('div', { class: 'stories-wrap' });
+  const rail = el('div', { class: 'stories' });
+
+  root.append(
+    el('div', { class: 'stories-top' },
+      el('span', { class: 'stories-title', text: 'Historias' }),
+      el('button', {
+        class: 'link small', type: 'button',
+        onclick: () => navigate('/historias'),
+      }, 'Ver todas')),
+    rail);
 
   function render() {
-    clear(root);
+    clear(rail);
     const groups = storiesGrouped(me.id);
 
-    // tarjeta "crear historia"
     const createTop = el('div', { class: 'create-top', style: { background: storyGradient(me.id) } },
       me.avatar
         ? mediaImg(me.avatar, {
@@ -223,12 +191,15 @@ export function mountStories() {
 
     const createCard = el('button', {
       class: 'story-card create', type: 'button', 'aria-label': 'Crear historia',
-      onclick: () => createStoryFlow(),
+      onclick: () => {
+        playSound('open');
+        navigate('/historias/crear');
+      },
     }, createTop,
     el('div', { class: 'create-bottom' },
       el('span', { class: 'plus' }, icon('plus', 18)),
       el('span', { class: 'create-label', text: 'Crear historia' })));
-    root.appendChild(createCard);
+    rail.appendChild(createCard);
 
     for (let index = 0; index < groups.length; index++) {
       const group = groups[index];
@@ -251,6 +222,12 @@ export function mountStories() {
           text: story.text || '',
         }));
       }
+      if (story.text) {
+        card.appendChild(el('div', {
+          class: `story-rail-text ${storyFontClass(story.font)}`,
+          text: story.text,
+        }));
+      }
       card.appendChild(el('div', { class: 'sc-shade' }));
       card.appendChild(el('div', { class: 'sc-avatar' }, avatarEl(group.user, 'sm')));
       card.appendChild(el('div', {
@@ -263,7 +240,7 @@ export function mountStories() {
           text: `${group.stories.length} historias`,
         }));
       }
-      root.appendChild(card);
+      rail.appendChild(card);
     }
   }
 

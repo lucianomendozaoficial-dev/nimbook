@@ -7,7 +7,6 @@ import { THEMES, THEME_LABELS, readTheme, setTheme, resolvedTheme } from '../cor
 import { soundsEnabled, setSoundsEnabled, playSound } from '../core/sounds.js';
 import { readReduced, setReduced } from '../core/motion.js';
 import { toast } from '../core/ui.js';
-import { goBack } from '../core/router.js';
 
 function switchRow({ iconName, title, sub, value, onChange }) {
   const button = el('button', {
@@ -99,9 +98,6 @@ export function settingsPage() {
   }
 
   root.append(el('div', { class: 'page-head' },
-    el('button', {
-      class: 'btn ghost sm', type: 'button', onclick: () => goBack('/inicio'),
-    }, icon('arrow-left', 17), 'Volver'),
     el('div', { class: 'grow' },
       el('h1', { text: 'Configuración' }),
       el('p', { class: 'muted small', text: 'Tema de la app, sonidos y animaciones.' }))), content);

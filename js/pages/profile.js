@@ -1,12 +1,12 @@
 /* ==========================================================================
    pages/profile.js — perfil público y "Mi perfil"
    ========================================================================== */
-import { el, clear, formatCount, longDate, monthYear } from '../core/util.js';
+import { el, clear, formatCount, longDate, monthYear, copyText } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
   state, userById, userByUsername, displayName, fullName, followersOf, followingOf,
   countFollowers, countFollowing, loadFollowers, loadFollowing, loadPost, loadUser,
-  postsByAuthor, canSeePost, relationWith, updateProfileCache,
+  postsByAuthor, canSeePost, relationWith, updateProfileCache, shopBySeller,
 } from '../core/store.js';
 import {
   avatarEl, emptyState, openModal, toast, lightbox,
@@ -15,14 +15,16 @@ import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../cor
 import { updateProfile } from '../core/actions.js';
 import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
+import { listingCard } from './shop.js';
 import { navigate, goBack, parseRoute } from '../core/router.js';
 import { ValidationError } from '../core/auth.js';
 
 const TABS = [
-  { id: 'posts', label: 'Publicaciones' },
-  { id: 'seguidores', label: 'Seguidores' },
-  { id: 'fotos', label: 'Fotos' },
-  { id: 'about', label: 'Información' },
+  { id: 'posts', label: 'Publicaciones', icon: 'grid' },
+  { id: 'seguidores', label: 'Seguidores', icon: 'users' },
+  { id: 'fotos', label: 'Fotos', icon: 'image' },
+  { id: 'shop', label: 'Shop', icon: 'shop' },
+  { id: 'about', label: 'Información', icon: 'info' },
 ];
 
 /* --------------------------- editar mi perfil ---------------------------- */
@@ -194,6 +196,19 @@ export function profilePage(username, { preview = false } = {}) {
     });
   }
 
+  function shareProfile(user) {
+    return el('button', {
+      class: 'btn-icon profile-share', type: 'button',
+      title: 'Compartir perfil', 'aria-label': 'Compartir perfil',
+      onclick: async () => {
+        const ok = await copyText(`${location.origin}${location.pathname}#/u/${user.username}`);
+        toast(ok ? 'Enlace del perfil copiado' : 'No se pudo copiar', {
+          type: ok ? 'success' : 'error',
+        });
+      },
+    }, icon('link', 18));
+  }
+
   function header(user) {
     const isMe = user.id === state.me?.id;
     const followers = followersOf(user.id);
@@ -216,17 +231,18 @@ export function profilePage(username, { preview = false } = {}) {
         el('button', {
           class: 'btn', type: 'button',
           onclick: () => navigate(`/mensajes/${user.username}`),
-        }, icon('message', 16), 'Mensaje'));
+        }, icon('message', 16), 'Mensaje'),
+        shareProfile(user));
     }
 
-    return el('div', { class: 'profile-header' },
+    return el('div', { class: 'profile-header profile-hero' },
       coverEl(user),
       el('div', { class: 'profile-main-row' },
         el('div', { class: 'profile-avatar-big' }, avatarEl(user, 'xxl')),
         el('div', { class: 'profile-info' },
           el('h1', { class: 'profile-name', text: displayName(user) }),
           el('div', { class: 'profile-fullname', text: fullName(user) }),
-          user.bio ? el('p', { class: 'muted', text: user.bio }) : null,
+          user.bio ? el('p', { class: 'muted profile-bio', text: user.bio }) : null,
           el('div', { class: 'profile-stats' },
             el('a', { href: `#/u/${user.username}/seguidores`, text: `${formatCount(countFollowers(user.id))} seguidores` }),
             el('span', { text: '·' }),
@@ -241,11 +257,14 @@ export function profilePage(username, { preview = false } = {}) {
       el('div', { class: 'profile-tabs' },
         ...TABS.map((tab) => el('button', {
           class: `tab ${currentTab() === tab.id ? 'active' : ''}`.trim(), type: 'button',
-          text: tab.id === 'seguidores'
-            ? `${tab.label} · ${formatCount(countFollowers(user.id))}`
-            : tab.label,
+          'aria-pressed': currentTab() === tab.id ? 'true' : 'false',
           onclick: () => goTab(tab.id),
-        }))));
+        },
+        icon(tab.icon, 16),
+        el('span', { text: tab.label }),
+        tab.id === 'seguidores'
+          ? el('span', { class: 'tab-count', text: `· ${formatCount(countFollowers(user.id))}` })
+          : null))));
   }
 
   function postsSection(user) {
@@ -297,12 +316,33 @@ export function profilePage(username, { preview = false } = {}) {
           el('span', { class: 'ut-sub', text: fullName(person) }))))));
   }
 
+  function shopSection(user) {
+    const listings = shopBySeller(user.id);
+    if (!listings.length) {
+      return el('div', { class: 'card' },
+        emptyState({
+          iconName: 'shop',
+          title: user.id === state.me?.id ? 'Todavía no vendés nada' : 'Sin ventas en Shop',
+          description: user.id === state.me?.id
+            ? 'Publicá lo que ya no usás desde el botón flotante de Shop.'
+            : 'Cuando publique algo, va a aparecer acá.',
+          action: el('a', { class: 'btn primary', href: '#/tienda' },
+            user.id === state.me?.id ? 'Ir a Shop' : 'Ver Shop'),
+        }));
+    }
+    return el('div', { class: 'card pad' },
+      el('div', { class: 'section-head' },
+        el('h2', { text: 'Ventas en Shop' }),
+        el('a', { class: 'link small', href: '#/tienda', text: 'Ir a Shop' })),
+      el('div', { class: 'shop-grid small' }, ...listings.map((item) => listingCard(item))));
+  }
+
   function photosSection(user) {
     const photos = postsByAuthor(user.id)
       .filter((post) => canSeePost(post, state.me?.id))
       .flatMap((post) => (post.media || []).map((item) => ({ path: item.path, postId: post.id })));
     if (!photos.length) {
-      return el('div', { class: 'card' }, emptyState({ iconName: 'photo', title: 'Sin fotos' }));
+      return el('div', { class: 'card' }, emptyState({ iconName: 'image', title: 'Sin fotos' }));
     }
     const paths = photos.map((photo) => photo.path);
     return el('div', { class: 'card pad' },
@@ -315,21 +355,22 @@ export function profilePage(username, { preview = false } = {}) {
 
   function aboutSection(user) {
     const rows = [
-      ['Nombre', displayName(user)],
-      ['Usuario', `@${user.username}`],
-      ['Biografía', user.bio || '—'],
-      ['Trabajo', user.work || '—'],
-      ['Estudios', user.education || '—'],
-      ['Ciudad', user.location || '—'],
-      ['Nacimiento', user.birthday ? longDate(user.birthday) : '—'],
-      ['Estado civil', user.maritalStatus || '—'],
-      ['WhatsApp', user.whatsapp ? `+${user.whatsapp}` : '—'],
-      ['Instagram', user.instagram ? `@${user.instagram}` : '—'],
-      ['Miembro desde', monthYear(user.createdAt)],
+      ['user', 'Nombre', displayName(user)],
+      ['tag', 'Usuario', `@${user.username}`],
+      ['info', 'Biografía', user.bio || '—'],
+      ['briefcase', 'Trabajo', user.work || '—'],
+      ['education', 'Estudios', user.education || '—'],
+      ['map-pin', 'Ciudad', user.location || '—'],
+      ['calendar', 'Nacimiento', user.birthday ? longDate(user.birthday) : '—'],
+      ['heart', 'Estado civil', user.maritalStatus || '—'],
+      ['whatsapp', 'WhatsApp', user.whatsapp ? `+${user.whatsapp}` : '—'],
+      ['instagram', 'Instagram', user.instagram ? `@${user.instagram}` : '—'],
+      ['clock', 'Miembro desde', monthYear(user.createdAt)],
     ];
-    return el('div', { class: 'card pad' },
+    return el('div', { class: 'card pad about-card' },
       el('h2', { class: 'card-title', text: 'Información' }),
-      ...rows.map(([label, value]) => el('div', { class: 'about-row' },
+      ...rows.map(([iconName, label, value]) => el('div', { class: 'about-row' },
+        el('span', { class: 'about-ic' }, icon(iconName, 17)),
         el('span', { class: 'muted', text: label }),
         el('span', { text: value }))));
   }
@@ -364,6 +405,7 @@ export function profilePage(username, { preview = false } = {}) {
     if (tab === 'seguidores') root.appendChild(peopleSection(target, 'seguidores'));
     else if (tab === 'siguiendo') root.appendChild(peopleSection(target, 'siguiendo'));
     else if (tab === 'fotos') root.appendChild(photosSection(target));
+    else if (tab === 'shop') root.appendChild(shopSection(target));
     else if (tab === 'about') root.appendChild(aboutSection(target));
     else root.appendChild(postsSection(target));
   }

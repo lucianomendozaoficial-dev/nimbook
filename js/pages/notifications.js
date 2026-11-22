@@ -6,7 +6,6 @@ import { icon } from '../core/icons.js';
 import { state, displayName, userById, loadNotifications } from '../core/store.js';
 import { avatarEl, emptyState, toast } from '../core/ui.js';
 import { markAllNotificationsRead } from '../core/actions.js';
-import { goBack } from '../core/router.js';
 import { emptyFriendsIllustration } from '../core/illustrations.js';
 
 const ICONS = {
@@ -99,12 +98,7 @@ export function notificationsPage() {
   loadNotifications(state.me.id).then(render).catch(() => {});
 
   return {
-    el: el('div', null,
-      el('div', { class: 'page-back' },
-        el('button', {
-          class: 'btn ghost sm', type: 'button', onclick: () => goBack('/inicio'),
-        }, icon('arrow-left', 17), 'Volver')),
-      list),
+    el: el('div', null, list),
     onData(topic) { if (topic === 'notifications') render(); },
   };
 }

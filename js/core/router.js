@@ -44,6 +44,12 @@ export function parseRoute(hash = window.location.hash) {
     case 'messages':
     case 'chats':
       return { name: 'messages', params: { username: second || '' }, query };
+    case 'historias':
+    case 'stories':
+      if (second === 'crear' || second === 'nueva') {
+        return { name: 'storycompose', params: {}, query };
+      }
+      return { name: 'stories', params: {}, query };
     case 'saved':
     case 'guardados':
       return { name: 'saved', params: {}, query };

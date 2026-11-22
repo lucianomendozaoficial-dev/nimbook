@@ -245,10 +245,6 @@ export function messagesPage(username = '') {
     }, icon('refresh', 19));
 
     const head = el('header', { class: 'chat-head' },
-      el('button', {
-        class: 'btn-icon chat-back', type: 'button', 'aria-label': 'Volver a mensajes',
-        onclick: () => navigate('/mensajes'),
-      }, icon('arrow-left', 20)),
       el('a', { href: `#/u/${partner.username}` }, avatarEl(partner, 'md')),
       el('div', { class: 'grow', style: { minWidth: '0' } },
         el('a', { class: 'ch-name', href: `#/u/${partner.username}`, text: displayName(partner) }),

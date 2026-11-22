@@ -21,6 +21,7 @@ import { notificationsPage } from './pages/notifications.js';
 import { groupsPage, groupPage } from './pages/groups.js';
 import { shopPage, shopItemPage } from './pages/shop.js';
 import { messagesPage } from './pages/messages.js';
+import { storiesPage, storyComposerPage } from './pages/stories.js';
 import { savedPage } from './pages/saved.js';
 import { searchPage } from './pages/search.js';
 import { menuPage } from './pages/menu.js';
@@ -183,6 +184,8 @@ function layoutFor(route) {
     case 'shop':
     case 'shopitem':
     case 'messages':
+    case 'stories':
+    case 'storycompose':
       return { right: false, left: true, wide: true };
     case 'profile':
     case 'myprofile':
@@ -213,6 +216,8 @@ function pageFor(route) {
     case 'shop': return shopPage();
     case 'shopitem': return shopItemPage(route.params.id);
     case 'messages': return messagesPage(route.params.username || '');
+    case 'stories': return storiesPage();
+    case 'storycompose': return storyComposerPage();
     case 'saved': return savedPage();
     case 'search': return searchPage(route.query.q || '');
     case 'menu': return menuPage();
