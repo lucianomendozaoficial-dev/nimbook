@@ -12,8 +12,14 @@
         "fromId": "u_mwpqp95w628hkn",
         "text": "hola",
         "createdAt": "2026-11-22T16:52:07.127Z"
+      },
+      {
+        "id": "m_mws3xlb4frwuej",
+        "fromId": "u_mwpqp95w628hkn",
+        "text": "todo bien?",
+        "createdAt": "2026-11-22T17:25:03.904Z"
       }
     ],
-    "updatedAt": "2026-11-22T16:52:07.127Z"
+    "updatedAt": "2026-11-22T17:25:03.904Z"
   }
 }
