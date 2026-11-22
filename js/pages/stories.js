@@ -1,5 +1,5 @@
 /* ==========================================================================
-   pages/stories.js — sección de historias y creador con cámara + editor
+   pages/stories.js — sección de historias y creador con cámara + galería
    ========================================================================== */
 import { el, clear, timeAgo } from '../core/util.js';
 import { icon } from '../core/icons.js';
@@ -13,7 +13,7 @@ import {
 import { createStory } from '../core/actions.js';
 import { openStoryViewer } from '../components/stories.js';
 import { navigate } from '../core/router.js';
-import { STORY_FONTS, storyFontClass } from '../core/story-fonts.js';
+import { storyFontClass } from '../core/story-fonts.js';
 import { playSound } from '../core/sounds.js';
 
 /* --------------------------------- sección -------------------------------- */
@@ -32,7 +32,7 @@ export function storiesPage() {
         emptyState({
           iconName: 'story',
           title: 'Todavía no hay historias',
-          description: 'Sacá una foto, ponele un texto y compartila durante 24 horas.',
+          description: 'Abrí la cámara o elegí una foto de tu galería. Dura 24 horas.',
           action: el('button', {
             class: 'btn primary', type: 'button',
             onclick: () => navigate('/historias/crear'),
@@ -41,7 +41,6 @@ export function storiesPage() {
       return;
     }
 
-    // Tarjeta para crear
     grid.appendChild(el('button', {
       class: 'story-tile create', type: 'button',
       onclick: () => navigate('/historias/crear'),
@@ -106,8 +105,6 @@ export function storiesPage() {
 export function storyComposerPage() {
   const root = el('div', { class: 'story-composer' });
   const stage = el('div', { class: 'story-stage' });
-  const textValue = { current: '' };
-  const fontValue = { current: 'clasica' };
   let stream = null;
   let photoFile = null;
   let previewUrl = '';
@@ -179,7 +176,7 @@ export function storyComposerPage() {
     revokePreview();
     photoFile = file;
     previewUrl = URL.createObjectURL(file);
-    stageName = 'edit';
+    stageName = 'publish';
     render();
   }
 
@@ -245,50 +242,7 @@ export function storyComposerPage() {
     return preview;
   }
 
-  function renderEditor() {
-    const overlay = el('div', {
-      class: `story-text-overlay ${storyFontClass(fontValue.current)}`,
-      text: textValue.current,
-    });
-
-    const name = el('div', { class: 'story-editor-title', text: 'Editar historia' });
-    const close = el('button', {
-      class: 'story-round-btn', type: 'button', 'aria-label': 'Cerrar',
-      onclick: () => navigate('/historias'),
-    }, icon('x', 20));
-
-    const textInput = el('textarea', {
-      class: 'story-text-input', rows: '2', maxlength: '80',
-      placeholder: 'Escribí algo sobre la foto…',
-    });
-    textInput.value = textValue.current;
-    textInput.addEventListener('input', () => {
-      textValue.current = textInput.value.slice(0, 80);
-      overlay.textContent = textValue.current;
-      overlay.classList.toggle('hide', !textValue.current.trim());
-    });
-
-    const fonts = el('div', { class: 'story-fonts' });
-    function paintFonts() {
-      clear(fonts);
-      for (const font of STORY_FONTS) {
-        const active = fontValue.current === font.id;
-        fonts.appendChild(el('button', {
-          class: `story-font-chip ${storyFontClass(font.id)}${active ? ' active' : ''}`.trim(),
-          type: 'button', 'aria-pressed': active ? 'true' : 'false',
-          text: font.label,
-          onclick: () => {
-            fontValue.current = font.id;
-            overlay.className = `story-text-overlay ${storyFontClass(font.id)}`;
-            overlay.classList.toggle('hide', !textValue.current.trim());
-            paintFonts();
-          },
-        }));
-      }
-    }
-    paintFonts();
-    overlay.classList.toggle('hide', !textValue.current.trim());
-
+  function renderPublish() {
     const publish = el('button', {
       class: 'btn primary block lg', type: 'button',
     }, icon('send', 17), 'Compartir historia');
@@ -297,14 +251,11 @@ export function storyComposerPage() {
       if (busy || !photoFile) return;
       busy = true;
       publish.disabled = true;
-      publish.textContent = 'Publicando…';
+      publish.replaceChildren(el('span', { class: 'spinner', style: { width: '15px', height: '15px' } }));
+      publish.append(document.createTextNode(' Publicando…'));
       try {
         const record = await uploadImage(photoFile, 'stories', { maxSize: 1440 });
-        await createStory({
-          image: record.path,
-          text: textValue.current.trim(),
-          font: fontValue.current,
-        });
+        await createStory({ image: record.path });
         playSound('send');
         toast('Historia publicada (visible 24 h)', { type: 'success' });
         navigate('/historias');
@@ -316,18 +267,14 @@ export function storyComposerPage() {
       }
     });
 
-    return el('div', { class: 'story-editor' },
-      el('div', { class: 'story-editor-preview' },
-        el('img', { src: previewUrl, alt: 'Tu historia', class: 'story-editor-img' }),
-        overlay,
-        el('div', { class: 'story-editor-top' }, close, name)),
-      el('div', { class: 'story-editor-panel' },
-        el('div', { class: 'field' },
-          el('label', { text: 'Texto (opcional)' }),
-          textInput),
-        el('div', { class: 'field' },
-          el('label', { text: 'Fuente del texto' }),
-          fonts),
+    return el('div', { class: 'story-publish' },
+      el('div', { class: 'story-publish-preview' },
+        el('img', { src: previewUrl, alt: 'Tu historia' }),
+        el('button', {
+          class: 'story-round-btn story-publish-close', type: 'button', 'aria-label': 'Cerrar',
+          onclick: () => navigate('/historias'),
+        }, icon('x', 20))),
+      el('div', { class: 'story-publish-actions' },
         publish,
         el('button', {
           class: 'btn soft block', type: 'button',
@@ -338,16 +285,11 @@ export function storyComposerPage() {
   function render() {
     if (destroyed) return;
     clear(stage);
-    if (stageName === 'edit' && previewUrl) stage.appendChild(renderEditor());
+    if (stageName === 'publish' && previewUrl) stage.appendChild(renderPublish());
     else stage.appendChild(renderCamera());
   }
 
-  root.append(
-    el('div', { class: 'page-head story-composer-head' },
-      el('div', { class: 'grow' },
-        el('h1', { text: 'Nueva historia' }),
-        el('p', { class: 'muted small', text: 'Tomá una foto o elegila de tu galería, ponele texto y compartila.' }))),
-    stage);
+  root.append(stage);
 
   render();
   startCamera();

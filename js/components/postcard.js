@@ -12,6 +12,7 @@ import { playSound } from '../core/sounds.js';
 import { mediaImg, downloadImage, mediaFileName } from '../core/media.js';
 import { setReaction, deletePost, updatePost, toggleSavePost, createPost } from '../core/actions.js';
 import { navigate } from '../core/router.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const PRIVACY_ICON = { public: 'globe', followers: 'users', friends: 'users', private: 'lock', group: 'groups' };
 const BG_IDS = ['azul', 'rosa', 'verde', 'arena', 'violeta', 'oscuro'];
@@ -135,7 +136,9 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
     headEl.append(
       el('a', { href: authorLink }, avatarEl(author, 'md')),
       el('div', { class: 'who' },
-        el('a', { href: authorLink, class: 'post-name', text: displayName(author) }),
+        el('div', { class: 'post-name-row' },
+          el('a', { href: authorLink, class: 'post-name', text: displayName(author) }),
+          verifiedBadge(author, { size: 15 })),
         el('div', { class: 'post-meta' },
           el('span', { class: 'post-fullname', text: fullName(author) }),
           el('span', { class: 'dot' }),

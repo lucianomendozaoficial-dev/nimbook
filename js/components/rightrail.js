@@ -9,6 +9,7 @@ import {
 } from '../core/store.js';
 import { avatarEl } from '../core/ui.js';
 import { followButton } from './follow-button.js';
+import { verifiedBadge } from './verified-badge.js';
 
 export function mountRightRail() {
   const root = el('aside', { class: 'col-right', 'aria-label': 'Personas y sugerencias' });
@@ -42,7 +43,10 @@ export function mountRightRail() {
         list.appendChild(el('a', {
           class: 'rail-item', href: `#/u/${person.username}`,
           title: displayName(person),
-        }, avatarEl(person, 'sm'), el('span', { class: 'name', text: displayName(person) })));
+        }, avatarEl(person, 'sm'),
+        el('span', { class: 'name' },
+          displayName(person),
+          verifiedBadge(person, { size: 13 }))));
       }
       root.appendChild(list);
       if (following.length > 12) {
@@ -94,11 +98,13 @@ export function mountRightRail() {
         root.appendChild(el('div', { class: 'rail-item', style: { gap: '10px' } },
           el('a', { href: `#/u/${person.username}` }, avatarEl(person, 'sm')),
           el('div', { class: 'grow', style: { minWidth: '0' } },
-            el('a', {
-              href: `#/u/${person.username}`, class: 'name',
-              style: { fontWeight: '600', display: 'block' },
-              text: displayName(person),
-            }),
+            el('div', { class: 'name-row' },
+              el('a', {
+                href: `#/u/${person.username}`, class: 'name',
+                style: { fontWeight: '600' },
+                text: displayName(person),
+              }),
+              verifiedBadge(person, { size: 13 })),
             el('span', {
               class: 'dim tiny',
               text: mutual

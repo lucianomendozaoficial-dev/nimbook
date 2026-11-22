@@ -16,6 +16,7 @@ import { updateProfile } from '../core/actions.js';
 import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
 import { listingCard } from './shop.js';
+import { verifiedBadge } from '../components/verified-badge.js';
 import { navigate, goBack, parseRoute } from '../core/router.js';
 import { ValidationError } from '../core/auth.js';
 
@@ -240,7 +241,9 @@ export function profilePage(username, { preview = false } = {}) {
       el('div', { class: 'profile-main-row' },
         el('div', { class: 'profile-avatar-big' }, avatarEl(user, 'xxl')),
         el('div', { class: 'profile-info' },
-          el('h1', { class: 'profile-name', text: displayName(user) }),
+          el('div', { class: 'profile-name-row' },
+            el('h1', { class: 'profile-name', text: displayName(user) }),
+            verifiedBadge(user, { size: 21 })),
           el('div', { class: 'profile-fullname', text: fullName(user) }),
           user.bio ? el('p', { class: 'muted profile-bio', text: user.bio }) : null,
           el('div', { class: 'profile-stats' },

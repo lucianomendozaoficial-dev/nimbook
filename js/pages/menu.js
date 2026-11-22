@@ -9,8 +9,10 @@ import { logout } from '../core/auth.js';
 import { deleteAccount } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 import { canInstall, promptInstall, isStandalone } from '../core/pwa.js';
+import { forceUpdate } from '../core/update.js';
 import { playSound } from '../core/sounds.js';
 import { mediaImg } from '../core/media.js';
+import { verifiedBadge } from '../components/verified-badge.js';
 
 function item({
   iconName, color = '', title, sub, href, onClick, danger = false, control = null, badge = null,
@@ -133,7 +135,9 @@ export function menuPage() {
     el('div', { class: 'menu-hero-body' },
       el('a', { class: 'menu-hero-avatar', href: '#/mi-perfil' }, avatarEl(me, 'xl')),
       el('div', { class: 'menu-hero-info' },
-        el('div', { class: 'menu-hero-name', text: displayName(me) }),
+        el('div', { class: 'menu-hero-name-row' },
+          el('div', { class: 'menu-hero-name', text: displayName(me) }),
+          verifiedBadge(me, { size: 19 })),
         el('div', { class: 'menu-hero-fullname', text: fullName(me) }),
         el('div', { class: 'menu-hero-stats' },
           el('span', { text: `${countFollowers(me.id)} seguidores` }),
@@ -202,6 +206,19 @@ export function menuPage() {
           iconName: 'settings', color: 'gray', title: 'Configuración',
           sub: 'Tema, sonidos y animaciones', href: '#/configuracion',
         }),
+        item({
+          iconName: 'refresh', color: 'blue', title: 'Actualizar Zuma',
+          sub: 'Buscar la última versión y recargar',
+          onClick: async () => {
+            toast('Buscando la última versión…');
+            await forceUpdate();
+          },
+        }),
+        item({
+          iconName: 'grid', color: 'purple', title: 'Panel de control',
+          sub: 'Usuarios, publicaciones y verificaciones',
+          href: 'panel.html',
+        }),
         canInstall()
           ? item({
             iconName: 'download', color: 'blue', title: 'Instalar Zuma',
@@ -237,6 +254,11 @@ export function menuPage() {
       ]),
 
       section('Privacidad y cuenta', [
+        item({
+          iconName: 'shield', color: 'blue', title: 'Insignias de verificación',
+          sub: 'Celeste, morada y dorada: qué significa cada una',
+          href: '#/verificacion',
+        }),
         item({
           iconName: 'shield', color: 'gray', title: 'Privacidad',
           sub: 'Tus datos se guardan en el repositorio de Zuma',

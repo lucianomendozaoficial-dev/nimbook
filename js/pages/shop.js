@@ -14,6 +14,7 @@ import { mediaImg, openFilePicker, uploadImage, validateImageFile } from '../cor
 import { createListing, deleteListing, setListingStatus, updateListing } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
+import { verifiedBadge } from '../components/verified-badge.js';
 
 const MAX_PHOTOS = 6;
 
@@ -555,7 +556,9 @@ export function shopItemPage(id) {
           ? el('a', { href: `#/u/${seller.username}` }, avatarEl(seller, 'md'))
           : avatarEl(null, 'md'),
         el('div', { class: 'grow' },
-          el('div', { class: 'shop-seller-name', text: displayName(seller) }),
+          el('div', { class: 'name-row' },
+            el('div', { class: 'shop-seller-name', text: displayName(seller) }),
+            verifiedBadge(seller, { size: 15 })),
           el('div', { class: 'muted small', text: 'Vendedor en Shop' }))),
       contactCard(current, mine),
       current.description

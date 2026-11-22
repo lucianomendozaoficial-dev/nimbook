@@ -10,6 +10,7 @@ import {
 import { avatarEl, emptyState } from '../core/ui.js';
 import { mediaImg } from '../core/media.js';
 import { followButton } from '../components/follow-button.js';
+import { verifiedBadge } from '../components/verified-badge.js';
 import { parseRoute } from '../core/router.js';
 
 const RECENT_KEY = 'zuma.recientes.v1';
@@ -121,7 +122,9 @@ export function searchPage(initial = '') {
     return el('div', { class: 'search-row' },
       el('a', { href: `#/u/${person.username}` }, avatarEl(person, 'md')),
       el('div', { class: 'grow', style: { minWidth: '0' } },
-        el('a', { href: `#/u/${person.username}`, class: 'post-name', text: displayName(person) }),
+        el('div', { class: 'name-row' },
+          el('a', { href: `#/u/${person.username}`, class: 'post-name', text: displayName(person) }),
+          verifiedBadge(person, { size: 15 })),
         el('div', { class: 'muted small', text: fullName(person) })),
       relation === 'self' ? el('span', { class: 'chip', text: 'Vos' }) : followButton(person));
   }

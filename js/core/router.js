@@ -50,6 +50,10 @@ export function parseRoute(hash = window.location.hash) {
         return { name: 'storycompose', params: {}, query };
       }
       return { name: 'stories', params: {}, query };
+    case 'verificacion':
+    case 'verification':
+    case 'insignias':
+      return { name: 'verification', params: {}, query };
     case 'saved':
     case 'guardados':
       return { name: 'saved', params: {}, query };

@@ -16,23 +16,27 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 
 ---
 
-## Novedades: iOS, historias, Shop y mensajes
+## Novedades: iOS, historias, insignias y panel de control
 
 | Muro «Para ti» | Venta de Shop en el muro | Contacto de la venta |
 | --- | --- | --- |
 | ![Muro](docs/zuma/muro-para-ti.jpg) | ![Venta en el muro](docs/zuma/venta-en-muro.jpg) | ![Contacto](docs/zuma/contacto-venta.jpg) |
 
-| Shop | Perfil con sus ventas | Publicar con más opciones |
+| Shop | Perfil con insignia | Publicar con más opciones |
 | --- | --- | --- |
-| ![Shop](docs/zuma/shop.jpg) | ![Perfil con Shop](docs/zuma/perfil-shop.jpg) | ![Publicar](docs/zuma/componer.jpg) |
+| ![Shop](docs/zuma/shop.jpg) | ![Perfil](docs/zuma/perfil.jpg) | ![Publicar](docs/zuma/componer.jpg) |
 
-| Historias (sección aparte) | Cámara de historias | Editor: texto y fuente |
+| Historias (sección aparte) | Cámara de historias | Vista previa y compartir |
 | --- | --- | --- |
-| ![Historias](docs/zuma/historias.jpg) | ![Cámara](docs/zuma/historia-camara.jpg) | ![Editor](docs/zuma/historia-editor.jpg) |
+| ![Historias](docs/zuma/historias.jpg) | ![Cámara](docs/zuma/historia-camara.jpg) | ![Vista previa](docs/zuma/historia-preview.jpg) |
 
-| Menú rediseñado | Eliminar cuenta | Búsqueda con pestañas |
+| Menú rediseñado | Eliminar cuenta | Insignias de verificación |
 | --- | --- | --- |
-| ![Menú](docs/zuma/menu.jpg) | ![Eliminar cuenta](docs/zuma/eliminar-cuenta.jpg) | ![Buscar](docs/zuma/buscar.jpg) |
+| ![Menú](docs/zuma/menu.jpg) | ![Eliminar cuenta](docs/zuma/eliminar-cuenta.jpg) | ![Insignias](docs/zuma/verificacion.jpg) |
+
+| Panel de control | Ficha en el panel | Búsqueda con pestañas |
+| --- | --- | --- |
+| ![Panel](docs/zuma/panel.jpg) | ![Ficha](docs/zuma/panel-ficha.jpg) | ![Buscar](docs/zuma/buscar.jpg) |
 
 | Mensajes privados | Chat en el móvil | Zuma en el móvil |
 | --- | --- | --- |
@@ -45,14 +49,17 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 **Red social**
 - Registro e inicio de sesión (contraseñas cifradas con PBKDF2-SHA256).
 - Publicaciones con texto, hasta 10 fotos, **sentimiento, ubicación, privacidad y fondos de color** (como Facebook).
-- **Historias en su propia sección**: la cámara se abre primero y abajo está la opción de elegir de la galería. Después se edita la foto con **texto y 5 fuentes** y se comparte durante 24 h; también se pueden descargar.
+- **Historias en su propia sección**: la cámara se abre primero y abajo está la opción de elegir de la galería. La foto se comparte tal cual (sin editor); dura 24 h y se puede descargar.
+- **Insignias de verificación**: tres niveles con color, como Instagram. La **celeste** es para cuentas verificadas que no son famosas, la **morada** para influencers, políticos y figuras públicas, y la **dorada** para el equipo de Zuma y sus aliados. Al tocar una insignia se abre la sección que explica las tres.
+- **Panel de control** (`panel.html`): el equipo puede ver usuarios, sus publicaciones y datos, y asignar o quitar la insignia. Lee por el link público y escribe con el token de `config.js`.
+- **Actualizar Zuma** en el menú: borra la caché, desregistra el service worker y recarga para ver los cambios sin Ctrl+R.
 - **Descargar imágenes** de publicaciones e historias desde el menú de la publicación o el visor.
 - **Eliminar cuenta** desde el menú: pide la contraseña, avisa que es permanente y borra perfil, publicaciones, historias, ventas, conversaciones y vínculos.
 - Muro con orden tipo Facebook: lo tuyo, lo de las personas que seguís y lo de tus grupos tiene prioridad, pero **no queda en orden cronológico**; se mezcla en bloques con publicaciones de gente que no seguís (marcadas como «Sugerencia para ti») y se evita que aparezcan dos publicaciones seguidas de la misma persona. Pestañas **Para ti** y **Siguiendo**, y al cargar más se agrega al final sin desordenar lo que ya estabas viendo.
 - **Shop**: mercado con productos de la gente de Zuma, búsqueda y categorías, publicación con fotos, precio, estado y ubicación, ficha con vendedor, botón para escribirle, marcar como vendido y eliminar lo propio. El botón **Vender algo** queda flotante.
 - **Contacto de la venta**: al publicar se puede activar el contacto y elegir **WhatsApp** o **Instagram** (con sus logos). En la ficha aparecen esos botones y, para quien no quiera usarlos, el chat privado de Zuma.
 - **Ventas en el muro**: cada tanto aparece una venta de Shop mezclada en «Para ti», sin importar a quién sigas, con la **marca de agua de Zuma** y la etiqueta «Venta» para que se note que es de Shop.
-- **Mensajes privados**: bandeja con conversaciones y contador de no leídos, chat uno a uno (enviar, actualizar, buscar gente para escribirle), aviso en la campana y atajo desde el perfil y desde Shop. El mensaje se ve al instante y el chat se actualiza solo **cada 5 segundos leyendo el link público** (raw/CDN), sin gastar la API de GitHub.
+- **Mensajes privados**: bandeja con conversaciones y contador de no leídos, chat uno a uno (enviar, actualizar, buscar gente para escribirle), aviso en la campana y atajo desde el perfil y desde Shop. El mensaje se ve al instante y el chat se actualiza solo **cada 5 segundos leyendo el link público** (raw/CDN), sin gastar la API de GitHub. La bandeja del destinatario muestra a la otra persona (y se reparan las bandejas viejas que mostraban el propio usuario).
 - Reacciones con un toque (me gusta) o manteniendo apretado (6 opciones), comentarios y respuestas, compartir y guardar.
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
@@ -64,7 +71,7 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 - Notificaciones con campana y contador.
 - Perfiles con portada, foto, biografía y pestañas (publicaciones, seguidores, fotos, **Shop** e información); botón para compartir el perfil.
 - **Buscador con pestañas** (Todo, Personas, Shop, Grupos), sugerencias y búsquedas recientes.
-- **Menú rediseñado** con el perfil, las secciones de la app y la zona de privacidad y cuenta.
+- **Menú rediseñado** con el perfil, las secciones de la app, **Actualizar Zuma**, **Panel de control**, **Insignias de verificación** y la zona de privacidad y cuenta.
 - Modo claro / oscuro / automático, toasts, menús, visor de imágenes.
 
 **Diseño**
@@ -81,6 +88,19 @@ Los usuarios, las publicaciones, las historias, los chats y las imágenes viven 
 - Todo lo descargado se guarda en el navegador (localStorage) para no bajarlo dos veces; el chat abierto se lee cada 5 s por el link público y el resto se actualiza al abrir o al tirar hacia abajo.
 
 ---
+ 
+## Panel de control
+
+`panel.html` es una página aparte para el equipo. Muestra los usuarios, sus datos y sus publicaciones, y permite asignar o quitar la insignia de verificación. Lee los archivos por el link público y escribe con el token de `config.js`.
+
+- Se entra con una cuenta de administrador. La lista está al principio de `js/panel.js` (`ADMIN_USERNAMES`): por defecto `lucianomdz`, `lucianomdz.ok`, `eltuty` y `nico.gimenez` (esta última es la cuenta demo local). Cambiala por las cuentas del equipo.
+- Si no hay una sesión de administrador, el panel muestra un acceso con usuario y contraseña; verifica la contraseña con el mismo PBKDF2 de la app.
+- Pestañas: **Usuarios** (buscar, ver ficha, asignar insignia), **Publicaciones** y **Insignias** (explicación y cuentas verificadas).
+- La insignia se guarda en `usuarios/<id>.json` (`verification: { type, at }`) y en `usuarios/index.json` (`verification: "celeste" | "morado" | "dorado"`) para que el muro y las listas la muestren sin descargar la ficha completa.
+
+> El panel es una herramienta del equipo, no un backend: la protección es del lado del navegador y el token de `config.js` ya es público en un sitio estático. Usá un token limitado a este repositorio, con caducidad, y no compartas el enlace del panel.
+
+---
 
 ## Estructura del repositorio (la base de datos)
 
@@ -88,8 +108,8 @@ Un archivo por cosa: así dos personas nunca escriben el mismo archivo y GitHub 
 
 ```
 data/
-  usuarios/index.json          lista liviana: id, usuario, nombre, foto, alta
-  usuarios/<id>.json           ficha completa (contraseña cifrada, bio, contacto…)
+  usuarios/index.json          lista liviana: id, usuario, nombre, foto, alta e insignia
+  usuarios/<id>.json           ficha completa (contraseña cifrada, bio, contacto, insignia…)
   feed/index.json              últimos 200: id, autor y fecha (nada más)
   feed/<post>.json             publicación completa (texto, fotos, contadores)
   likes/<usuario>.json         { postId: tipo de reacción } de cada persona
@@ -99,7 +119,7 @@ data/
   seguidores/<usuario>.json    quién lo sigue
   notificaciones/<usuario>.json    bandeja de cada persona
   grupos.json                  grupos y canales (tipo, dueño y miembros)
-  historias.json               historias activas (imagen, texto, fuente; se limpian a las 24 h)
+  historias.json               historias activas (imagen; las viejas pueden tener texto y fuente)
   tienda/index.json            productos de Shop: id, vendedor, foto, precio y estado
   tienda/<producto>.json       ficha completa (descripción, fotos y contacto opcional)
   mensajes/bandejas/<usuario>.json   conversaciones de cada persona y no leídos
@@ -223,14 +243,16 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Tema | Decisión |
 | --- | --- |
 | Framework | Ninguno: módulos ES nativos, DOM a mano |
-| Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/tienda`, `#/tienda/producto`, `#/mensajes`, `#/mensajes/usuario`, `#/historias`, `#/historias/crear`), compatibles con Pages |
+| Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/tienda`, `#/tienda/producto`, `#/mensajes`, `#/mensajes/usuario`, `#/historias`, `#/historias/crear`, `#/verificacion`) y `panel.html`, compatibles con Pages |
 | Estado | Store propio con índices (`Map`) y selectores |
 | Concurrencia | Cola por archivo + reintentos ante `409` / `sha` inválido |
 | Caché | Memoria + `localStorage` por archivo con `ETag` y `sha` |
 | Cuota | ~5 000 peticiones/hora con token; los `304` no cuentan |
 | Chat en vivo | Sondeo cada 5 s por `raw.githubusercontent.com` (sin token); el token solo se usa al escribir |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
-| Historias | Cámara con `getUserMedia`; si no hay permiso o cámara, se elige de la galería. El texto se guarda con su fuente y se dibuja sobre la foto |
+| Historias | Cámara con `getUserMedia`; si no hay permiso o cámara, se elige de la galería. Se comparte la foto tal cual, sin editor |
+| Verificación | Tres niveles (celeste/morado/dorado) guardados en la ficha y el índice; la insignia es un botón que abre `#/verificacion` |
+| Panel | `panel.html` + `js/panel.js`, lectura pública y escritura con token; acceso por cuenta administradora |
 | Eliminar cuenta | Verifica la contraseña y borra perfil, posts, historias, ventas, conversaciones y vínculos; el aviso indica que no se puede deshacer |
 | Imágenes | `canvas` → JPEG, máx. 1600 px y ~1,4 MB, nombre único |
 | Vídeos | **No soportados** (por diseño); solo imágenes |
@@ -243,6 +265,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - Los mensajes privados se guardan como JSON en el repositorio: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Si el repositorio es público, alguien con el enlace podría abrir el archivo (como pasa con el resto de los datos). Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
 - La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, la app ofrece elegir una foto de la galería.
 - Al eliminar una cuenta se borran sus archivos JSON, pero las imágenes ya subidas a `media/` y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar en el repositorio.
+- El panel de control no tiene backend: el acceso es una verificación en el navegador y el token de escritura está en `config.js`. No lo uses como bóveda de datos: para un equipo grande haría falta un servidor o autenticación real.
 - Si dos personas escriben a la vez, la app reintenta automáticamente; en el peor caso avisa para volver a intentarlo.
 
 ---
@@ -268,10 +291,16 @@ js/core/crypto.js       PBKDF2
 js/core/media.js        compresión y subida de imágenes
 js/core/ui.js           modales, menús, toasts, visor de imágenes
 js/core/router.js       rutas por hash
-js/components/*         topbar, sidebars, compositor, tarjeta de post, historias
-js/pages/*              feed, Shop, historias con cámara, mensajes privados, perfil, búsqueda, menú…
-js/core/story-fonts.js  fuentes disponibles para el texto de las historias
+js/components/*         topbar, sidebars, compositor, tarjeta de post, historias, insignias
+js/pages/*              feed, Shop, historias con cámara, mensajes privados, perfil, búsqueda, verificación, menú…
+js/core/story-fonts.js  fuentes para las historias viejas que ya tenían texto
+js/core/update.js       Actualizar Zuma: limpia caché, desregistra el SW y recarga
 css/ios.css             capa de estilo iOS y estilos de las secciones nuevas
+panel.html              panel de control del equipo
+js/panel.js             usuarios, publicaciones e insignias (lectura pública, escritura con token)
+css/panel.css           estilos del panel
+js/components/verified-badge.js  insignias celeste, morada y dorada
+js/pages/verification.js         explicación de las tres insignias
 assets/logo/            logo PNG en todos los tamaños + favicon
 tools/                  despliegue, emulador de GitHub, datos de ejemplo y pruebas
 ```

@@ -11,6 +11,7 @@ import { postCard } from '../components/postcard.js';
 import { addComment, deleteComment } from '../core/actions.js';
 import { mediaImg } from '../core/media.js';
 import { playSound } from '../core/sounds.js';
+import { verifiedBadge } from '../components/verified-badge.js';
 
 export function postPage(postId) {
   const root = el('div');
@@ -31,7 +32,9 @@ export function postPage(postId) {
       el('a', { href: `#/u/${author.username}` }, avatarEl(author, 'sm')),
       el('div', { class: 'comment-body' },
         el('div', { class: 'comment-bubble' },
-          el('a', { href: `#/u/${author.username}`, class: 'comment-name', text: displayName(author) }),
+          el('div', { class: 'comment-name-row' },
+            el('a', { href: `#/u/${author.username}`, class: 'comment-name', text: displayName(author) }),
+            verifiedBadge(author, { size: 13 })),
           el('div', { class: 'comment-text', text: comment.text || '' }),
           comment.media?.length
             ? mediaImg(comment.media[0].path, { alt: 'Foto del comentario', className: 'comment-img' })

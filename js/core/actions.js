@@ -863,13 +863,15 @@ export async function sendMessage(toUserId, text, { silent = false } = {}) {
   const stamp = message.createdAt;
   // Al archivo se guarda sin las marcas locales (pending/localOnly).
   const persisted = { id: message.id, fromId: me.id, text: clean, createdAt: stamp };
-  const inboxEntry = {
+  const baseEntry = {
     threadId,
-    withId: toUserId,
     lastText: clean.slice(0, 140),
     lastAt: stamp,
     lastFromId: me.id,
   };
+  // Ojo: en mi bandeja el otro soy yo; en la suya el otro es mi id.
+  const myInboxEntry = { ...baseEntry, withId: toUserId };
+  const theirInboxEntry = { ...baseEntry, withId: me.id };
 
   // 1) se muestra al instante (después la red confirma en segundo plano)
   const beforeThread = state.threads.get(threadId);
@@ -877,7 +879,7 @@ export async function sendMessage(toUserId, text, { silent = false } = {}) {
   if (beforeThread) beforeThread.messages = [...beforeThread.messages, message].slice(-400);
   else state.threads.set(threadId, { threadId, messages: [message], loaded: true, at: Date.now() });
   state.inbox = [
-    { ...inboxEntry, unread: 0 },
+    { ...myInboxEntry, unread: 0 },
     ...state.inbox.filter((row) => row.threadId !== threadId),
   ];
   state.ui.unreadMessages = countUnreadMessages(state.inbox);
@@ -906,10 +908,10 @@ export async function sendMessage(toUserId, text, { silent = false } = {}) {
 
     // 3) bandejas: la mía queda sin pendientes, la de la otra persona suma uno
     await Promise.all([
-      queueDoc(P.inbox(me.id), (doc) => withInboxEntry(doc, inboxEntry, 'mine'), {
+      queueDoc(P.inbox(me.id), (doc) => withInboxEntry(doc, myInboxEntry, 'mine'), {
         delay: 400, message: 'Zuma: mensajes',
       }).catch(() => {}),
-      queueDoc(P.inbox(toUserId), (doc) => withInboxEntry(doc, inboxEntry, 'inbox'), {
+      queueDoc(P.inbox(toUserId), (doc) => withInboxEntry(doc, theirInboxEntry, 'inbox'), {
         delay: 400, message: 'Zuma: mensajes',
       }).catch(() => {}),
     ]);

@@ -11,6 +11,7 @@ import { avatarEl, openModal, toast } from '../core/ui.js';
 import { sendMessage, markThreadRead } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
+import { verifiedBadge } from '../components/verified-badge.js';
 
 export function messagesPage(username = '') {
   const root = el('div');
@@ -95,7 +96,9 @@ export function messagesPage(username = '') {
       },
       avatarEl(person, 'md', { online: false }),
       el('div', { class: 'cv-body' },
-        el('div', { class: 'cv-name', text: displayName(person) }),
+        el('div', { class: 'cv-name-row' },
+          el('span', { class: 'cv-name', text: displayName(person) }),
+          verifiedBadge(person, { size: 14 })),
         el('div', { class: 'cv-last', text: `${mine ? 'Vos: ' : ''}${entry.lastText || ''}` })),
       el('div', { class: 'cv-time', text: timeAgo(entry.lastAt) }),
       entry.unread ? el('span', { class: 'cv-dot' }) : null));
@@ -247,7 +250,9 @@ export function messagesPage(username = '') {
     const head = el('header', { class: 'chat-head' },
       el('a', { href: `#/u/${partner.username}` }, avatarEl(partner, 'md')),
       el('div', { class: 'grow', style: { minWidth: '0' } },
-        el('a', { class: 'ch-name', href: `#/u/${partner.username}`, text: displayName(partner) }),
+        el('div', { class: 'ch-name-row' },
+          el('a', { class: 'ch-name', href: `#/u/${partner.username}`, text: displayName(partner) }),
+          verifiedBadge(partner, { size: 15 })),
         el('div', { class: 'ch-sub', text: 'Mensaje privado' })),
       el('a', {
         class: 'btn-icon', href: `#/u/${partner.username}`, title: 'Ver perfil', 'aria-label': 'Ver perfil',

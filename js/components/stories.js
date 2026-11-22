@@ -13,6 +13,7 @@ import { deleteStory } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 import { storyFontClass } from '../core/story-fonts.js';
 import { playSound } from '../core/sounds.js';
+import { verifiedBadge } from './verified-badge.js';
 
 function storyGradient(seed) {
   return STORY_GRADIENTS[hashCode(seed) % STORY_GRADIENTS.length];
@@ -71,7 +72,9 @@ export function openStoryViewer(groups, startIndex = 0) {
     header.append(
       el('a', { href: `#/u/${group.user.username}` }, avatarEl(group.user, 'sm')),
       el('div', { class: 'grow' },
-        el('div', { class: 'sv-name', text: displayName(group.user) }),
+        el('div', { class: 'story-name-row' },
+          el('div', { class: 'sv-name', text: displayName(group.user) }),
+          verifiedBadge(group.user, { size: 14 })),
         el('div', { class: 'sv-time', text: timeAgo(story.createdAt) })),
       story.image
         ? el('button', {
