@@ -4,7 +4,7 @@ Red social completa inspirada en Facebook, hecha con **JavaScript puro** (sin fr
 
 **En línea:** https://lucianomendozaoficial-dev.github.io/nimbook/
 
-Los usuarios, las publicaciones, las historias, los chats y las ventas viven en la tabla `zuma_docs` de Supabase (un documento JSON por “archivo”), y las imágenes nuevas se guardan en **Supabase Storage**. Los **videos de historias y Reels** se guardan en **Cloudflare R2**. GitHub solo se usa para alojar el sitio estático.
+Los usuarios, las publicaciones, las historias, los chats y las ventas viven en la tabla `zuma_docs` de Supabase (un documento JSON por “archivo”), y las imágenes nuevas se guardan en **Supabase Storage**. Los **videos de historias** se guardan en **Cloudflare R2**. GitHub solo se usa para alojar el sitio estático.
 
 ![Feed de Zuma](docs/preview-feed.jpg)
 
@@ -49,9 +49,8 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 **Red social**
 - Registro e inicio de sesión (contraseñas cifradas con PBKDF2-SHA256).
 - Publicaciones con texto, hasta 10 fotos, **sentimiento, ubicación, privacidad y fondos de color** (como Facebook). Los enlaces del texto se detectan y se abren con un aviso y un botón **Abrir**; el fondo solo está disponible cuando la publicación es solo texto y el texto queda centrado.
-- **Historias en su propia sección**: fotos 9:16 y **videos de hasta 60 s comprimidos a 720p**. Las imágenes duran 24 h y los videos **18 h**; al vencer se quitan y se borra el archivo de R2. La tuya va siempre primera, las no vistas antes que las vistas y dentro de cada persona se ven de la primera a la última; si ya viste la primera y hay una nueva, abre directo en la nueva.
-- **Reels**: sección de videos verticales de hasta **2 minutos**, comprimidos a 720p, con scroll tipo TikTok, **solo me gusta** (sin comentarios) y subida desde la app.
-- **Galería propia**: las fotos importadas del dispositivo quedan guardadas y comprimidas en el navegador (IndexedDB), así después las elegís desde la galería de Zuma sin abrir el selector del sistema cada vez.
+- **Historias en su propia sección**: fotos 9:16 y **videos de hasta 60 s comprimidos a 720p**. Las imágenes duran 24 h y los videos **18 h**; al vencer se quitan y se borra el archivo de R2. La tuya va siempre primera, las no vistas antes que las vistas y dentro de cada persona se ven de la primera a la última; si ya viste la primera y hay una nueva, abre directo en la nueva. Se puede **responder una historia** y la respuesta llega al chat privado citando esa historia.
+- **Galería propia**: fotos y videos del dispositivo quedan optimizados y guardados en IndexedDB. La cámara abre directo a pantalla completa, sin header ni navegación, y con el acceso a la galería abajo; los videos se comprimen una sola vez a 720p y se reutilizan al publicar.
 - **Insignia única azul**: la cuenta verificada cuesta **$10.000/mes**. Incluye mayor visibilidad en el muro, perfil en sugerencias, tipo de cuenta (influencer, gamer, político/a, artista, deportista, periodista o marca) y un estilo especial en el perfil público.
 - **Solicitud de insignia**: se piden nombre completo, DNI, localidad, fecha de nacimiento y tipo de cuenta. Los datos se envían automáticamente al chat privado de **@soporte** y quedan en el panel.
 - **Perfil verificado**: las cuentas con insignia azul tienen un perfil público normal, con ilustraciones y detalles azules, la franja **Cuenta verificada** (sin fecha) y el tipo de cuenta.
@@ -81,8 +80,8 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - Grupos públicos y privados con publicaciones, miembros y administración.
 - Canales: solo el creador publica; el resto los sigue y lee.
 - Estado civil y datos personales editables desde «Mi perfil».
-- Notificaciones con campana y contador.
-- Perfiles con portada, foto, biografía y pestañas (publicaciones, seguidores, fotos, **Shop** e información); botón para compartir el perfil.
+- Notificaciones reales para reacciones, comentarios, seguidores, mensajes y respuestas a historias; se pueden marcar leídas al abrirlas y el contador se actualiza en vivo.
+- Perfiles con portada, foto, biografía, datos rápidos, pestañas (publicaciones, seguidores, fotos, **Shop** e información), acciones según sea tuyo o ajeno y botón para compartir. El nombre completo queda como título y `@usuario` debajo.
 - **Buscador con pestañas** (Todo, Personas, Shop, Grupos), ranking inteligente, coincidencias resaltadas, etiquetas para explorar, sugerencias y búsquedas recientes.
 - **Contactar a Luciano** desde el menú: WhatsApp **+54 11 5118-6792** e Instagram **@lucianomdz.ok**.
 - **Menú rediseñado** con el perfil, las secciones de la app, **Actualizar Zuma**, **Contactar**, **Panel de control**, **Insignia de verificación** y la zona de privacidad y cuenta.
@@ -137,7 +136,6 @@ data/
   notificaciones/<usuario>.json    bandeja de cada persona
   grupos.json                  grupos y canales (tipo, dueño y miembros)
   historias.json               historias activas (fotos 24 h y videos 18 h; los videos apuntan a R2)
-  reels/index.json             metadatos de Reels: video R2, poster, autor, duración y likes
   soporte/verificaciones.json  solicitudes de la insignia azul (nombre, DNI, localidad, nacimiento y tipo)
   soporte/reportes.json        cuentas reportadas y motivo
   soporte/config.json          datos de pago que se envían en los avisos
@@ -282,7 +280,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Tema | Decisión |
 | --- | --- |
 | Framework | Ninguno: módulos ES nativos, DOM a mano |
-| Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/tienda`, `#/tienda/producto`, `#/mensajes`, `#/mensajes/usuario`, `#/historias`, `#/historias/crear`, `#/verificacion`, `#/reels`) y `panel.html`, compatibles con Pages |
+| Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/tienda`, `#/tienda/producto`, `#/mensajes`, `#/mensajes/usuario`, `#/historias`, `#/historias/crear`, `#/verificacion`) y `panel.html`, compatibles con Pages |
 | Estado | Store propio con índices (`Map`) y selectores |
 | Base de datos | Supabase Postgres, tabla `zuma_docs` (`path` + `data jsonb` + `updated_at`) |
 | Concurrencia | Cola por documento + bloqueo optimista con `updated_at` y reintentos |
@@ -292,7 +290,6 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Chat en vivo | Realtime instantáneo + sonido si el chat no está abierto; el sondeo queda como respaldo |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
 | Historias | Fotos 24 h y videos de 60 s máx. / 18 h, 720p; galería propia en IndexedDB; videos en R2 |
-| Reels | Videos verticales de 2 min máx., 720p, solo like; metadatos en Supabase y archivos en R2 |
 | Enlaces | Los links del texto se abren desde un modal con un único botón **Abrir** |
 | Verificación | Una sola insignia azul, **$10.000/mes**. Guarda nombre completo, DNI, localidad, nacimiento y tipo de cuenta en `soporte/verificaciones.json`; vence en la fecha que fija el panel |
 | Soporte | Perfil @soporte, chat privado, reportes de cuentas, avisos publicados desde el panel y recordatorios de vencimiento |
@@ -308,14 +305,14 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - Las políticas RLS actuales permiten leer y escribir con la clave publicable. Es una etapa de transición: para una comunidad abierta conviene migrar el login a **Supabase Auth** y cerrar las políticas por usuario.
 - La `service_role` de Supabase **nunca** va en el navegador ni en `config.js`: solo se usa desde el SQL Editor o scripts privados.
 - Los mensajes privados se guardan como JSON en Supabase: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Alguien con la clave publicable y las políticas actuales podría leer la tabla. Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
-- La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, la app ofrece elegir una foto de la galería.
-- Los videos se comprimen en el navegador a **720 × 1280** con `MediaRecorder`; la compresión tarda lo que dura el video. Los archivos viven en R2 y los metadatos en Supabase.
+- La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, queda el acceso a la galería abajo.
+- Los videos se comprimen en el navegador a **720 × 1280** con `MediaRecorder`; si ya son 720p se reutiliza el original para evitar recodificar. La galería comprime una vez al agregar y la historia publica ese archivo listo.
 - **Seguridad de R2:** al ser una app estática, la URL firmada se genera en el navegador y las credenciales de R2 están en `config.js`. Cualquiera que abra el código puede verlas y subir/borrar archivos del bucket. Para producción hay que mover la firma a un Worker o Edge Function y rotar las claves. No uses ese bucket para archivos privados.
 - Los videos de historias se eliminan de la app a las 18 h y se intenta borrar el archivo de R2; si nadie abre la app, la limpieza queda pendiente.
 - El trámite de verificación guarda nombre completo, DNI, localidad y fecha de nacimiento en Supabase. El panel pide una contraseña de verificación, pero se comprueba en el navegador; no es autenticación real. Para producción conviene cerrar el panel con Supabase Auth.
 - La insignia azul es la única; los datos viejos con otros colores se muestran como azul.
 - Los avisos de vencimiento se envían al abrir el panel o la app del usuario (7 y 2 días antes), no con un cron del servidor: al ser un sitio estático no hay proceso en segundo plano.
-- La galería propia solo contiene las fotos que el usuario importó desde el dispositivo; el navegador no permite leer toda la galería del teléfono sin permiso.
+- La galería propia contiene las fotos y videos que el usuario agregó desde el dispositivo; el navegador no permite leer toda la galería del teléfono sin permiso, por eso el botón **+** abre el selector una vez y después los archivos quedan dentro de Zuma.
 - Al eliminar una cuenta se borran sus documentos JSON, pero las imágenes ya subidas a Storage y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar.
 - La contraseña del panel viaja y se comprueba en el cliente: alguien con experiencia puede saltearla leyendo el código. No la uses como única protección de datos sensibles.
 - Si dos personas escriben a la vez, la app relee y reintenta; en el peor caso avisa para volver a intentarlo.
@@ -345,7 +342,6 @@ js/core/media.js        compresión y subida de imágenes
 js/core/video.js        compresión de videos a 720 × 1280 y poster
 js/core/r2.js           Cloudflare R2: URLs firmadas, subida y borrado
 js/core/ui.js           modales, menús, toasts, visor de imágenes
-js/pages/reels.js       sección Reels vertical con like
 js/pages/verification.js         explicación y solicitud de la insignia azul
 js/core/router.js       rutas por hash
 js/components/*         topbar, sidebars, compositor, tarjeta de post, historias, insignias, emojis
@@ -353,11 +349,11 @@ js/components/emoji-picker.js   selector de emojis por categorías y recientes
 js/core/verification.js   insignia única, categorías, vencimiento y avisos
 js/core/reminders.js      mensajes privados de @soporte 7 y 2 días antes
 js/core/realtime.js     Supabase Realtime: cambios en vivo entre dispositivos
-js/core/gallery.js      galería propia con IndexedDB (fotos importadas)
+js/core/gallery.js      galería propia de fotos y videos optimizados en IndexedDB
 js/core/native.js       transiciones de vista y vibración nativa
 js/pages/group-editor.js        crear y personalizar grupos/canales
 css/features.css        mensajes estilo WhatsApp, emojis, grupos y márgenes móviles
-js/pages/*              feed, Shop, grupos, historias con cámara, mensajes, perfil, búsqueda, verificación, Reels, menú…
+js/pages/*              feed, Shop, grupos, historias con cámara, mensajes, perfil, búsqueda, verificación, menú…
 js/core/story-fonts.js  fuentes para las historias viejas que ya tenían texto
 js/core/update.js       Actualizar Zuma: limpia caché, desregistra el SW y recarga
 css/ios.css             capa de estilo iOS y estilos de las secciones nuevas

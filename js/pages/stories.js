@@ -1,5 +1,5 @@
 /* ==========================================================================
-   pages/stories.js — sección de historias y creador con cámara + galería
+   pages/stories.js â€” secciÃ³n de historias y creador con cÃ¡mara + galerÃ­a
    ========================================================================== */
 import { el, clear, timeAgo } from '../core/util.js';
 import { icon } from '../core/icons.js';
@@ -8,9 +8,8 @@ import {
 } from '../core/store.js';
 import { avatarEl, emptyState, toast } from '../core/ui.js';
 import {
-  mediaImg, uploadImage, validateImageFile, openFilePicker,
+  mediaImg, uploadImage, validateImageFile,
 } from '../core/media.js';
-import { compressVideo } from '../core/video.js';
 import { uploadR2 } from '../core/r2.js';
 import { openGallery } from '../core/gallery.js';
 import { createStory } from '../core/actions.js';
@@ -19,7 +18,7 @@ import { navigate } from '../core/router.js';
 import { storyFontClass } from '../core/story-fonts.js';
 import { playSound } from '../core/sounds.js';
 
-/* --------------------------------- sección -------------------------------- */
+/* --------------------------------- secciÃ³n -------------------------------- */
 
 export function storiesPage() {
   const root = el('div', { class: 'stories-page' });
@@ -34,8 +33,8 @@ export function storiesPage() {
       grid.appendChild(el('div', { class: 'card', style: { gridColumn: '1 / -1' } },
         emptyState({
           iconName: 'story',
-          title: 'Todavía no hay historias',
-          description: 'Abrí la cámara o elegí una foto de tu galería. Dura 24 horas.',
+          title: 'TodavÃ­a no hay historias',
+          description: 'AbrÃ­ la cÃ¡mara o elegÃ­ una foto de tu galerÃ­a. Dura 24 horas.',
           action: el('button', {
             class: 'btn primary', type: 'button',
             onclick: () => navigate('/historias/crear'),
@@ -93,9 +92,9 @@ export function storiesPage() {
     el('div', { class: 'page-head stories-head' },
       el('div', { class: 'grow' },
         el('h1', { text: 'Historias' }),
-        el('p', { class: 'muted small', text: 'Lo que compartió tu gente: fotos 24 h y videos 18 h.' })),
+        el('p', { class: 'muted small', text: 'Lo que compartiÃ³ tu gente: fotos 24 h y videos 18 h.' })),
       el('div', { class: 'stories-head-actions' },
-        el('span', { class: 'stories-duration-pill' }, icon('clock', 14), 'Fotos 24 h · Videos 18 h'),
+        el('span', { class: 'stories-duration-pill' }, icon('clock', 14), 'Fotos 24 h Â· Videos 18 h'),
         el('button', {
           class: 'btn primary', type: 'button',
           onclick: () => navigate('/historias/crear'),
@@ -158,7 +157,7 @@ export function storyComposerPage() {
     render();
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      cameraError = 'Este navegador no permite abrir la cámara acá. Elegí una foto de tu galería.';
+      cameraError = 'Este navegador no permite abrir la cÃ¡mara acÃ¡. ElegÃ­ una foto de tu galerÃ­a.';
       render();
       return;
     }
@@ -178,18 +177,30 @@ export function storyComposerPage() {
     } catch (err) {
       if (destroyed) return;
       cameraError = err?.name === 'NotAllowedError'
-        ? 'No diste permiso para usar la cámara. Podés elegir una foto de tu galería.'
-        : 'No pudimos abrir la cámara. Elegí una foto de tu galería.';
+        ? 'No diste permiso para usar la cÃ¡mara. PodÃ©s elegir una foto de tu galerÃ­a.'
+        : 'No pudimos abrir la cÃ¡mara. ElegÃ­ una foto de tu galerÃ­a.';
       render();
     }
   }
 
   async function pickFromGallery() {
     openGallery({
-      onPick: (file) => {
-        const problem = validateImageFile(file);
+      onPick: (item) => {
+        if (item.kind === 'video') {
+          stopCamera();
+          revokePreview();
+          photoFile = null;
+          videoBlob = item.file;
+          posterBlob = item.record.thumbBlob || null;
+          videoDuration = item.record.duration || 0;
+          videoPreviewUrl = URL.createObjectURL(item.file);
+          stageName = 'publish';
+          render();
+          return;
+        }
+        const problem = validateImageFile(item.file);
         if (problem) { toast(problem, { type: 'error' }); return; }
-        usePhoto(file);
+        usePhoto(item.file);
       },
     });
   }
@@ -204,35 +215,7 @@ export function storyComposerPage() {
   }
 
   async function pickVideo() {
-    const files = await openFilePicker({ accept: 'video/*' });
-    if (!files.length) return;
-    stopCamera();
-    revokePreview();
-    photoFile = null;
-    stageName = 'processing';
-    videoProcessing = 0;
-    render();
-    try {
-      const output = await compressVideo(files[0], {
-        maxDuration: 60,
-        onProgress: (value) => {
-          videoProcessing = value;
-          if (processingText) processingText.textContent = `Comprimiendo… ${value}%`;
-          if (processingBar) processingBar.style.width = `${value}%`;
-        },
-      });
-      videoBlob = output.blob;
-      posterBlob = output.poster;
-      videoDuration = output.duration;
-      videoPreviewUrl = URL.createObjectURL(output.blob);
-      stageName = 'publish';
-      render();
-    } catch (err) {
-      stageName = 'camera';
-      render();
-      toast(err.message || 'No se pudo comprimir el video.', { type: 'error' });
-      startCamera();
-    }
+    pickFromGallery();
   }
 
   async function shoot() {
@@ -253,7 +236,7 @@ export function storyComposerPage() {
     try {
       ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, targetW, targetH);
     } catch {
-      toast('La cámara todavía no está lista. Probá de nuevo en un segundo.', { type: 'error' });
+      toast('La cÃ¡mara todavÃ­a no estÃ¡ lista. ProbÃ¡ de nuevo en un segundo.', { type: 'error' });
       return;
     }
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
@@ -272,14 +255,14 @@ export function storyComposerPage() {
         }, icon('x', 20)),
         el('span', { class: 'grow' }),
         el('button', {
-          class: 'story-round-btn', type: 'button', 'aria-label': 'Cambiar cámara',
+          class: 'story-round-btn', type: 'button', 'aria-label': 'Cambiar cÃ¡mara',
           onclick: () => { facing = facing === 'user' ? 'environment' : 'user'; startCamera(); },
         }, icon('refresh', 20))),
       el('div', { class: 'story-camera-foot' },
         el('button', {
           class: 'story-gallery-btn', type: 'button',
           onclick: pickFromGallery,
-        }, icon('photo-library', 22), el('span', { text: 'Galería' })),
+        }, icon('photo-library', 22), el('span', { text: 'GalerÃ­a' })),
         el('button', {
           class: 'story-shutter', type: 'button', 'aria-label': 'Tomar foto',
           onclick: shoot,
@@ -291,7 +274,7 @@ export function storyComposerPage() {
 
     if (cameraError || !stream) {
       preview.classList.add('no-camera');
-      const message = cameraError || 'Preparando la cámara…';
+      const message = cameraError || 'Preparando la cÃ¡maraâ€¦';
       preview.appendChild(el('div', { class: 'story-camera-error' },
         el('div', { class: 'big-ic' }, icon('camera', 34)),
         el('p', { text: message }),
@@ -311,16 +294,16 @@ export function storyComposerPage() {
   }
 
   function renderProcessing() {
-    processingText = el('div', { class: 'story-processing-text', text: `Comprimiendo… ${videoProcessing}%` });
+    processingText = el('div', { class: 'story-processing-text', text: `Comprimiendoâ€¦ ${videoProcessing}%` });
     processingBar = el('div', { class: 'story-processing-bar' });
     return el('div', { class: 'story-processing' },
       el('div', { class: 'story-processing-card' },
         el('div', { class: 'big-ic' }, icon('videocam', 30)),
         el('div', { class: 'strong', text: 'Preparando tu video' }),
-        el('p', { class: 'muted small', text: 'Se comprime a 720p para que cargue rápido. Esto puede tardar lo mismo que dura el video.' }),
+        el('p', { class: 'muted small', text: 'Se comprime a 720p para que cargue rÃ¡pido. Esto puede tardar lo mismo que dura el video.' }),
         processingText,
         el('div', { class: 'story-processing-track' }, processingBar),
-        el('p', { class: 'muted tiny', text: 'Máximo 60 segundos · se verá 18 horas' })));
+        el('p', { class: 'muted tiny', text: 'MÃ¡ximo 60 segundos Â· se verÃ¡ 18 horas' })));
   }
 
   function renderPublish() {
@@ -334,7 +317,7 @@ export function storyComposerPage() {
       busy = true;
       publish.disabled = true;
       publish.replaceChildren(el('span', { class: 'spinner', style: { width: '15px', height: '15px' } }));
-      publish.append(document.createTextNode(' Publicando…'));
+      publish.append(document.createTextNode(' Publicandoâ€¦'));
       try {
         if (isVideo) {
           const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;

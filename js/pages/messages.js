@@ -144,13 +144,16 @@ export function messagesPage(username = '', routeQuery = {}) {
 
   function quotedNode(reply) {
     if (!reply) return null;
+    const label = reply.kind === 'shop'
+      ? 'Publicación de Shop'
+      : reply.kind === 'story' ? 'Historia' : 'Mensaje citado';
     return el('div', { class: 'msg-reply' },
       el('span', { class: 'msg-reply-thumb' },
         reply.image
           ? mediaImg(reply.image, { alt: reply.title || 'Publicación' })
-          : icon(reply.kind === 'shop' ? 'shop' : 'message', 16)),
+          : icon(reply.kind === 'shop' ? 'shop' : reply.kind === 'story' ? 'story' : 'message', 16)),
       el('div', { class: 'msg-reply-copy' },
-        el('div', { class: 'msg-reply-label', text: reply.kind === 'shop' ? 'Publicación de Shop' : 'Mensaje citado' }),
+        el('div', { class: 'msg-reply-label', text: label }),
         el('div', { class: 'msg-reply-title', text: reply.title || reply.text || 'Publicación' }),
         reply.price ? el('div', { class: 'msg-reply-price', text: money(reply.price, reply.currency || 'ARS') }) : null));
   }

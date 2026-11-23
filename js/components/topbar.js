@@ -13,7 +13,6 @@ import { canInstall, promptInstall, onPwaChange } from '../core/pwa.js';
 const TABS = [
   { id: 'feed', icon: 'home', href: '#/inicio', label: 'Inicio' },
   { id: 'groups', icon: 'groups', href: '#/grupos', label: 'Grupos' },
-  { id: 'reels', icon: 'play', href: '#/reels', label: 'Reels' },
   { id: 'shop', icon: 'shop', href: '#/tienda', label: 'Shop' },
   { id: 'saved', icon: 'bookmark', href: '#/guardados', label: 'Guardado' },
 ];

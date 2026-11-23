@@ -28,7 +28,6 @@ export const state = {
   comments: new Map(),     // postId -> { index, items: Map, loaded }
   groups: [],
   stories: [],
-  reels: [],
   notifications: [],
 
   shopIndex: [],           // [{ id, sellerId, title, price, ... }]
@@ -90,9 +89,6 @@ export function attach(cfg) {
     } else if (path === P.stories) {
       state.stories = doc?.stories || [];
       topic = 'stories';
-    } else if (path === P.reels) {
-      state.reels = Array.isArray(doc?.reels) ? doc.reels : [];
-      topic = 'reels';
     } else if (path === P.shopIndex) {
       state.shopIndex = doc?.items || [];
       topic = 'shop';
@@ -306,12 +302,6 @@ export async function loadStories() {
     }
   }
   return state.stories;
-}
-
-export async function loadReels({ fresh = false } = {}) {
-  const doc = await docJson(P.reels, { fresh });
-  state.reels = Array.isArray(doc?.reels) ? doc.reels : [];
-  return state.reels;
 }
 
 /* -------------------------------- tienda --------------------------------- */
@@ -984,7 +974,6 @@ export async function bootData() {
       loadInbox(state.me.id),
       loadGroups(),
       loadStories(),
-      loadReels(),
     ]);
   }
   await loadFeedPage({ reset: true });
@@ -1001,7 +990,6 @@ export async function refreshAll() {
     loadShopIndex({ fresh: true }),
     loadGroups(),
     loadStories(),
-    loadReels(),
   ]);
   if (state.me) {
     await Promise.all([

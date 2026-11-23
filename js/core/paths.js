@@ -35,7 +35,4 @@ export const P = {
   supportReports: 'data/soporte/reportes.json',
   supportConfig: 'data/soporte/config.json',
   supportUser: 'u_support',
-
-  /* Reels: metadatos en Supabase, video en Cloudflare R2 */
-  reels: 'data/reels/index.json',
 };

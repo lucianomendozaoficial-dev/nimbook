@@ -9,7 +9,7 @@ import {
 import { avatarEl, toast } from '../core/ui.js';
 import { mediaImg, downloadImage, mediaFileName } from '../core/media.js';
 import { fetchImageUrl } from '../core/net.js';
-import { deleteStory } from '../core/actions.js';
+import { deleteStory, sendMessage } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 import { storyFontClass } from '../core/story-fonts.js';
 import { playSound } from '../core/sounds.js';
@@ -27,18 +27,32 @@ export function openStoryViewer(groups, startIndex = 0) {
   let groupIndex = Math.max(0, Math.min(startIndex, groups.length - 1));
   let storyIndex = groups[groupIndex]?.startIndex || 0;
   let timer = null;
+  let destroyed = false;
 
   const root = el('div', { class: 'story-viewer', role: 'dialog', 'aria-modal': 'true' });
   const card = el('div', { class: 'sv-card' });
   const bars = el('div', { class: 'sv-bars' });
   const header = el('div', { class: 'sv-head' });
   const image = el('img', { alt: 'Historia', class: 'sv-image' });
-  const storyVideo = el('video', { class: 'sv-video hide', playsinline: true, autoplay: true });
+  const storyVideo = el('video', {
+    class: 'sv-video hide', playsinline: true, autoplay: true,
+    preload: 'auto', 'disablepictureinpicture': 'true',
+  });
   const caption = el('div', { class: 'sv-text' });
 
   const closeBtn = el('button', {
     class: 'sv-close', type: 'button', 'aria-label': 'Cerrar', onclick: () => destroy(),
   }, icon('x', 18));
+
+  const replyInput = el('input', {
+    class: 'sv-reply-input', type: 'text', maxlength: '500',
+    placeholder: 'Responder a la historia…', 'aria-label': 'Responder a la historia',
+  });
+  const replySend = el('button', {
+    class: 'sv-reply-send', type: 'submit', 'aria-label': 'Enviar respuesta',
+  }, icon('send', 17));
+  const replyForm = el('form', { class: 'sv-reply hide' }, replyInput, replySend);
+  let replying = false;
 
   const prevZone = el('button', {
     class: 'sv-nav prev', type: 'button', 'aria-label': 'Anterior',
@@ -49,7 +63,7 @@ export function openStoryViewer(groups, startIndex = 0) {
     onclick: (event) => { event.stopPropagation(); step(1); },
   });
 
-  card.append(storyVideo, image, bars, header, caption, prevZone, nextZone, closeBtn);
+  card.append(storyVideo, image, bars, header, caption, prevZone, nextZone, replyForm, closeBtn);
   root.appendChild(card);
 
   function currentStory() {
@@ -62,15 +76,18 @@ export function openStoryViewer(groups, startIndex = 0) {
     if (!current) { destroy(); return; }
     const { group, story } = current;
     markStorySeen(story.id);
+    replyForm.classList.toggle('hide', group.user.id === me.id);
+    replyInput.placeholder = `Responder a ${displayName(group.user)}…`;
 
     const isVideo = Boolean(story.video);
     if (isVideo) {
       image.classList.add('hide');
       storyVideo.classList.remove('hide');
+      storyVideo.pause();
       storyVideo.src = story.video;
       storyVideo.poster = story.poster || story.image || '';
       storyVideo.muted = false;
-      storyVideo.currentTime = 0;
+      try { storyVideo.currentTime = 0; } catch { /* noop */ }
       const play = () => storyVideo.play().catch(() => {
         storyVideo.muted = true;
         storyVideo.play().catch(() => {});
@@ -126,14 +143,14 @@ export function openStoryViewer(groups, startIndex = 0) {
         : null);
 
     clear(bars);
-    const duration = story.video
+    const playback = story.video
       ? Math.min(60, Math.max(0.5, Number(story.duration) || 15)) + 0.4
       : 6.2;
     for (let i = 0; i < group.stories.length; i++) {
       const segment = el('span', { class: 'sv-bar' }, el('i'));
       if (i < storyIndex) segment.firstChild.style.width = '100%';
       if (i === storyIndex) {
-        segment.firstChild.style.transition = `width ${duration}s linear`;
+        segment.firstChild.style.transition = `width ${playback}s linear`;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             segment.firstChild.style.width = '100%';
@@ -142,7 +159,7 @@ export function openStoryViewer(groups, startIndex = 0) {
       }
       bars.appendChild(segment);
     }
-    scheduleAdvance(duration);
+    scheduleAdvance(story.video ? playback + 4 : playback);
   }
 
   function scheduleAdvance(duration = 6.2) {
@@ -176,18 +193,52 @@ export function openStoryViewer(groups, startIndex = 0) {
   }
 
   function destroy() {
+    if (destroyed) return;
+    destroyed = true;
     clearTimeout(timer);
     storyVideo.pause();
     document.removeEventListener('keydown', onKey);
+    window.removeEventListener('hashchange', destroy);
     root.remove();
     document.body.style.overflow = '';
     notify('stories');
   }
 
   document.addEventListener('keydown', onKey);
+  window.addEventListener('hashchange', destroy);
   document.body.style.overflow = 'hidden';
   document.body.appendChild(root);
   render();
+
+  replyForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const current = currentStory();
+    const text = replyInput.value.trim();
+    if (!current || !text || replying || current.group.user.id === me?.id) return;
+    replying = true;
+    replySend.disabled = true;
+    try {
+      await sendMessage(current.group.user.id, text, {
+        replyTo: {
+          kind: 'story',
+          id: current.story.id,
+          title: 'Historia',
+          image: current.story.poster || current.story.image || '',
+        },
+        notificationType: 'story_reply',
+      });
+      replyInput.value = '';
+      playSound('send');
+      toast('Respuesta enviada', { type: 'success' });
+    } catch (err) {
+      toast(err.message || 'No se pudo enviar la respuesta.', { type: 'error' });
+    } finally {
+      replying = false;
+      replySend.disabled = false;
+      replyInput.focus();
+    }
+  });
+
   return { close: destroy };
 }
 

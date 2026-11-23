@@ -34,10 +34,11 @@ export async function probeVideo(file) {
 function supportedMime() {
   if (typeof MediaRecorder === 'undefined') return '';
   const types = [
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
     'video/mp4',
+    'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp9,opus',
+    'video/webm',
   ];
   return types.find((type) => MediaRecorder.isTypeSupported(type)) || '';
 }
@@ -89,6 +90,23 @@ export async function compressVideo(file, { maxDuration = 60, onProgress = null,
   const ctx = canvas.getContext('2d', { alpha: false });
   drawCover(ctx, video, canvas);
   const posterBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+
+  // Si ya es un video liviano de 720p o menos, no hace falta recodificarlo:
+  // se conserva el archivo original y solo se le agrega el poster.
+  const shortSide = Math.min(info.width || 0, info.height || 0);
+  if (shortSide > 0 && shortSide <= 720 && /^video\/(mp4|webm)/i.test(file.type || '') && file.size < 70 * 1024 * 1024) {
+    URL.revokeObjectURL(info.url);
+    return {
+      blob: file,
+      poster: posterBlob,
+      duration: info.duration || 0.5,
+      width: info.width,
+      height: info.height,
+      mimeType: file.type,
+      optimized: true,
+    };
+  }
+
   video.currentTime = 0;
   const stream = canvas.captureStream(30);
   let audioCtx = null;
@@ -103,8 +121,8 @@ export async function compressVideo(file, { maxDuration = 60, onProgress = null,
 
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
-    videoBitsPerSecond: 2_400_000,
-    audioBitsPerSecond: 128_000,
+    videoBitsPerSecond: 1_900_000,
+    audioBitsPerSecond: 96_000,
   });
   const chunks = [];
   recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
@@ -118,7 +136,11 @@ export async function compressVideo(file, { maxDuration = 60, onProgress = null,
     if (stopped) return;
     drawCover(ctx, video, canvas);
     onProgress?.(Math.min(99, Math.round((video.currentTime / Math.max(0.1, info.duration || 1)) * 100)));
-    raf = requestAnimationFrame(draw);
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      video.requestVideoFrameCallback(draw);
+    } else {
+      raf = requestAnimationFrame(draw);
+    }
   };
 
   const result = new Promise((resolve, reject) => {

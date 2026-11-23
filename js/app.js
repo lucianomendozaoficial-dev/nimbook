@@ -24,7 +24,6 @@ import { notificationsPage } from './pages/notifications.js';
 import { groupsPage, groupPage } from './pages/groups.js';
 import { shopPage, shopItemPage } from './pages/shop.js';
 import { messagesPage } from './pages/messages.js';
-import { reelsPage } from './pages/reels.js';
 import { storiesPage, storyComposerPage } from './pages/stories.js';
 import { verificationPage } from './pages/verification.js';
 import { savedPage } from './pages/saved.js';
@@ -110,7 +109,6 @@ function buildShell() {
   const items = [
     { id: 'feed', icon: 'home', label: 'Inicio', href: '#/inicio' },
     { id: 'compose', icon: 'plus', label: 'Publicar', href: '#/publicar' },
-    { id: 'reels', icon: 'play', label: 'Reels', href: '#/reels' },
     { id: 'shop', icon: 'shop', label: 'Shop', href: '#/tienda' },
     { id: 'messages', icon: 'message', label: 'Mensajes', href: '#/mensajes', badge: true },
     { id: 'menu', icon: 'menu', label: 'Menú', href: '#/menu' },
@@ -186,7 +184,6 @@ function layoutFor(route) {
   switch (route.name) {
     case 'feed': return { right: true, left: true, wide: false };
     case 'post': return { right: false, left: true, wide: true };
-    case 'reels': return { right: false, left: false, wide: true };
     case 'shop':
     case 'shopitem':
     case 'messages':
@@ -223,7 +220,6 @@ function pageFor(route) {
     case 'shop': return shopPage();
     case 'shopitem': return shopItemPage(route.params.id);
     case 'messages': return messagesPage(route.params.username || '', route.query || {});
-    case 'reels': return reelsPage();
     case 'stories': return storiesPage();
     case 'storycompose': return storyComposerPage();
     case 'verification': return verificationPage();

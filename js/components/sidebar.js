@@ -48,10 +48,6 @@ export function mountSidebar() {
       href: '#/grupos', active: route.name === 'groups' || route.name === 'group',
     }));
     root.appendChild(item({
-      iconName: 'play', color: 'pink', label: 'Reels',
-      href: '#/reels', active: route.name === 'reels',
-    }));
-    root.appendChild(item({
       iconName: 'shop', color: 'blue', label: 'Shop',
       href: '#/tienda', active: route.name === 'shop' || route.name === 'shopitem',
     }));

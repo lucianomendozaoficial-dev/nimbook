@@ -1,17 +1,19 @@
 /* ==========================================================================
-   gallery.js — galería propia de Zuma (IndexedDB)
-   Guarda una copia comprimida de las fotos que el usuario importa del
-   dispositivo para que después pueda elegirlas sin abrir el selector nativo.
+   gallery.js — galería propia de Zuma (fotos y videos, IndexedDB)
+   Guarda copias optimizadas de los archivos que el usuario elige del
+   dispositivo. Los videos se comprimen una vez a 720p y quedan listos para
+   publicar en Historias sin volver a recodificarlos.
    ========================================================================== */
 import { el, clear } from './util.js';
 import { icon } from './icons.js';
 import { openModal, toast } from './ui.js';
 import { openFilePicker } from './media.js';
+import { compressVideo } from './video.js';
 
 const DB_NAME = 'zuma-gallery';
 const STORE = 'photos';
 const VERSION = 1;
-const MAX_PHOTOS = 40;
+const MAX_MEDIA = 30;
 
 let dbPromise = null;
 
@@ -57,33 +59,68 @@ async function compressPhoto(file) {
   return { blob, width, height };
 }
 
-export async function listPhotos() {
+function normalizeKind(record) {
+  return record.kind || (record.duration ? 'video' : 'image');
+}
+
+export async function listMedia(kind = 'all') {
   try {
     const db = await openDb();
     const tx = db.transaction(STORE, 'readonly');
     const rows = await requestResult(tx.objectStore(STORE).getAll());
-    return (rows || []).sort((a, b) => b.createdAt - a.createdAt);
+    return (rows || [])
+      .map((record) => ({ ...record, kind: normalizeKind(record) }))
+      .filter((record) => kind === 'all' || record.kind === kind)
+      .sort((a, b) => b.createdAt - a.createdAt);
   } catch {
     return [];
   }
 }
 
-export async function addPhotos(files) {
-  const list = [...(files || [])].filter(Boolean).slice(0, 20);
+export async function addMedia(files, { onProgress = null } = {}) {
+  const list = [...(files || [])].filter(Boolean).slice(0, 12);
   if (!list.length) return [];
   const added = [];
   try {
     const db = await openDb();
     for (const file of list) {
-      if (!/^image\//i.test(file.type || '')) continue;
       try {
-        const { blob, width, height } = await compressPhoto(file);
+        const isVideo = /^video\//i.test(file.type || '');
+        const isImage = /^image\//i.test(file.type || '');
+        if (!isVideo && !isImage) continue;
+        let blob;
+        let thumbBlob;
+        let duration = 0;
+        let width = 0;
+        let height = 0;
+        let kind = 'image';
+        if (isVideo) {
+          kind = 'video';
+          const output = await compressVideo(file, {
+            maxDuration: 60,
+            onProgress: (value) => onProgress?.(value, file.name),
+          });
+          blob = output.blob;
+          thumbBlob = output.poster;
+          duration = output.duration;
+          width = output.width;
+          height = output.height;
+        } else {
+          const output = await compressPhoto(file);
+          blob = output.blob;
+          thumbBlob = output.blob;
+          width = output.width;
+          height = output.height;
+        }
         const record = {
           id: `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+          kind,
           blob,
+          thumbBlob: thumbBlob || null,
           width,
           height,
-          name: file.name || 'foto.jpg',
+          duration,
+          name: file.name || (kind === 'video' ? 'video.mp4' : 'foto.jpg'),
           createdAt: Date.now(),
         };
         const tx = db.transaction(STORE, 'readwrite');
@@ -94,12 +131,11 @@ export async function addPhotos(files) {
         });
         added.push(record);
       } catch {
-        /* una foto inválida no corta el resto */
+        /* un archivo inválido no corta el resto */
       }
     }
-    // límite de fotos guardadas
-    const all = await listPhotos();
-    for (const old of all.slice(MAX_PHOTOS)) {
+    const all = await listMedia();
+    for (const old of all.slice(MAX_MEDIA)) {
       const tx = db.transaction(STORE, 'readwrite');
       tx.objectStore(STORE).delete(old.id);
       await new Promise((resolve) => { tx.oncomplete = resolve; tx.onerror = resolve; });
@@ -110,90 +146,138 @@ export async function addPhotos(files) {
   return added;
 }
 
-export async function getPhoto(id) {
+export async function getMedia(id) {
   try {
     const db = await openDb();
     const tx = db.transaction(STORE, 'readonly');
-    return await requestResult(tx.objectStore(STORE).get(id));
+    const record = await requestResult(tx.objectStore(STORE).get(id));
+    return record ? { ...record, kind: normalizeKind(record) } : null;
   } catch {
     return null;
   }
 }
 
-export async function photoFile(id) {
-  const record = await getPhoto(id);
+export async function mediaFile(id) {
+  const record = await getMedia(id);
   if (!record?.blob) return null;
-  return new File([record.blob], record.name || 'foto.jpg', { type: record.blob.type || 'image/jpeg' });
+  return new File([record.blob], record.name || (record.kind === 'video' ? 'video.mp4' : 'foto.jpg'), {
+    type: record.blob.type || (record.kind === 'video' ? 'video/mp4' : 'image/jpeg'),
+  });
 }
 
-/** Abre la galería propia. Si está vacía, permite importar fotos del dispositivo. */
-export function openGallery({ onPick } = {}) {
+function durationLabel(seconds) {
+  const value = Math.round(Number(seconds) || 0);
+  return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+}
+
+/** Galería unificada de fotos y videos. */
+export function openGallery({ onPick, initialKind = 'all' } = {}) {
   const grid = el('div', { class: 'zuma-gallery-grid' });
+  const tabs = el('div', { class: 'zuma-gallery-tabs' });
+  const status = el('div', { class: 'zuma-gallery-status hide' });
   const urls = new Set();
+  let kind = initialKind;
   let closed = false;
+  let importing = false;
 
   function revokeAll() {
     for (const url of urls) URL.revokeObjectURL(url);
     urls.clear();
   }
 
+  function paintTabs() {
+    clear(tabs);
+    for (const item of [
+      { id: 'all', label: 'Todo' },
+      { id: 'image', label: 'Fotos' },
+      { id: 'video', label: 'Videos' },
+    ]) {
+      tabs.appendChild(el('button', {
+        class: `zuma-gallery-tab${kind === item.id ? ' active' : ''}`.trim(),
+        type: 'button',
+        onclick: () => { kind = item.id; paintTabs(); render(); },
+      }, item.label));
+    }
+  }
+
   async function render() {
     if (closed) return;
     revokeAll();
     clear(grid);
-    const photos = await listPhotos();
-    if (!photos.length) {
+    const media = await listMedia(kind);
+    if (!media.length) {
       grid.appendChild(el('div', { class: 'zuma-gallery-empty' },
-        el('div', { class: 'big-ic' }, icon('photo-library', 30)),
-        el('div', { class: 'strong', text: 'Tu galería de Zuma está vacía' }),
-        el('p', { class: 'muted small', text: 'Importá fotos del dispositivo una vez y después vas a poder elegirlas desde acá, sin abrir el selector del sistema cada vez.' })));
+        el('div', { class: 'big-ic' }, icon(kind === 'video' ? 'videocam' : 'photo-library', 30)),
+        el('div', { class: 'strong', text: kind === 'video' ? 'No hay videos todavía' : 'Tu galería está vacía' }),
+        el('p', { class: 'muted small', text: 'Tocá el botón + para sumar fotos o videos a tu galería. Los videos se optimizan una vez.' })));
       return;
     }
-    for (const record of photos) {
-      const url = URL.createObjectURL(record.blob);
+    for (const record of media) {
+      const thumb = record.thumbBlob || record.blob;
+      const url = URL.createObjectURL(thumb);
       urls.add(url);
       grid.appendChild(el('button', {
-        class: 'zuma-gallery-item', type: 'button',
-        'aria-label': record.name || 'Foto',
+        class: `zuma-gallery-item${record.kind === 'video' ? ' is-video' : ''}`,
+        type: 'button',
+        'aria-label': record.name || record.kind,
         onclick: async () => {
-          const file = await photoFile(record.id);
-          if (!file) { toast('No se pudo abrir esa foto.', { type: 'error' }); return; }
+          const file = await mediaFile(record.id);
+          if (!file) { toast('No se pudo abrir ese archivo.', { type: 'error' }); return; }
           api.close();
-          onPick?.(file);
+          onPick?.({ kind: record.kind, file, record });
         },
-      }, el('img', { src: url, alt: '', loading: 'lazy' }),
-      el('span', { class: 'zuma-gallery-check' }, icon('check', 13))));
+      },
+      el('img', { src: url, alt: '', loading: 'lazy' }),
+      record.kind === 'video'
+        ? el('span', { class: 'zuma-gallery-video' },
+          el('span', { class: 'zuma-gallery-play' }, icon('play', 12)),
+          el('span', { text: durationLabel(record.duration) }))
+        : null));
     }
   }
 
-  async function importPhotos() {
-    const files = await openFilePicker({ multiple: true });
+  async function importMedia() {
+    if (importing) return;
+    const files = await openFilePicker({ multiple: true, accept: 'image/*,video/*' });
     if (!files.length) return;
-    const added = await addPhotos(files);
-    if (!added.length) {
-      toast('No se pudieron importar las fotos.', { type: 'error' });
-      return;
+    importing = true;
+    status.classList.remove('hide');
+    status.textContent = 'Optimizando archivos…';
+    try {
+      const added = await addMedia(files, {
+        onProgress: (value, name) => { status.textContent = `Optimizando ${name || 'video'}… ${value}%`; },
+      });
+      if (!added.length) {
+        toast('No se pudieron agregar esos archivos.', { type: 'error' });
+        return;
+      }
+      toast(added.length === 1 ? 'Archivo agregado' : `${added.length} archivos agregados`, { type: 'success' });
+      render();
+    } finally {
+      importing = false;
+      status.classList.add('hide');
     }
-    toast(added.length === 1 ? 'Foto importada a tu galería' : `${added.length} fotos importadas`, { type: 'success' });
-    render();
   }
 
   const api = openModal({
-    title: 'Tu galería',
+    title: 'Galería',
     size: 'lg',
     onClose: () => {
       closed = true;
       revokeAll();
     },
     body: el('div', { class: 'zuma-gallery' },
-      el('div', { class: 'zuma-gallery-head' },
-        el('p', { class: 'muted small', text: 'Fotos guardadas en este dispositivo. Se comprimen antes de guardarse.' }),
+      el('div', { class: 'zuma-gallery-top' },
+        tabs,
         el('button', {
-          class: 'btn soft sm', type: 'button', onclick: importPhotos,
-        }, icon('plus', 15), 'Importar del dispositivo')),
+          class: 'zuma-gallery-add', type: 'button', 'aria-label': 'Agregar fotos o videos',
+          onclick: importMedia,
+        }, icon('plus', 20))),
+      status,
       grid),
   });
 
+  paintTabs();
   render();
   return api;
 }

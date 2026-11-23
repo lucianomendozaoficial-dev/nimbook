@@ -306,6 +306,13 @@ export function profilePage(username, { preview = false } = {}) {
 
     const vInfo = verificationInfo(user);
     const verifiedProfile = Boolean(vInfo?.active);
+    const displayNameValue = fullName(user) || displayName(user);
+    const metaChips = [
+      user.location ? { icon: 'map-pin', text: user.location } : null,
+      user.work ? { icon: 'briefcase', text: user.work } : null,
+      user.education ? { icon: 'education', text: user.education } : null,
+      user.createdAt ? { icon: 'calendar', text: `Se unió en ${monthYear(user.createdAt)}` } : null,
+    ].filter(Boolean);
 
     const cover = coverEl(user);
     if (verifiedProfile) cover.appendChild(verifiedCoverArt());
@@ -316,18 +323,23 @@ export function profilePage(username, { preview = false } = {}) {
         el('div', { class: 'profile-avatar-big' }, avatarEl(user, 'xxl')),
         el('div', { class: 'profile-info' },
           el('div', { class: 'profile-name-row' },
-            el('h1', { class: 'profile-name', text: displayName(user) }),
+            el('h1', { class: 'profile-name', text: displayNameValue }),
             verifiedBadge(user, { size: 21 }),
             verifiedProfile && vInfo.category
               ? el('span', { class: 'profile-type-chip', text: categoryLabel(vInfo.category) })
               : null),
-          el('div', { class: 'profile-fullname', text: fullName(user) }),
+          el('div', { class: 'profile-fullname', text: `@${user.username || 'usuario'}` }),
           verifiedProfile
             ? el('div', { class: 'profile-verified-strip' },
               verifiedBadge(user, { size: 17, interactive: false }),
               el('span', { class: 'profile-verified-label', text: 'Cuenta verificada' }))
             : null,
           user.bio ? el('p', { class: 'muted profile-bio', text: user.bio }) : null,
+          metaChips.length
+            ? el('div', { class: 'profile-meta-chips' },
+              ...metaChips.map((chip) => el('span', { class: 'profile-meta-chip' },
+                icon(chip.icon, 13), el('span', { text: chip.text }))))
+            : null,
           el('div', { class: 'profile-stats' },
             el('a', { href: `#/u/${user.username}/seguidores`, text: `${formatCount(countFollowers(user.id))} seguidores` }),
             el('span', { text: '·' }),

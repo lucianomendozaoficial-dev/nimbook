@@ -1,5 +1,5 @@
 /* ==========================================================================
-   actions.js — todas las escrituras (con cola, agrupadas y con reintentos)
+   actions.js Ã¢â‚¬â€ todas las escrituras (con cola, agrupadas y con reintentos)
    ========================================================================== */
 import {
   queueDoc, writeNow, deleteDoc, fetchDoc, newId, nowISO, forget,
@@ -7,7 +7,7 @@ import {
 import { P } from './paths.js';
 import {
   state, notify, loadUserIndex, loadUser, loadPost, loadComments,
-  isFollowing, followingIdsOf, threadIdFor, countUnreadMessages, loadShopItem,
+  isFollowing, threadIdFor, countUnreadMessages, loadShopItem,
 } from './store.js';
 import { hashPassword, verifyPassword } from './crypto.js';
 import { ValidationError } from './auth.js';
@@ -15,7 +15,7 @@ import { BADGE_PRICE, VERIFICATION_CATEGORIES } from './verification.js';
 import { deleteR2 } from './r2.js';
 
 function requireMe() {
-  if (!state.me) throw new ValidationError('Primero tenés que iniciar sesión.');
+  if (!state.me) throw new ValidationError('Primero tenÃƒÂ©s que iniciar sesiÃƒÂ³n.');
   return state.me;
 }
 
@@ -23,17 +23,6 @@ const norm = (value) => String(value || '').trim().replace(/\s+/g, ' ');
 
 async function notifySoon(userId, payload) {
   if (!userId || userId === state.me?.id) return;
-  // Solo avisamos de personas que la otra persona sigue (las de "nuevo
-  // seguidor" siempre llegan, para que sepa quién lo empezó a seguir; los
-  // mensajes privados también, porque son para esa persona).
-  if (payload.type !== 'follow' && payload.type !== 'message') {
-    try {
-      const following = await followingIdsOf(userId);
-      if (!following.includes(state.me.id)) return;
-    } catch {
-      return;
-    }
-  }
   queueDoc(P.notifications(userId), (doc) => {
     const data = doc || { version: 1, items: [] };
     data.items = [
@@ -42,12 +31,12 @@ async function notifySoon(userId, payload) {
         !(item.actorId === payload.actorId && item.type === payload.type && item.postId === payload.postId)),
     ].slice(0, 50);
     return data;
-  }, { delay: 1200, message: 'Zuma: notificación' }).catch(() => {});
+  }, { delay: 1200, message: 'Zuma: notificaciÃƒÂ³n' }).catch(() => {});
 }
 
 /* --------------------------------- cuenta -------------------------------- */
 
-/** ¿Se puede usar este nombre de usuario? (para avisar mientras escribe). */
+/** Ã‚Â¿Se puede usar este nombre de usuario? (para avisar mientras escribe). */
 export async function isUsernameAvailable(username) {
   const handle = String(username || '').trim().toLowerCase();
   if (handle.length < 3) return { ok: false, reason: 'short' };
@@ -65,18 +54,18 @@ export async function register({ firstName, lastName, username, password }) {
   const last = norm(lastName);
   const handle = String(username || '').trim().toLowerCase();
 
-  if (first.length < 2) throw new ValidationError('Escribí tu nombre.');
-  if (last.length < 2) throw new ValidationError('Escribí tu apellido.');
+  if (first.length < 2) throw new ValidationError('EscribÃƒÂ­ tu nombre.');
+  if (last.length < 2) throw new ValidationError('EscribÃƒÂ­ tu apellido.');
   if (!/^[a-z0-9._]{3,30}$/.test(handle)) {
-    throw new ValidationError('El usuario debe tener 3 a 30 letras, números, puntos o guiones bajos.');
+    throw new ValidationError('El usuario debe tener 3 a 30 letras, nÃƒÂºmeros, puntos o guiones bajos.');
   }
   if (String(password || '').length < 6) {
-    throw new ValidationError('La contraseña debe tener al menos 6 caracteres.');
+    throw new ValidationError('La contraseÃƒÂ±a debe tener al menos 6 caracteres.');
   }
 
   const index = await loadUserIndex({ fresh: true });
   if (index.some((user) => user.username?.toLowerCase() === handle)) {
-    throw new ValidationError('Ese usuario ya está en uso. Probá con otro.');
+    throw new ValidationError('Ese usuario ya estÃƒÂ¡ en uso. ProbÃƒÂ¡ con otro.');
   }
 
   const record = await hashPassword(password);
@@ -127,7 +116,7 @@ export async function register({ firstName, lastName, username, password }) {
   const clash = verified.find((item) => item.username?.toLowerCase() === handle && item.id !== id);
   if (clash) {
     await deleteDoc(P.user(id), 'Zuma: usuario duplicado').catch(() => {});
-    throw new ValidationError('Ese usuario se acaba de ocupar. Probá con otro.');
+    throw new ValidationError('Ese usuario se acaba de ocupar. ProbÃƒÂ¡ con otro.');
   }
 
   // bienvenida en la bandeja
@@ -138,7 +127,7 @@ export async function register({ firstName, lastName, username, password }) {
       type: 'welcome',
       createdAt: nowISO(),
       read: false,
-      text: '¡Bienvenido a Zuma! Completá tu perfil, seguí a tus amigos y publicá tu primer momento.',
+      text: 'Ã‚Â¡Bienvenido a Zuma! CompletÃƒÂ¡ tu perfil, seguÃƒÂ­ a tus amigos y publicÃƒÂ¡ tu primer momento.',
     }],
   }), { delay: 0, message: 'Zuma: bienvenida' }).catch(() => {});
 
@@ -150,16 +139,16 @@ export async function register({ firstName, lastName, username, password }) {
 
 export async function login(username, password) {
   const handle = String(username || '').trim().toLowerCase();
-  if (!handle || !password) throw new ValidationError('Completá usuario y contraseña.');
+  if (!handle || !password) throw new ValidationError('CompletÃƒÂ¡ usuario y contraseÃƒÂ±a.');
 
   const index = await loadUserIndex({ fresh: true });
   const entry = index.find((user) => user.username?.toLowerCase() === handle);
-  if (!entry) throw new ValidationError('Usuario o contraseña incorrectos.');
+  if (!entry) throw new ValidationError('Usuario o contraseÃƒÂ±a incorrectos.');
 
   const user = await loadUser(entry.id);
-  if (!user?.password) throw new ValidationError('Usuario o contraseña incorrectos.');
+  if (!user?.password) throw new ValidationError('Usuario o contraseÃƒÂ±a incorrectos.');
   const ok = await verifyPassword(password, user.password);
-  if (!ok) throw new ValidationError('Usuario o contraseña incorrectos.');
+  if (!ok) throw new ValidationError('Usuario o contraseÃƒÂ±a incorrectos.');
   return user;
 }
 
@@ -178,11 +167,11 @@ export async function updateProfile(patch = {}) {
     const handle = String(patch.username || '').trim().toLowerCase();
     if (handle !== me.username) {
       if (!/^[a-z0-9._]{3,30}$/.test(handle)) {
-        throw new ValidationError('El usuario debe tener 3 a 30 letras, números, puntos o guiones bajos.');
+        throw new ValidationError('El usuario debe tener 3 a 30 letras, nÃƒÂºmeros, puntos o guiones bajos.');
       }
       const index = await loadUserIndex({ fresh: true });
       if (index.some((user) => user.username?.toLowerCase() === handle && user.id !== me.id)) {
-        throw new ValidationError('Ese usuario ya está en uso.');
+        throw new ValidationError('Ese usuario ya estÃƒÂ¡ en uso.');
       }
       changes.username = handle;
     }
@@ -222,29 +211,29 @@ export async function updateProfile(patch = {}) {
 
 export async function changePassword(current, next) {
   const me = requireMe();
-  if (String(next || '').length < 6) throw new ValidationError('La nueva contraseña es muy corta.');
+  if (String(next || '').length < 6) throw new ValidationError('La nueva contraseÃƒÂ±a es muy corta.');
   const ok = await verifyPassword(current, me.password);
-  if (!ok) throw new ValidationError('La contraseña actual no es correcta.');
+  if (!ok) throw new ValidationError('La contraseÃƒÂ±a actual no es correcta.');
   const record = await hashPassword(next);
   const updated = { ...me, password: record };
   state.me = updated;
   state.users.set(me.id, updated);
   await writeNow(P.user(me.id), () => ({ version: 1, user: updated }), {
-    message: 'Zuma: contraseña actualizada',
+    message: 'Zuma: contraseÃƒÂ±a actualizada',
   });
   notify('me');
 }
 
 /**
  * Elimina la cuenta y todo lo que le pertenece (posts, historias, ventas,
- * conversaciones, seguidores y ficha). Pide la contraseña como confirmación y
+ * conversaciones, seguidores y ficha). Pide la contraseÃƒÂ±a como confirmaciÃƒÂ³n y
  * no se puede deshacer.
  */
 export async function deleteAccount(password) {
   const me = requireMe();
-  if (!me.password) throw new ValidationError('Esta cuenta no se puede eliminar desde acá.');
+  if (!me.password) throw new ValidationError('Esta cuenta no se puede eliminar desde acÃƒÂ¡.');
   const ok = await verifyPassword(String(password || ''), me.password);
-  if (!ok) throw new ValidationError('La contraseña no es correcta.');
+  if (!ok) throw new ValidationError('La contraseÃƒÂ±a no es correcta.');
 
   const myId = me.id;
   const myPosts = state.feedIndex.filter((entry) => entry.authorId === myId).map((entry) => entry.id);
@@ -302,7 +291,7 @@ export async function deleteAccount(password) {
       : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' }).catch(() => {})),
   ]);
 
-  // 7) índice y ficha (si esto falla, se avisa para poder reintentar)
+  // 7) ÃƒÂ­ndice y ficha (si esto falla, se avisa para poder reintentar)
   await queueDoc(P.userIndex, (doc) => (doc?.users
     ? { ...doc, users: doc.users.filter((user) => user.id !== myId) }
     : undefined), { delay: 0, message: 'Zuma: eliminar cuenta' });
@@ -335,11 +324,11 @@ export async function createPost({
 } = {}) {
   const me = requireMe();
   const clean = String(text || '').trim();
-  if (!clean && !media.length && !shareOf) throw new ValidationError('Escribí algo o agregá una foto.');
+  if (!clean && !media.length && !shareOf) throw new ValidationError('EscribÃƒÂ­ algo o agregÃƒÂ¡ una foto.');
   if (groupId) {
     const group = state.groups.find((item) => item.id === groupId);
     if (group && (group.type || 'group') === 'channel' && group.ownerId !== me.id) {
-      throw new ValidationError('Solo quien creó el canal puede publicar en él.');
+      throw new ValidationError('Solo quien creÃƒÂ³ el canal puede publicar en ÃƒÂ©l.');
     }
   }
 
@@ -360,7 +349,7 @@ export async function createPost({
   };
 
   await queueDoc(P.post(post.id), () => ({ version: 1, post }), {
-    delay: 0, message: 'Zuma: nueva publicación',
+    delay: 0, message: 'Zuma: nueva publicaciÃƒÂ³n',
   });
 
   const entry = { id: post.id, authorId: me.id, createdAt: post.createdAt };
@@ -379,28 +368,28 @@ export async function createPost({
 export async function deletePost(postId) {
   const me = requireMe();
   const post = state.posts.get(postId) || await loadPost(postId);
-  if (post && post.authorId !== me.id) throw new ValidationError('Esa publicación no es tuya.');
+  if (post && post.authorId !== me.id) throw new ValidationError('Esa publicaciÃƒÂ³n no es tuya.');
 
   await queueDoc(P.feedIndex, (doc) => {
     if (!doc?.posts) return undefined;
     return { ...doc, posts: doc.posts.filter((item) => item.id !== postId) };
-  }, { delay: 0, message: 'Zuma: borrar publicación' });
+  }, { delay: 0, message: 'Zuma: borrar publicaciÃƒÂ³n' });
 
   state.feedIndex = state.feedIndex.filter((item) => item.id !== postId);
   state.posts.delete(postId);
   forget(P.post(postId));
-  await deleteDoc(P.post(postId), 'Zuma: borrar publicación').catch(() => {});
+  await deleteDoc(P.post(postId), 'Zuma: borrar publicaciÃƒÂ³n').catch(() => {});
   notify('feed');
 }
 
 export async function updatePost(postId, patch = {}) {
   const me = requireMe();
   const post = state.posts.get(postId) || await loadPost(postId);
-  if (!post || post.authorId !== me.id) throw new ValidationError('Esa publicación no es tuya.');
+  if (!post || post.authorId !== me.id) throw new ValidationError('Esa publicaciÃƒÂ³n no es tuya.');
   const next = { ...post, ...patch, updatedAt: nowISO() };
   state.posts.set(postId, next);
   await queueDoc(P.post(postId), () => ({ version: 1, post: next }), {
-    delay: 300, message: 'Zuma: editar publicación',
+    delay: 300, message: 'Zuma: editar publicaciÃƒÂ³n',
   });
   notify('post', { id: postId });
   return next;
@@ -458,7 +447,7 @@ export async function toggleSavePost(postId) {
 export async function addComment(postId, text, { parentId = null, media = [] } = {}) {
   const me = requireMe();
   const clean = String(text || '').trim();
-  if (!clean && !media.length) throw new ValidationError('Escribí un comentario.');
+  if (!clean && !media.length) throw new ValidationError('EscribÃƒÂ­ un comentario.');
 
   const comment = {
     id: newId('c'),
@@ -579,6 +568,19 @@ export async function toggleFollow(userId) {
 
 /* ------------------------------ notificaciones --------------------------- */
 
+export async function markNotificationRead(id) {
+  const me = requireMe();
+  const item = state.notifications.find((row) => row.id === id);
+  if (!item || item.read) return;
+  state.notifications = state.notifications.map((row) => (row.id === id ? { ...row, read: true } : row));
+  state.ui.unreadNotifs = state.notifications.filter((row) => !row.read).length;
+  const items = state.notifications;
+  await queueDoc(P.notifications(me.id), () => ({ version: 1, items }), {
+    delay: 120, message: 'Zuma: notificación leída',
+  });
+  notify('notifications');
+}
+
 export async function markAllNotificationsRead() {
   const me = requireMe();
   if (!state.notifications.some((item) => !item.read)) return;
@@ -586,7 +588,7 @@ export async function markAllNotificationsRead() {
   state.ui.unreadNotifs = 0;
   const items = state.notifications;
   await queueDoc(P.notifications(me.id), () => ({ version: 1, items }), {
-    delay: 300, message: 'Zuma: notificaciones leídas',
+    delay: 300, message: 'Zuma: notificaciones leÃƒÂ­das',
   });
   notify('notifications');
 }
@@ -625,12 +627,12 @@ export async function createGroup({
   return group;
 }
 
-/** El dueño puede cambiar nombre, texto, reglas, categoría, color, emoji y portada. */
+/** El dueÃƒÂ±o puede cambiar nombre, texto, reglas, categorÃƒÂ­a, color, emoji y portada. */
 export async function updateGroup(groupId, changes = {}) {
   const me = requireMe();
   const group = state.groups.find((item) => item.id === groupId);
   if (!group) throw new ValidationError('No encontramos ese grupo.');
-  if (group.ownerId !== me.id) throw new ValidationError('Solo quien creó el grupo puede editarlo.');
+  if (group.ownerId !== me.id) throw new ValidationError('Solo quien creÃƒÂ³ el grupo puede editarlo.');
 
   const next = { ...group };
   if (changes.name !== undefined) {
@@ -692,23 +694,23 @@ export async function requestVerification({
 } = {}) {
   const me = requireMe();
   const cleanDni = String(dni || '').replace(/[^0-9a-z]/gi, '').toUpperCase();
-  if (cleanDni.length < 6 || cleanDni.length > 12) throw new ValidationError('Escribí un DNI válido.');
+  if (cleanDni.length < 6 || cleanDni.length > 12) throw new ValidationError('EscribÃƒÂ­ un DNI vÃƒÂ¡lido.');
   const cleanName = norm(fullName).slice(0, 120);
-  if (cleanName.length < 3) throw new ValidationError('Escribí tu nombre completo.');
+  if (cleanName.length < 3) throw new ValidationError('EscribÃƒÂ­ tu nombre completo.');
   const cleanLocality = norm(locality).slice(0, 90);
-  if (cleanLocality.length < 2) throw new ValidationError('Escribí tu localidad.');
+  if (cleanLocality.length < 2) throw new ValidationError('EscribÃƒÂ­ tu localidad.');
   const cleanBirth = String(birthDate || '').trim();
   const born = cleanBirth ? new Date(`${cleanBirth}T12:00:00`) : null;
   if (!born || Number.isNaN(born.getTime()) || born > new Date()) {
-    throw new ValidationError('Elegí tu fecha de nacimiento.');
+    throw new ValidationError('ElegÃƒÂ­ tu fecha de nacimiento.');
   }
   const categoryInfo = VERIFICATION_CATEGORIES.find((item) => item.id === category);
-  if (!categoryInfo) throw new ValidationError('Elegí qué tipo de cuenta tenés.');
+  if (!categoryInfo) throw new ValidationError('ElegÃƒÂ­ quÃƒÂ© tipo de cuenta tenÃƒÂ©s.');
 
   const doc = await fetchDoc(P.supportVerifications, { fresh: true });
   const requests = Array.isArray(doc?.requests) ? doc.requests : [];
   if (requests.some((item) => item.userId === me.id && item.status === 'pending')) {
-    throw new ValidationError('Ya tenés una solicitud pendiente. Te vamos a responder por soporte.');
+    throw new ValidationError('Ya tenÃƒÂ©s una solicitud pendiente. Te vamos a responder por soporte.');
   }
 
   const request = {
@@ -730,9 +732,9 @@ export async function requestVerification({
   await queueDoc(P.supportVerifications, (current) => {
     const data = current || { version: 1, requests: [] };
     return { ...data, requests: [request, ...(data.requests || [])].slice(0, 500) };
-  }, { delay: 0, message: 'Zuma: solicitud de verificación' });
+  }, { delay: 0, message: 'Zuma: solicitud de verificaciÃƒÂ³n' });
 
-  // Los datos también entran automáticamente al chat privado de soporte.
+  // Los datos tambiÃƒÂ©n entran automÃƒÂ¡ticamente al chat privado de soporte.
   try {
     const text = [
       'Solicitud de insignia azul',
@@ -754,9 +756,9 @@ export async function requestVerification({
 
 export async function reportAccount(userId, reason, detail = '') {
   const me = requireMe();
-  if (!userId || userId === me.id) throw new ValidationError('No podés reportar tu propia cuenta.');
+  if (!userId || userId === me.id) throw new ValidationError('No podÃƒÂ©s reportar tu propia cuenta.');
   const cleanReason = norm(reason).slice(0, 120);
-  if (!cleanReason) throw new ValidationError('Elegí un motivo.');
+  if (!cleanReason) throw new ValidationError('ElegÃƒÂ­ un motivo.');
   const cleanDetail = norm(detail).slice(0, 800);
   const report = {
     id: newId('r'),
@@ -782,7 +784,7 @@ export async function createStory({
   duration = 0, text = '', font = 'clasica',
 } = {}) {
   const me = requireMe();
-  if (!image && !video) throw new ValidationError('Elegí una foto o un video para tu historia.');
+  if (!image && !video) throw new ValidationError('ElegÃƒÂ­ una foto o un video para tu historia.');
   const isVideo = Boolean(video);
   const story = {
     id: newId('s'),
@@ -830,72 +832,6 @@ export async function deleteStory(storyId) {
   notify('stories');
 }
 
-/* ---------------------------------- reels --------------------------------- */
-
-export async function createReel({
-  video = '', videoKey = '', poster = '', posterKey = '', duration = 0, caption = '',
-} = {}) {
-  const me = requireMe();
-  if (!video) throw new ValidationError('Subí un video para publicar el Reel.');
-  const cleanDuration = Math.min(120, Math.max(0.5, Number(duration) || 0));
-  const reel = {
-    id: newId('rl'),
-    userId: me.id,
-    video,
-    videoKey,
-    poster,
-    posterKey,
-    duration: cleanDuration,
-    caption: norm(caption).slice(0, 500),
-    likes: [],
-    createdAt: nowISO(),
-  };
-  state.reels = [reel, ...state.reels];
-  await queueDoc(P.reels, (doc) => {
-    const data = doc || { version: 1, reels: [] };
-    data.reels = [reel, ...(data.reels || []).filter((item) => item.id !== reel.id)].slice(0, 300);
-    return data;
-  }, { delay: 300, message: 'Zuma: nuevo Reel' });
-  notify('reels');
-  return reel;
-}
-
-export async function toggleReelLike(reelId) {
-  const me = requireMe();
-  const reel = state.reels.find((item) => item.id === reelId);
-  if (!reel) return false;
-  const likes = new Set(Array.isArray(reel.likes) ? reel.likes : []);
-  const liked = likes.has(me.id);
-  if (liked) likes.delete(me.id); else likes.add(me.id);
-  reel.likes = [...likes];
-  const next = [...state.reels];
-  state.reels = next;
-  await queueDoc(P.reels, (doc) => {
-    if (!doc?.reels) return undefined;
-    return {
-      ...doc,
-      reels: doc.reels.map((item) => (item.id === reelId ? { ...item, likes: [...likes] } : item)),
-    };
-  }, { delay: 80, message: 'Zuma: me gusta en Reel' });
-  notify('reels');
-  return !liked;
-}
-
-export async function deleteReel(reelId) {
-  const me = requireMe();
-  const reel = state.reels.find((item) => item.id === reelId);
-  if (!reel) return;
-  if (reel.userId !== me.id) throw new ValidationError('Ese Reel no es tuyo.');
-  state.reels = state.reels.filter((item) => item.id !== reelId);
-  await queueDoc(P.reels, (doc) => {
-    if (!doc?.reels) return undefined;
-    return { ...doc, reels: doc.reels.filter((item) => item.id !== reelId) };
-  }, { delay: 0, message: 'Zuma: borrar Reel' });
-  if (reel.videoKey) deleteR2(reel.videoKey).catch(() => {});
-  if (reel.posterKey) deleteR2(reel.posterKey).catch(() => {});
-  notify('reels');
-}
-
 /* ---------------------------------- shop --------------------------------- */
 
 const shopEntry = (item) => ({
@@ -916,13 +852,13 @@ const shopEntry = (item) => ({
 function normalizeContact(contact) {
   if (!contact || !contact.type) return null;
   const type = contact.type === 'instagram' ? 'instagram' : contact.type === 'whatsapp' ? 'whatsapp' : null;
-  if (!type) throw new ValidationError('Elegí WhatsApp o Instagram para el contacto.');
+  if (!type) throw new ValidationError('ElegÃƒÂ­ WhatsApp o Instagram para el contacto.');
   const raw = String(contact.value || '').trim();
 
   if (type === 'whatsapp') {
     const digits = raw.replace(/\D/g, '').replace(/^0+/, '');
     if (digits.length < 8 || digits.length > 15) {
-      throw new ValidationError('Escribí el WhatsApp con código de país (ej. 54 9 11 5555 1234).');
+      throw new ValidationError('EscribÃƒÂ­ el WhatsApp con cÃƒÂ³digo de paÃƒÂ­s (ej. 54 9 11 5555 1234).');
     }
     return { type, value: digits };
   }
@@ -934,16 +870,16 @@ function normalizeContact(contact) {
     .trim()
     .toLowerCase();
   if (!/^[a-z0-9._]{2,30}$/.test(handle)) {
-    throw new ValidationError('Escribí un usuario de Instagram válido (sin espacios).');
+    throw new ValidationError('EscribÃƒÂ­ un usuario de Instagram vÃƒÂ¡lido (sin espacios).');
   }
   return { type, value: handle };
 }
 
 function validateListing({ title, price }) {
   const cleanTitle = norm(title);
-  if (cleanTitle.length < 4) throw new ValidationError('Poné un título de al menos 4 letras.');
+  if (cleanTitle.length < 4) throw new ValidationError('PonÃƒÂ© un tÃƒÂ­tulo de al menos 4 letras.');
   const amount = Number(price);
-  if (!Number.isFinite(amount) || amount < 0) throw new ValidationError('Poné un precio válido.');
+  if (!Number.isFinite(amount) || amount < 0) throw new ValidationError('PonÃƒÂ© un precio vÃƒÂ¡lido.');
   if (amount > 99_999_999) throw new ValidationError('Ese precio es demasiado alto.');
   return { title: cleanTitle.slice(0, 90), price: Math.round(amount) };
 }
@@ -1063,17 +999,19 @@ function withInboxEntry(doc, entry, mode = 'mine') {
   return data;
 }
 
-/** Envía un mensaje privado. Las dos personas leen el mismo archivo de hilo. */
-export async function sendMessage(toUserId, text, { silent = false, replyTo = null } = {}) {
+/** EnvÃƒÂ­a un mensaje privado. Las dos personas leen el mismo archivo de hilo. */
+export async function sendMessage(toUserId, text, {
+  silent = false, replyTo = null, notificationType = 'message',
+} = {}) {
   const me = requireMe();
   const other = state.users.get(toUserId) || await loadUser(toUserId);
   if (!other) throw new ValidationError('No encontramos a esa persona.');
   const clean = String(text || '').trim();
-  if (!clean) throw new ValidationError('Escribí un mensaje.');
+  if (!clean) throw new ValidationError('EscribÃƒÂ­ un mensaje.');
   if (clean.length > 4000) throw new ValidationError('El mensaje es demasiado largo.');
 
   const quoted = replyTo && typeof replyTo === 'object' ? {
-    kind: replyTo.kind === 'shop' ? 'shop' : 'message',
+    kind: replyTo.kind === 'shop' ? 'shop' : replyTo.kind === 'story' ? 'story' : 'message',
     id: String(replyTo.id || '').slice(0, 80),
     title: String(replyTo.title || '').slice(0, 140),
     text: String(replyTo.text || '').slice(0, 240),
@@ -1104,7 +1042,7 @@ export async function sendMessage(toUserId, text, { silent = false, replyTo = nu
   const myInboxEntry = { ...baseEntry, withId: toUserId };
   const theirInboxEntry = { ...baseEntry, withId: me.id };
 
-  // 1) se muestra al instante (después la red confirma en segundo plano)
+  // 1) se muestra al instante (despuÃƒÂ©s la red confirma en segundo plano)
   const beforeThread = state.threads.get(threadId);
   const beforeInboxEntry = state.inbox.find((row) => row.threadId === threadId) || null;
   if (beforeThread) beforeThread.messages = [...beforeThread.messages, message].slice(-400);
@@ -1128,8 +1066,8 @@ export async function sendMessage(toUserId, text, { silent = false, replyTo = nu
       return data;
     }, { delay: 200, message: 'Zuma: mensaje' });
 
-    // Ya está guardado: deja de estar "enviando", pero se conserva en memoria
-    // hasta que el link público lo devuelva (evita que un sondeo viejo lo borre).
+    // Ya estÃƒÂ¡ guardado: deja de estar "enviando", pero se conserva en memoria
+    // hasta que el link pÃƒÂºblico lo devuelva (evita que un sondeo viejo lo borre).
     const stored = state.threads.get(threadId)?.messages?.find((row) => row.id === message.id);
     if (stored) {
       stored.pending = false;
@@ -1137,7 +1075,7 @@ export async function sendMessage(toUserId, text, { silent = false, replyTo = nu
     }
     notify('messages');
 
-    // 3) bandejas: la mía queda sin pendientes, la de la otra persona suma uno
+    // 3) bandejas: la mÃƒÂ­a queda sin pendientes, la de la otra persona suma uno
     await Promise.all([
       queueDoc(P.inbox(me.id), (doc) => withInboxEntry(doc, myInboxEntry, 'mine'), {
         delay: 400, message: 'Zuma: mensajes',
@@ -1147,11 +1085,11 @@ export async function sendMessage(toUserId, text, { silent = false, replyTo = nu
       }).catch(() => {}),
     ]);
 
-    if (!silent) notifySoon(toUserId, { type: 'message', actorId: me.id });
+    if (!silent) notifySoon(toUserId, { type: notificationType, actorId: me.id });
     notify('messages');
     return message;
   } catch (err) {
-    // se deshace el mensaje optimista para no mostrar algo que no se guardó
+    // se deshace el mensaje optimista para no mostrar algo que no se guardÃƒÂ³
     const current = state.threads.get(threadId);
     if (current) {
       current.messages = current.messages.filter((row) => row.id !== message.id);
@@ -1165,7 +1103,7 @@ export async function sendMessage(toUserId, text, { silent = false, replyTo = nu
   }
 }
 
-/** Marca como leída la conversación con alguien (mi bandeja). */
+/** Marca como leÃƒÂ­da la conversaciÃƒÂ³n con alguien (mi bandeja). */
 export async function markThreadRead(otherUserId) {
   const me = state.me;
   if (!me || !otherUserId) return;
@@ -1184,7 +1122,7 @@ export async function markThreadRead(otherUserId) {
       ...doc,
       threads: doc.threads.map((row) => (row.threadId === threadId ? { ...row, unread: 0 } : row)),
     };
-  }, { delay: 600, message: 'Zuma: mensajes leídos' }).catch(() => {});
+  }, { delay: 600, message: 'Zuma: mensajes leÃƒÂ­dos' }).catch(() => {});
 
   notify('messages');
 }

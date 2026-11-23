@@ -5,12 +5,12 @@ import { el, clear, timeAgo } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import { state, displayName, userById, loadNotifications } from '../core/store.js';
 import { avatarEl, emptyState, toast } from '../core/ui.js';
-import { markAllNotificationsRead } from '../core/actions.js';
+import { markAllNotificationsRead, markNotificationRead } from '../core/actions.js';
 import { emptyFriendsIllustration } from '../core/illustrations.js';
 
 const ICONS = {
   reaction: 'heart', like: 'thumbsup', comment: 'message', reply: 'reply',
-  follow: 'user-plus', share: 'share', message: 'message',
+  follow: 'user-plus', share: 'share', message: 'message', story_reply: 'reply',
 };
 
 function textFor(item) {
@@ -24,12 +24,13 @@ function textFor(item) {
     case 'follow': return `${actor} empezó a seguirte.`;
     case 'share': return `${actor} compartió tu publicación.`;
     case 'message': return `${actor} te envió un mensaje privado.`;
+    case 'story_reply': return `${actor} respondió a tu historia.`;
     default: return `${actor} hizo algo nuevo.`;
   }
 }
 
 function hrefFor(item) {
-  if (item.type === 'message') {
+  if (item.type === 'message' || item.type === 'story_reply') {
     const actor = userById(item.actorId);
     if (actor?.username) return `#/mensajes/${actor.username}`;
   }
@@ -87,6 +88,7 @@ export function notificationsPage() {
       wrap.appendChild(el('a', {
         class: `notif ${item.read ? '' : 'unread'}`.trim(),
         href: hrefFor(item),
+        onclick: () => { markNotificationRead(item.id).catch(() => {}); },
       },
       el('span', { class: 'notif-avatar' }, avatar, badge),
       body));
