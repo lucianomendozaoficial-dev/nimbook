@@ -4,7 +4,7 @@
    hay conexiÃƒÂ³n, lo ÃƒÂºltimo guardado en cachÃƒÂ©.
    ========================================================================== */
 
-const CACHE = 'nimbookgr-v18';
+const CACHE = 'nimbookgr-v19';
 const SHELL = [
   './',
   './index.html',

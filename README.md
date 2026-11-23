@@ -215,6 +215,28 @@ La base arranca **vacía**: no se migran datos viejos. Cada persona vuelve a cre
 
 ---
 
+## Dominio propio
+
+Sí. GitHub Pages permite usar un dominio comprado en otra parte (Namecheap, Hostinger, Cloudflare, etc.) sin cambiar el código de Zuma, porque las rutas de la app son relativas.
+
+1. Comprá el dominio y entrá al panel DNS del registrador.
+2. Elegí un nombre canónico:
+   - **Con `www`:** creá un registro **CNAME** para `www` apuntando a `lucianomendozaoficial-dev.github.io`.
+   - **Con el dominio raíz:** creá cuatro registros **A** para `@`:
+     - `185.199.108.153`
+     - `185.199.109.153`
+     - `185.199.110.153`
+     - `185.199.111.153`
+   - Opcionalmente, agregá los **AAAA** de GitHub Pages si tu proveedor los soporta.
+3. Si usás Cloudflare como DNS, dejá los registros en **DNS only** (nube gris) durante la configuración; el proxy naranja puede interferir con el certificado de GitHub Pages.
+4. En GitHub: **Repositorio → Settings → Pages → Custom domain**, escribí el dominio (`www.tudominio.com` o `tudominio.com`) y guardá.
+5. Esperá la verificación DNS y activá **Enforce HTTPS**. GitHub emite el certificado automáticamente.
+6. GitHub crea un archivo `CNAME` en la rama publicada; no lo borres. Si preferís, agregalo también al proyecto con el dominio.
+
+Con el dominio propio, la app queda en `https://tudominio.com/` (sin `/nimbook/`), el panel en `/panel.html` y el reset en `/reset.html`. Supabase y R2 no necesitan cambios: R2 ya permite CORS para cualquier origen y Supabase no restringe el origen de la clave publicable.
+
+> El dominio anterior de GitHub Pages sigue funcionando salvo que lo desactives. La PWA instalada desde el dominio viejo es otra instalación; desde el dominio nuevo se instala de cero.
+
 ## Base vacía
 
 La primera vez que abras la app con Supabase, la tabla `zuma_docs` está vacía y vas a ver la pantalla de registro. No hay datos de ejemplo en producción y no se importa nada de GitHub: las cuentas y publicaciones se crean de nuevo.

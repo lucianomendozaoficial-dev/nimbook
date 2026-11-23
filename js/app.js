@@ -186,10 +186,10 @@ function layoutFor(route) {
   switch (route.name) {
     case 'feed': return { right: true, left: true, wide: false };
     case 'post': return { right: false, left: true, wide: true };
+    case 'reels': return { right: false, left: false, wide: true };
     case 'shop':
     case 'shopitem':
     case 'messages':
-    case 'reels':
     case 'stories':
     case 'storycompose':
     case 'verification':

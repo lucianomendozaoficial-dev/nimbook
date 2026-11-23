@@ -4,7 +4,7 @@
   "description": "Comparte momentos, historias y mensajes con las personas que quieres.",
   "lang": "es",
   "dir": "ltr",
-  "id": "/nimbook/",
+  "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

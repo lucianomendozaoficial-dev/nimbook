@@ -94,10 +94,12 @@ export function storiesPage() {
       el('div', { class: 'grow' },
         el('h1', { text: 'Historias' }),
         el('p', { class: 'muted small', text: 'Lo que compartió tu gente: fotos 24 h y videos 18 h.' })),
-      el('button', {
-        class: 'btn primary', type: 'button',
-        onclick: () => navigate('/historias/crear'),
-      }, icon('camera', 17), 'Crear historia')),
+      el('div', { class: 'stories-head-actions' },
+        el('span', { class: 'stories-duration-pill' }, icon('clock', 14), 'Fotos 24 h · Videos 18 h'),
+        el('button', {
+          class: 'btn primary', type: 'button',
+          onclick: () => navigate('/historias/crear'),
+        }, icon('camera', 17), 'Crear historia'))),
     grid);
 
   render();
@@ -283,7 +285,7 @@ export function storyComposerPage() {
           onclick: shoot,
         }, el('span')),
         el('button', {
-          class: 'story-gallery-btn ghost', type: 'button',
+          class: 'story-gallery-btn story-video-btn', type: 'button',
           onclick: pickVideo,
         }, icon('videocam', 22), el('span', { text: 'Video' }))));
 

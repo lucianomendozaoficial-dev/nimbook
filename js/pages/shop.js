@@ -53,6 +53,7 @@ function contactCard(current, mine) {
 }
 
 export function listingCard(item) {
+  const seller = userById(item.sellerId);
   const sold = item.status === 'sold';
   return el('a', {
     class: `shop-card${sold ? ' sold' : ''}`, href: `#/tienda/${item.id}`,
@@ -62,6 +63,7 @@ export function listingCard(item) {
     item.cover
       ? mediaImg(item.cover, { alt: item.title })
       : el('div', { class: 'shop-noimg' }, icon('shop', 34)),
+    el('span', { class: 'shop-card-condition', text: shopConditionLabel(item.condition) || 'Usado' }),
     sold ? el('span', { class: 'shop-sold', text: 'Vendido' }) : null),
   el('div', { class: 'shop-card-body' },
     el('div', { class: 'shop-price', text: money(item.price, item.currency) }),
@@ -69,7 +71,13 @@ export function listingCard(item) {
     el('div', { class: 'shop-card-meta' },
       el('span', { text: item.location || 'Sin ubicación' }),
       el('span', { text: ' · ' }),
-      el('span', { text: shopConditionLabel(item.condition) || 'Usado' }))));
+      el('span', { text: shopCategoryLabel(item.category) })),
+    seller
+      ? el('div', { class: 'shop-card-seller' },
+        avatarEl(seller, 'xs'),
+        el('span', { text: displayName(seller) }),
+        verifiedBadge(seller, { size: 13, interactive: false }))
+      : null));
 }
 
 /* ------------------------------ publicar -------------------------------- */
@@ -391,6 +399,16 @@ export function shopPage() {
   }
 
   root.append(
+    el('div', { class: 'shop-hero' },
+      el('div', { class: 'shop-hero-copy' },
+        el('span', { class: 'shop-hero-kicker' }, icon('shop', 14), 'Mercado de la comunidad'),
+        el('h1', { text: 'Shop' }),
+        el('p', { text: 'Comprá y vendé con tu gente. Productos cerca, vendedores reales y contacto directo.' })),
+      el('div', { class: 'shop-hero-actions' },
+        el('button', {
+          class: 'btn primary', type: 'button',
+          onclick: () => openListingForm(null, (item) => navigate(`/tienda/${item.id}`)),
+        }, icon('plus', 17), 'Vender algo'))),
     el('div', { class: 'page-card shop-toolbar' },
       el('div', { class: 'shop-search-row' },
         el('div', { class: 'search-inline grow' }, icon('search', 18), searchInput),

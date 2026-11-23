@@ -74,6 +74,49 @@ export function composePage() {
     class: 'compose-privacy', type: 'button', 'aria-label': 'Privacidad de la publicación',
   });
 
+  const previewText = el('div', { class: 'compose-preview-text' });
+  const previewMedia = el('div', { class: 'compose-preview-media' });
+  const previewPrivacy = el('span', { class: 'compose-preview-privacy' });
+  const previewCard = el('aside', { class: 'compose-preview-card' },
+    el('div', { class: 'compose-preview-label' }, icon('eye', 14), 'Vista previa'),
+    el('div', { class: 'compose-preview-post' },
+      el('div', { class: 'compose-preview-head' },
+        avatarEl(me, 'md'),
+        el('div', { class: 'grow' },
+          el('div', { class: 'post-name', text: displayName(me) }),
+          el('div', { class: 'compose-preview-sub' },
+            previewPrivacy,
+            el('span', { text: ' · ahora' })))),
+      previewText,
+      previewMedia,
+      el('div', { class: 'compose-preview-actions' },
+        el('span', null, icon('heart', 18), 'Me gusta'),
+        el('span', null, icon('message', 18), 'Comentar'),
+        el('span', null, icon('share', 18), 'Compartir'))),
+    el('p', { class: 'compose-preview-note', text: 'Así se va a ver en el muro. Podés cambiarlo antes de publicar.' }));
+
+  function updatePreview() {
+    const current = PRIVACY.find((item) => item.id === privacy) || PRIVACY[0];
+    previewPrivacy.textContent = current.label;
+    const text = textarea.value.trim();
+    previewText.className = 'compose-preview-text';
+    for (const option of BACKGROUNDS) previewText.classList.remove(`post-bg-${option.id}`);
+    if (!text) {
+      previewText.classList.add('empty');
+      previewText.textContent = 'Tu publicación aparecerá acá.';
+    } else {
+      previewText.classList.remove('empty');
+      previewText.textContent = text;
+      if (background && !files.length) {
+        previewText.classList.add('post-bg', `post-bg-${background}`);
+      }
+    }
+    clear(previewMedia);
+    for (const item of files.slice(0, 4)) {
+      previewMedia.appendChild(el('img', { src: item.preview, alt: '' }));
+    }
+  }
+
   function paintPrivacy() {
     const current = PRIVACY.find((item) => item.id === privacy) || PRIVACY[0];
     privacyBtn.replaceChildren(
@@ -81,6 +124,7 @@ export function composePage() {
       el('span', { text: current.label }),
       icon('chevron-down', 14));
     privacyBtn.title = current.sub;
+    updatePreview();
   }
 
   privacyBtn.addEventListener('click', () => {
@@ -95,6 +139,7 @@ export function composePage() {
   function updateCounter() {
     counter.textContent = `${textarea.value.length} / 5000`;
     publishBtn.disabled = publishing || (!textarea.value.trim() && !files.length);
+    updatePreview();
   }
 
   textarea.addEventListener('input', updateCounter);
@@ -105,8 +150,12 @@ export function composePage() {
       textarea.classList.remove(`compose-bg-${option.id}`);
       textarea.classList.remove(`text-on-${option.id}`);
     }
-    if (!value) return;
+    if (!value) {
+      updatePreview();
+      return;
+    }
     textarea.classList.add(`compose-bg-${value}`);
+    updatePreview();
   }
 
   function renderChips() {
@@ -287,26 +336,33 @@ export function composePage() {
       icon('map-pin', 19), el('span', { text: 'Ubicación' })),
     bgBtn);
 
+  const composeCard = el('div', { class: 'page-card compose-card' },
+    el('div', { class: 'compose-owner' },
+      avatarEl(me, 'md'),
+      el('div', { class: 'grow' },
+        el('div', { class: 'post-name', text: displayName(me) }),
+        privacyBtn)),
+    textarea,
+    chips,
+    grid,
+    palette,
+    toolbar,
+    el('div', { class: 'compose-foot' },
+      el('span', { class: 'muted tiny', text: 'Se va a publicar en tu muro' }),
+      counter));
+
   root.append(
     el('div', { class: 'page-head compose-head' },
       el('div', { class: 'grow' },
         el('h1', { text: group ? `Publicar en ${group.name}` : 'Crear publicación' }),
         el('p', { class: 'muted small', text: 'Compartí un momento con tu gente.' })),
-      publishBtn),
-    el('div', { class: 'page-card compose-card' },
-      el('div', { class: 'compose-owner' },
-        avatarEl(me, 'md'),
-        el('div', { class: 'grow' },
-          el('div', { class: 'post-name', text: displayName(me) }),
-          privacyBtn)),
-      textarea,
-      chips,
-      grid,
-      palette,
-      toolbar,
-      el('div', { class: 'compose-foot' },
-        el('span', { class: 'muted tiny', text: 'Se va a publicar en tu muro' }),
-        counter)));
+      el('div', { class: 'compose-head-actions' },
+        el('button', {
+          class: 'btn soft', type: 'button', text: 'Descartar',
+          onclick: () => navigate(group ? `/grupos/${group.id}` : '/inicio'),
+        }),
+        publishBtn)),
+    el('div', { class: 'compose-layout' }, composeCard, previewCard));
 
   paintPrivacy();
   renderChips();
