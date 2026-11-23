@@ -17,6 +17,7 @@ import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
 import { listingCard } from './shop.js';
 import { verifiedBadge } from '../components/verified-badge.js';
+import { verificationInfo, categoryLabel, formatDate } from '../core/verification.js';
 import { navigate, goBack, parseRoute } from '../core/router.js';
 import { ValidationError } from '../core/auth.js';
 
@@ -287,15 +288,29 @@ export function profilePage(username, { preview = false } = {}) {
           }, icon('flag', 18)));
     }
 
-    return el('div', { class: 'profile-header profile-hero' },
+    const vInfo = verificationInfo(user);
+    const verifiedProfile = Boolean(vInfo?.active);
+
+    return el('div', { class: `profile-header profile-hero${verifiedProfile ? ' verified-profile' : ''}` },
       coverEl(user),
       el('div', { class: 'profile-main-row' },
         el('div', { class: 'profile-avatar-big' }, avatarEl(user, 'xxl')),
         el('div', { class: 'profile-info' },
           el('div', { class: 'profile-name-row' },
             el('h1', { class: 'profile-name', text: displayName(user) }),
-            verifiedBadge(user, { size: 21 })),
+            verifiedBadge(user, { size: 21 }),
+            verifiedProfile && vInfo.category
+              ? el('span', { class: 'profile-type-chip', text: categoryLabel(vInfo.category) })
+              : null),
           el('div', { class: 'profile-fullname', text: fullName(user) }),
+          verifiedProfile
+            ? el('div', { class: 'profile-verified-strip' },
+              verifiedBadge(user, { size: 17, interactive: false }),
+              el('span', { class: 'profile-verified-label', text: 'Cuenta verificada' }),
+              vInfo.until
+                ? el('span', { class: 'profile-verified-until', text: `Hasta ${formatDate(vInfo.until)}` })
+                : null)
+            : null,
           user.bio ? el('p', { class: 'muted profile-bio', text: user.bio }) : null,
           el('div', { class: 'profile-stats' },
             el('a', { href: `#/u/${user.username}/seguidores`, text: `${formatCount(countFollowers(user.id))} seguidores` }),

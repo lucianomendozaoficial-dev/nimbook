@@ -33,5 +33,6 @@ export const P = {
   /* Soporte, verificaciones y reportes */
   supportVerifications: 'data/soporte/verificaciones.json',
   supportReports: 'data/soporte/reportes.json',
+  supportConfig: 'data/soporte/config.json',
   supportUser: 'u_support',
 };

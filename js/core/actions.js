@@ -11,6 +11,7 @@ import {
 } from './store.js';
 import { hashPassword, verifyPassword } from './crypto.js';
 import { ValidationError } from './auth.js';
+import { BADGE_PRICE, VERIFICATION_CATEGORIES } from './verification.js';
 
 function requireMe() {
   if (!state.me) throw new ValidationError('Primero tenés que iniciar sesión.');
@@ -683,28 +684,25 @@ export async function leaveGroup(groupId) {
 
 /* ------------------------------ soporte ---------------------------------- */
 
-export const VERIFICATION_PRICES = {
-  celeste: 10000,
-  morado: 18000,
-};
+export const VERIFICATION_PRICES = { celeste: BADGE_PRICE };
 
 export async function requestVerification({
-  type, dni, birthDate, country, city,
+  dni, locality, fullName, birthDate, category,
 } = {}) {
   const me = requireMe();
-  const kind = type === 'morado' ? 'morado' : type === 'celeste' ? 'celeste' : null;
-  if (!kind) throw new ValidationError('Elegí una insignia disponible.');
   const cleanDni = String(dni || '').replace(/[^0-9a-z]/gi, '').toUpperCase();
   if (cleanDni.length < 6 || cleanDni.length > 12) throw new ValidationError('Escribí un DNI válido.');
+  const cleanName = norm(fullName).slice(0, 120);
+  if (cleanName.length < 3) throw new ValidationError('Escribí tu nombre completo.');
+  const cleanLocality = norm(locality).slice(0, 90);
+  if (cleanLocality.length < 2) throw new ValidationError('Escribí tu localidad.');
   const cleanBirth = String(birthDate || '').trim();
   const born = cleanBirth ? new Date(`${cleanBirth}T12:00:00`) : null;
   if (!born || Number.isNaN(born.getTime()) || born > new Date()) {
     throw new ValidationError('Elegí tu fecha de nacimiento.');
   }
-  const cleanCountry = norm(country).slice(0, 60);
-  const cleanCity = norm(city).slice(0, 80);
-  if (cleanCountry.length < 2) throw new ValidationError('Escribí tu país de residencia.');
-  if (cleanCity.length < 2) throw new ValidationError('Escribí tu ciudad.');
+  const categoryInfo = VERIFICATION_CATEGORIES.find((item) => item.id === category);
+  if (!categoryInfo) throw new ValidationError('Elegí qué tipo de cuenta tenés.');
 
   const doc = await fetchDoc(P.supportVerifications, { fresh: true });
   const requests = Array.isArray(doc?.requests) ? doc.requests : [];
@@ -717,12 +715,14 @@ export async function requestVerification({
     userId: me.id,
     username: me.username,
     name: me.name,
-    type: kind,
-    price: VERIFICATION_PRICES[kind],
+    type: 'celeste',
+    price: BADGE_PRICE,
+    fullName: cleanName,
     dni: cleanDni,
+    locality: cleanLocality,
     birthDate: cleanBirth,
-    country: cleanCountry,
-    city: cleanCity,
+    category: categoryInfo.id,
+    categoryLabel: categoryInfo.label,
     status: 'pending',
     createdAt: nowISO(),
   };
@@ -730,6 +730,23 @@ export async function requestVerification({
     const data = current || { version: 1, requests: [] };
     return { ...data, requests: [request, ...(data.requests || [])].slice(0, 500) };
   }, { delay: 0, message: 'Zuma: solicitud de verificación' });
+
+  // Los datos también entran automáticamente al chat privado de soporte.
+  try {
+    const text = [
+      'Solicitud de insignia azul',
+      `Nombre completo: ${cleanName}`,
+      `DNI: ${cleanDni}`,
+      `Localidad: ${cleanLocality}`,
+      `Fecha de nacimiento: ${cleanBirth}`,
+      `Tipo de cuenta: ${categoryInfo.label}`,
+      `Precio: $ ${BADGE_PRICE.toLocaleString('es-AR')}/mes`,
+    ].join('\n');
+    await sendMessage(P.supportUser, text);
+  } catch (err) {
+    console.warn('[verification] no se pudo enviar la solicitud a soporte:', err?.message || err);
+  }
+
   notify('support', { kind: 'verification', request });
   return request;
 }

@@ -6,12 +6,19 @@ import { icon } from './core/icons.js';
 import { configure, fetchDoc, queueDoc } from './core/net.js';
 import { P } from './core/paths.js';
 import { mediaImg } from './core/media.js';
-import { verifyPassword } from './core/crypto.js';
+import { verifyPassword, hashPassword } from './core/crypto.js';
 import { initTheme } from './core/theme.js';
 import { initRealtime, onRemoteDoc } from './core/realtime.js';
 import {
-  VERIFICATION_TYPES, verifiedBadge, verificationType,
+  verifiedBadge,
 } from './components/verified-badge.js';
+import {
+  BADGE_PRICE, VERIFICATION_CATEGORIES, categoryLabel, verificationInfo,
+  hasVerification, formatDate, daysUntil, defaultUntil,
+} from './core/verification.js';
+import {
+  processVerificationReminders, loadPaymentConfig,
+} from './core/reminders.js';
 
 /* Cuentas que pueden abrir el panel. Editá esta lista si cambia el equipo. */
 const BASE_ADMINS = ['lucianomdz', 'lucianomdz.ok', 'eltuty'];
@@ -37,6 +44,7 @@ const state = {
   reports: [],
   supportInbox: [],
   supportUser: null,
+  supportConfig: null,
   postDocs: new Map(),
   tab: 'users',
   query: '',
@@ -109,7 +117,7 @@ async function readJson(path) {
 /* ------------------------------- carga de datos -------------------------- */
 
 async function loadData() {
-  const [usersDoc, feedDoc, storiesDoc, shopDoc, verificationsDoc, reportsDoc, supportInboxDoc] = await Promise.all([
+  const [usersDoc, feedDoc, storiesDoc, shopDoc, verificationsDoc, reportsDoc, supportInboxDoc, supportConfigDoc] = await Promise.all([
     readJson(P.userIndex),
     readJson(P.feedIndex),
     readJson(P.stories),
@@ -117,6 +125,7 @@ async function loadData() {
     readJson(P.supportVerifications),
     readJson(P.supportReports),
     readJson(P.inbox(P.supportUser)),
+    readJson(P.supportConfig),
   ]);
   if (!usersDoc) throw new Error('No se pudo leer la lista de usuarios. Revisá la conexión o config.js.');
 
@@ -126,6 +135,7 @@ async function loadData() {
   state.verifications = Array.isArray(verificationsDoc?.requests) ? verificationsDoc.requests : [];
   state.reports = Array.isArray(reportsDoc?.reports) ? reportsDoc.reports : [];
   state.supportInbox = Array.isArray(supportInboxDoc?.threads) ? supportInboxDoc.threads : [];
+  state.supportConfig = supportConfigDoc?.payment || supportConfigDoc || null;
   state.postDocs.clear();
 
   const index = Array.isArray(usersDoc.users) ? usersDoc.users : [];
@@ -151,6 +161,7 @@ async function loadData() {
   }
   if (state.me) state.me = users.find((user) => user.id === state.me.id) || state.me;
   state.loadedAt = Date.now();
+  processVerificationReminders(state.users).catch(() => {});
 }
 
 async function ensureSupportUser() {
@@ -173,7 +184,7 @@ async function ensureSupportUser() {
     password: null,
     saved: [],
     support: true,
-    verification: { type: 'dorado', at: now },
+    verification: { type: 'celeste', at: now, category: 'otro' },
     createdAt: now,
   };
   await queueDoc(P.user(support.id), () => ({ version: 1, user: support }), {
@@ -187,7 +198,7 @@ async function ensureSupportUser() {
     name: support.name,
     avatar: support.avatar,
     support: true,
-    verification: 'dorado',
+    verification: 'celeste',
     createdAt: now,
   };
   await queueDoc(P.userIndex, (doc) => {
@@ -225,41 +236,47 @@ async function loadPostDocs(limit = 30) {
 
 /* ---------------------------------- insignias ---------------------------- */
 
-function verificationButtons(user, { onDone = null } = {}) {
-  const current = verificationType(user);
-  const buttons = Object.values(VERIFICATION_TYPES).map((info) => el('button', {
-    class: `pn-vbtn ${info.id}${current === info.id ? ' active' : ''}`.trim(),
+function verificationButtons(user) {
+  const info = verificationInfo(user);
+  return [el('button', {
+    class: `pn-vbtn celeste${info?.active ? ' active' : ''}`.trim(),
     type: 'button',
-    title: info.title,
+    title: info?.active ? 'Renovar insignia azul' : 'Asignar insignia azul',
     disabled: state.busy,
-    onclick: () => setVerification(user.id, info.id, onDone),
+    onclick: () => openVerificationModal(user),
   },
-  verifiedBadge({ verification: info.id }, { size: 18, interactive: false }),
-  el('span', { text: info.label })));
-
-  if (current) {
-    buttons.push(el('button', {
-      class: 'pn-vbtn', type: 'button', title: 'Quitar insignia',
-      disabled: state.busy,
-      onclick: () => setVerification(user.id, null, onDone),
-    }, icon('x', 14), el('span', { text: 'Quitar' })));
-  }
-  return buttons;
+  verifiedBadge({ verification: 'celeste' }, { size: 18, interactive: false }),
+  el('span', { text: info?.active ? 'Renovar' : 'Dar insignia' }))];
 }
 
-async function setVerification(userId, type, onDone = null) {
+function paymentSummary() {
+  const payment = state.supportConfig || {};
+  const parts = [
+    payment.alias ? `Alias: ${payment.alias}` : '',
+    payment.cvu ? `CVU/CBU: ${payment.cvu}` : '',
+    payment.holder ? `Titular: ${payment.holder}` : '',
+    payment.bank ? `Banco: ${payment.bank}` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Todavía no configuraste los datos de pago.';
+}
+
+async function setVerification(userId, { until = null, category = null, remove = false } = {}) {
   if (state.busy) return false;
   state.busy = true;
-  state.note = type ? `Guardando insignia ${VERIFICATION_TYPES[type].label}…` : 'Quitando insignia…';
+  state.note = remove ? 'Quitando insignia…' : 'Guardando insignia azul…';
   state.noteType = 'info';
   render();
   try {
+    const verification = remove ? null : {
+      type: 'celeste',
+      at: nowISO(),
+      until: until || null,
+      category: category || null,
+      reminders: {},
+    };
     await queueDoc(P.user(userId), (doc) => {
       if (!doc?.user) return undefined;
-      return {
-        ...doc,
-        user: { ...doc.user, verification: type ? { type, at: nowISO() } : null },
-      };
+      return { ...doc, user: { ...doc.user, verification } };
     }, { delay: 0, message: 'Zuma: insignia' });
 
     await queueDoc(P.userIndex, (doc) => {
@@ -267,19 +284,27 @@ async function setVerification(userId, type, onDone = null) {
       return {
         ...doc,
         users: doc.users.map((entry) => (
-          entry.id === userId ? { ...entry, verification: type || null } : entry
+          entry.id === userId
+            ? {
+              ...entry,
+              verification: verification ? 'celeste' : null,
+              verificationUntil: verification?.until || null,
+              verificationCategory: verification?.category || null,
+            }
+            : entry
         )),
       };
     }, { delay: 0, message: 'Zuma: insignia' });
 
     const user = state.users.find((entry) => entry.id === userId);
-    if (user) user.verification = type ? { type, at: nowISO() } : null;
-    if (state.me?.id === userId && user) state.me = user;
-    state.note = type
-      ? `Listo: insignia ${VERIFICATION_TYPES[type].label} asignada a ${nameOf(user)}.`
-      : `Insignia quitada a ${nameOf(user)}.`;
+    if (user) {
+      user.verification = verification;
+      if (state.me?.id === userId) state.me = user;
+    }
+    state.note = remove
+      ? `Insignia quitada a ${nameOf(user)}.`
+      : `Insignia azul asignada a ${nameOf(user)}${until ? ` hasta el ${formatDate(until)}` : ''}.`;
     state.noteType = 'info';
-    onDone?.();
     return true;
   } catch (err) {
     state.note = `No se pudo guardar la insignia: ${err?.message || 'error de red'}`;
@@ -289,6 +314,81 @@ async function setVerification(userId, type, onDone = null) {
     state.busy = false;
     render();
   }
+}
+
+function openVerificationModal(user, { request = null } = {}) {
+  const info = verificationInfo(user);
+  const backdrop = el('div', { class: 'pn-modal-backdrop' });
+  const modal = el('div', { class: 'pn-modal pn-verification-modal' });
+  const close = () => backdrop.remove();
+  backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+
+  const until = el('input', {
+    class: 'input', type: 'date', value: info?.until?.slice(0, 10) || defaultUntil(),
+  });
+  const category = el('select', { class: 'input' },
+    el('option', { value: '', text: 'Sin tipo de cuenta' }),
+    ...VERIFICATION_CATEGORIES.map((item) => el('option', {
+      value: item.id, text: item.label, selected: (request?.category || info?.category) === item.id,
+    })));
+  const save = el('button', { class: 'pn-btn primary', type: 'submit', text: 'Guardar insignia' });
+  const remove = el('button', {
+    class: 'pn-btn danger', type: 'button', text: 'Quitar insignia', disabled: !hasVerification(user),
+  });
+
+  const fields = request ? el('div', { class: 'pn-fields pn-verification-request-fields' },
+    ...[
+      ['Nombre completo', request.fullName || request.name],
+      ['DNI', request.dni],
+      ['Localidad', request.locality],
+      ['Nacimiento', request.birthDate],
+      ['Tipo de cuenta', request.categoryLabel || categoryLabel(request.category)],
+      ['Precio', `$ ${BADGE_PRICE.toLocaleString('es-AR')}/mes`],
+    ].map(([label, value]) => el('div', { class: 'pn-field' },
+      el('div', { class: 'pn-field-label', text: label }),
+      el('div', { class: 'pn-field-value', text: value || '—' })))) : null;
+
+  const form = el('form', { class: 'col gap-12' },
+    el('div', { class: 'pn-verification-preview' },
+      verifiedBadge({ verification: 'celeste' }, { size: 46, interactive: false }),
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: 'Insignia azul' }),
+        el('div', { class: 'pn-card-sub', text: `$ ${BADGE_PRICE.toLocaleString('es-AR')}/mes · ${nameOf(user)} · @${user.username || '—'}` }))),
+    fields,
+    el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Válida hasta' }), until),
+    el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Tipo de cuenta' }), category),
+    el('div', { class: 'pn-verification-payment' },
+      el('div', { class: 'pn-field-label', text: 'Datos de pago que se envían en el aviso' }),
+      el('div', { class: 'pn-field-value', text: paymentSummary() })),
+    el('div', { class: 'pn-modal-actions' }, remove, save));
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    const ok = await setVerification(user.id, {
+      until: until.value,
+      category: category.value || null,
+    });
+    if (ok && request) {
+      await updateSupportRequest(request.id, 'approved').catch(() => {});
+    }
+    close();
+  });
+  remove.addEventListener('click', async () => {
+    if (!confirm(`¿Quitar la insignia a ${nameOf(user)}?`)) return;
+    const ok = await setVerification(user.id, { remove: true });
+    if (ok) close();
+  });
+
+  modal.append(
+    el('div', { class: 'pn-modal-head' },
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: request ? 'Aprobar verificación' : 'Insignia azul' }),
+        el('div', { class: 'pn-card-sub', text: 'Una sola insignia para toda la comunidad.' })),
+      el('button', { class: 'pn-close', type: 'button', 'aria-label': 'Cerrar', onclick: close }, icon('x', 18))),
+    el('div', { class: 'pn-modal-body' }, form));
+  backdrop.appendChild(modal);
+  document.body.appendChild(backdrop);
 }
 
 /* ---------------------------------- gate --------------------------------- */
@@ -375,7 +475,6 @@ function renderStats() {
 /* --------------------------------- soporte -------------------------------- */
 
 const ARS = new Intl.NumberFormat('es-AR');
-const supportPrice = (type) => (type === 'celeste' ? 10000 : type === 'morado' ? 18000 : 0);
 
 function supportUserRow(user) {
   return user || { id: '', name: 'Usuario', username: '' };
@@ -400,12 +499,14 @@ async function updateSupportRequest(id, status) {
 }
 
 async function approveVerification(request) {
-  const ok = await setVerification(request.userId, request.type);
-  if (!ok) return;
-  await updateSupportRequest(request.id, 'approved');
-  state.note = `Insignia ${VERIFICATION_TYPES[request.type].label} aprobada para ${nameOf(supportUserRow(state.users.find((u) => u.id === request.userId)))}.`;
-  state.noteType = 'info';
-  render();
+  const user = state.users.find((entry) => entry.id === request.userId);
+  if (!user) {
+    state.note = 'No encontramos la cuenta de esta solicitud.';
+    state.noteType = 'error';
+    render();
+    return;
+  }
+  openVerificationModal(user, { request });
 }
 
 async function rejectVerification(request) {
@@ -456,36 +557,35 @@ function renderSupportView() {
     el('div', { class: 'pn-card-head' },
       el('div', null,
         el('div', { class: 'pn-card-title', text: 'Solicitudes de verificación' }),
-        el('div', { class: 'pn-card-sub', text: 'DNI, nacimiento, país, ciudad e insignia elegida. El pago se coordina antes de aprobar.' }))));
+        el('div', { class: 'pn-card-sub', text: 'Insignia azul: nombre completo, DNI, localidad, nacimiento y tipo de cuenta. El pago se coordina y se define la fecha de vencimiento.' }))));
   if (!pending.length) {
     verCard.appendChild(el('div', { class: 'pn-post' }, el('span', { class: 'muted', text: 'No hay solicitudes pendientes.' })));
   }
   for (const request of pending) {
     const user = state.users.find((row) => row.id === request.userId);
-    const type = VERIFICATION_TYPES[request.type] || VERIFICATION_TYPES.celeste;
     verCard.appendChild(el('div', { class: 'pn-support-request' },
       el('div', { class: 'pn-support-request-head' },
         avatarEl(user, 42),
         el('div', { class: 'grow' },
           el('div', { class: 'pn-name-row' },
             el('span', { class: 'pn-user-name', text: nameOf(user) }),
-            verifiedBadge({ verification: request.type }, { size: 15, interactive: false })),
+            verifiedBadge({ verification: 'celeste' }, { size: 15, interactive: false })),
           el('div', { class: 'pn-user-sub', text: `@${request.username || user?.username || '—'} · ${new Date(request.createdAt).toLocaleString('es-AR')}` })),
-        el('span', { class: 'pn-support-price', text: `$ ${ARS.format(supportPrice(request.type))}/mes` })),
-      el('div', { class: 'pn-support-badge' }, type.title),
+        el('span', { class: 'pn-support-price', text: `$ ${ARS.format(BADGE_PRICE)}/mes` })),
+      el('div', { class: 'pn-support-badge', text: 'Insignia azul' }),
       el('div', { class: 'pn-fields pn-support-fields' },
         ...[
+          ['Nombre completo', request.fullName || request.name],
           ['DNI', request.dni],
+          ['Localidad', request.locality],
           ['Nacimiento', request.birthDate],
-          ['País', request.country],
-          ['Ciudad', request.city],
-          ['Insignia', type.title],
-          ['Precio', `$ ${ARS.format(request.price || supportPrice(request.type))}/mes`],
+          ['Tipo de cuenta', request.categoryLabel || categoryLabel(request.category)],
+          ['Precio', `$ ${ARS.format(BADGE_PRICE)}/mes`],
         ].map(([label, value]) => el('div', { class: 'pn-field' },
           el('div', { class: 'pn-field-label', text: label }),
           el('div', { class: 'pn-field-value', text: value || '—' })))),
       el('div', { class: 'pn-user-actions' },
-        btn('Aprobar y verificar', () => approveVerification(request), { className: 'primary sm', iconName: 'check' }),
+        btn('Revisar y aprobar', () => approveVerification(request), { className: 'primary sm', iconName: 'check' }),
         btn('Rechazar', () => rejectVerification(request), { className: 'danger sm', iconName: 'x' }))));
   }
   wrap.appendChild(verCard);
@@ -722,12 +822,82 @@ function openSupportChat(userId) {
   setTimeout(() => input.focus(), 100);
 }
 
+/* ------------------------------- configuración --------------------------- */
+
+function renderConfigView() {
+  const payment = state.supportConfig || {};
+  const alias = el('input', { class: 'input', value: payment.alias || '', maxlength: '80', placeholder: 'Alias de pago' });
+  const cvu = el('input', { class: 'input', value: payment.cvu || '', maxlength: '40', placeholder: 'CVU / CBU' });
+  const holder = el('input', { class: 'input', value: payment.holder || '', maxlength: '80', placeholder: 'Titular de la cuenta' });
+  const bank = el('input', { class: 'input', value: payment.bank || '', maxlength: '80', placeholder: 'Banco / billetera' });
+  const note = el('textarea', { class: 'textarea', rows: '3', maxlength: '500', placeholder: 'Instrucciones extra para el pago', value: payment.note || '' });
+  const save = el('button', {
+    class: 'pn-btn primary', type: 'submit', text: 'Guardar datos de pago',
+  });
+
+  const form = el('form', { class: 'col gap-12' },
+    el('div', { class: 'pn-fields' },
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Alias' }), alias),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'CVU / CBU' }), cvu),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Titular' }), holder),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Banco / billetera' }), bank)),
+    el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Instrucciones' }), note),
+    el('div', { class: 'pn-config-actions' }, save));
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    try {
+      const data = {
+        alias: alias.value.trim(),
+        cvu: cvu.value.trim(),
+        holder: holder.value.trim(),
+        bank: bank.value.trim(),
+        note: note.value.trim(),
+      };
+      await queueDoc(P.supportConfig, () => ({
+        version: 1,
+        payment: data,
+        updatedAt: nowISO(),
+      }), { delay: 0, message: 'Zuma: datos de pago' });
+      state.supportConfig = data;
+      state.note = 'Datos de pago guardados. Se incluyen en los avisos de vencimiento.';
+      state.noteType = 'info';
+      render();
+    } catch (err) {
+      state.note = err.message || 'No se pudieron guardar los datos de pago.';
+      state.noteType = 'error';
+      render();
+    } finally {
+      save.disabled = false;
+    }
+  });
+
+  return el('div', { class: 'col gap-16' },
+    el('div', { class: 'pn-card' },
+      el('div', { class: 'pn-card-head' },
+        el('div', null,
+          el('div', { class: 'pn-card-title', text: 'Datos de pago de la insignia' }),
+          el('div', { class: 'pn-card-sub', text: 'Se muestran en el panel al aprobar y se envían por chat 7 y 2 días antes del vencimiento.' }))),
+      el('div', { class: 'pn-config-body' }, form)),
+    el('div', { class: 'pn-card' },
+      el('div', { class: 'pn-card-head' },
+        el('div', null,
+          el('div', { class: 'pn-card-title', text: 'Cómo funcionan los avisos' }),
+          el('div', { class: 'pn-card-sub', text: 'La insignia cuesta $ 10.000/mes. El panel pregunta hasta qué fecha dura al asignarla.' }))),
+      el('div', { class: 'pn-config-info' },
+        el('div', { class: 'pn-config-info-row' }, icon('clock', 17), el('span', { text: 'El usuario recibe un mensaje privado de @soporte 7 días antes y otro 2 días antes.' })),
+        el('div', { class: 'pn-config-info-row' }, icon('shield', 17), el('span', { text: 'Los avisos se envían al abrir el panel o cuando el usuario abre su app; no se repiten.' })),
+        el('div', { class: 'pn-config-info-row' }, icon('message', 17), el('span', { text: 'El mensaje incluye los datos de pago de esta sección.' })))));
+}
+
 function renderTabs() {
   const tabs = [
     { id: 'users', label: 'Usuarios', iconName: 'users' },
     { id: 'posts', label: 'Publicaciones', iconName: 'grid' },
     { id: 'badges', label: 'Insignias', iconName: 'shield' },
     { id: 'support', label: 'Soporte', iconName: 'message' },
+    { id: 'config', label: 'Configuración', iconName: 'settings' },
   ];
   return el('div', { class: 'pn-tabs' },
     ...tabs.map((tab) => el('button', {
@@ -754,6 +924,7 @@ function userRow(user) {
         user.createdAt ? el('span', { text: `Alta ${timeAgo(user.createdAt)}` }) : null)),
     el('div', { class: 'pn-user-actions' },
       ...verificationButtons(user),
+      btn('Editar', () => openEditUser(user), { className: 'sm', iconName: 'edit' }),
       btn('Ver ficha', () => openUserModal(user), { className: 'sm', iconName: 'info' })));
 }
 
@@ -877,44 +1048,55 @@ function renderPostsView() {
 
 function renderBadgesView() {
   const card = el('div', { class: 'pn-card' });
-  const counts = {};
-  for (const info of Object.values(VERIFICATION_TYPES)) counts[info.id] = 0;
-  for (const user of state.users) {
-    const type = verificationType(user);
-    if (type) counts[type] += 1;
-  }
-
-  const grid = el('div', { class: 'pn-verif-grid' },
-    ...Object.values(VERIFICATION_TYPES).map((info) => el('div', { class: 'pn-verif' },
-      verifiedBadge({ verification: info.id }, { size: 42, interactive: false }),
-      el('h3', { text: info.title }),
-      el('p', { text: info.description }),
-      el('span', { class: 'pn-verif-count', text: `${counts[info.id]} cuenta${counts[info.id] === 1 ? '' : 's'}` }))));
+  const verified = state.users
+    .filter((user) => hasVerification(user))
+    .sort((a, b) => {
+      const ai = verificationInfo(a)?.active ? 0 : 1;
+      const bi = verificationInfo(b)?.active ? 0 : 1;
+      return ai - bi || String(a.username).localeCompare(String(b.username), 'es');
+    });
+  const active = verified.filter((user) => verificationInfo(user)?.active);
+  const expired = verified.length - active.length;
 
   card.append(
     el('div', { class: 'pn-card-head' },
       el('div', null,
-        el('div', { class: 'pn-card-title', text: 'Insignias de verificación' }),
-        el('div', { class: 'pn-card-sub', text: 'Asigná una insignia desde Usuarios. Los tres niveles confirman identidad; el color indica el vínculo.' }))),
-    grid);
+        el('div', { class: 'pn-card-title', text: 'Insignia azul' }),
+        el('div', { class: 'pn-card-sub', text: 'Una sola insignia para toda la comunidad. Asigná la fecha de vencimiento y el tipo de cuenta desde acá.' }))),
+    el('div', { class: 'pn-badge-blue-card' },
+      verifiedBadge({ verification: 'celeste' }, { size: 54, interactive: false }),
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: 'Cuenta verificada' }),
+        el('div', { class: 'pn-card-sub', text: 'Mayor visibilidad · perfil en sugerencias · tipo de cuenta · estilo especial de perfil' }),
+        el('div', { class: 'pn-badge-blue-meta' },
+          el('span', { class: 'chip', text: `$ ${ARS.format(BADGE_PRICE)}/mes` }),
+          el('span', { class: 'chip', text: `${active.length} activa${active.length === 1 ? '' : 's'}` }),
+          expired ? el('span', { class: 'chip warn', text: `${expired} vencida${expired === 1 ? '' : 's'}` }) : null))),
+    el('div', { class: 'pn-card-head' },
+      el('div', { class: 'pn-card-title', style: { fontSize: '15px' }, text: 'Usuarios con insignia' })));
 
-  const verified = state.users
-    .filter((user) => verificationType(user))
-    .sort((a, b) => String(a.username).localeCompare(String(b.username), 'es'));
-  if (verified.length) {
-    card.appendChild(el('div', { class: 'pn-card-head' },
-      el('div', { class: 'pn-card-title', style: { fontSize: '15px' }, text: 'Cuentas verificadas' })));
-    for (const user of verified) {
-      card.appendChild(el('div', { class: 'pn-user' },
-        avatarEl(user, 38),
-        el('div', { class: 'pn-user-main' },
-          el('div', { class: 'pn-name-row' },
-            el('span', { class: 'pn-user-name', text: nameOf(user) }),
-            verifiedBadge(user, { size: 15, interactive: false })),
-          el('div', { class: 'pn-user-sub', text: `@${user.username || '—'} · ${VERIFICATION_TYPES[verificationType(user)].label}` })),
-        el('div', { class: 'pn-user-actions' },
-          btn('Ver ficha', () => openUserModal(user), { className: 'sm' }))));
-    }
+  if (!verified.length) {
+    card.appendChild(el('div', { class: 'pn-post' }, el('span', { class: 'muted', text: 'Todavía no hay usuarios con insignia.' })));
+    return card;
+  }
+
+  for (const user of verified) {
+    const info = verificationInfo(user);
+    const status = !hasVerification(user) ? 'Sin verificar' : info?.active ? 'Activa' : 'Vencida';
+    card.appendChild(el('div', { class: 'pn-user' },
+      avatarEl(user, 40),
+      el('div', { class: 'pn-user-main' },
+        el('div', { class: 'pn-name-row' },
+          el('span', { class: 'pn-user-name', text: nameOf(user) }),
+          verifiedBadge(user, { size: 15, interactive: false }),
+          el('span', { class: `pn-status${info?.active ? ' resolved' : ''}`, text: status })),
+        el('div', { class: 'pn-user-sub' },
+          `@${user.username || '—'} · ${info?.category ? categoryLabel(info.category) : 'Sin tipo'} · ${info?.until ? `vence ${formatDate(info.until)}` : 'sin vencimiento'}`),
+        el('div', { class: 'pn-user-meta' },
+          el('span', { text: `Avisos: ${info?.reminders?.d7 ? '7d ✓' : '7d pendiente'} · ${info?.reminders?.d2 ? '2d ✓' : '2d pendiente'}` }))),
+      el('div', { class: 'pn-user-actions' },
+        btn(info?.active ? 'Renovar' : 'Asignar', () => openVerificationModal(user), { className: 'primary sm', iconName: 'shield' }),
+        btn('Ver ficha', () => openUserModal(user), { className: 'sm', iconName: 'info' }))));
   }
   return card;
 }
@@ -935,6 +1117,7 @@ function render() {
     if (state.tab === 'posts') content.appendChild(renderPostsView());
     else if (state.tab === 'badges') content.appendChild(renderBadgesView());
     else if (state.tab === 'support') content.appendChild(renderSupportView());
+    else if (state.tab === 'config') content.appendChild(renderConfigView());
     else content.appendChild(renderUsersView());
   };
 
@@ -975,6 +1158,130 @@ function render() {
 
 /* ------------------------------- ficha de usuario ------------------------- */
 
+function openEditUser(user) {
+  const info = verificationInfo(user);
+  const backdrop = el('div', { class: 'pn-modal-backdrop' });
+  const modal = el('div', { class: 'pn-modal pn-edit-user-modal' });
+  const close = () => backdrop.remove();
+  backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+
+  const firstName = el('input', { class: 'input', value: user.firstName || '', maxlength: '40' });
+  const lastName = el('input', { class: 'input', value: user.lastName || '', maxlength: '40' });
+  const username = el('input', { class: 'input', value: user.username || '', maxlength: '30', autocapitalize: 'none' });
+  const location = el('input', { class: 'input', value: user.location || '', maxlength: '80' });
+  const work = el('input', { class: 'input', value: user.work || '', maxlength: '80' });
+  const education = el('input', { class: 'input', value: user.education || '', maxlength: '80' });
+  const birthday = el('input', { class: 'input', type: 'date', value: String(user.birthday || '').slice(0, 10) });
+  const bio = el('textarea', { class: 'textarea', rows: '3', maxlength: '300', value: user.bio || '' });
+  const password = el('input', {
+    class: 'input', type: 'password', autocomplete: 'new-password',
+    placeholder: 'Dejar vacío para no cambiarla', maxlength: '100',
+  });
+  const category = info ? el('select', { class: 'input' },
+    el('option', { value: '', text: 'Sin tipo de cuenta' }),
+    ...VERIFICATION_CATEGORIES.map((item) => el('option', {
+      value: item.id, text: item.label, selected: info.category === item.id,
+    }))) : null;
+  const error = el('div', { class: 'pn-gate-error' });
+  const save = el('button', { class: 'pn-btn primary', type: 'submit', text: 'Guardar cambios' });
+
+  const form = el('form', { class: 'col gap-12' },
+    el('div', { class: 'pn-fields' },
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Nombre' }), firstName),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Apellido' }), lastName),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Usuario' }), username),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Localidad' }), location),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Trabajo' }), work),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Estudios' }), education),
+      el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Nacimiento' }), birthday),
+      info ? el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Tipo verificado' }), category) : null),
+    el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Biografía' }), bio),
+    el('div', { class: 'pn-field' }, el('div', { class: 'pn-field-label', text: 'Nueva contraseña (opcional)' }), password),
+    error,
+    el('div', { class: 'pn-modal-actions' }, save));
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    error.textContent = '';
+    const first = firstName.value.trim();
+    const last = lastName.value.trim();
+    const handle = username.value.trim().toLowerCase();
+    if (first.length < 2 || last.length < 2) { error.textContent = 'Nombre y apellido son obligatorios.'; return; }
+    if (!/^[a-z0-9._]{3,30}$/.test(handle)) { error.textContent = 'Usuario: 3 a 30 letras, números, puntos o guiones bajos.'; return; }
+    if (state.users.some((row) => row.id !== user.id && String(row.username).toLowerCase() === handle)) {
+      error.textContent = 'Ese usuario ya está en uso.';
+      return;
+    }
+    if (password.value && password.value.length < 6) { error.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
+
+    save.disabled = true;
+    try {
+      const doc = await readJson(P.user(user.id));
+      if (!doc?.user) throw new Error('No se encontró la cuenta.');
+      const patch = {
+        firstName: first,
+        lastName: last,
+        name: `${first} ${last}`.trim(),
+        username: handle,
+        location: location.value.trim(),
+        work: work.value.trim(),
+        education: education.value.trim(),
+        birthday: birthday.value,
+        bio: bio.value.trim(),
+      };
+      if (password.value) patch.password = await hashPassword(password.value);
+      if (category) {
+        const value = doc.user.verification;
+        const base = typeof value === 'string' ? { type: value } : { ...(value || {}) };
+        base.type = 'celeste';
+        base.category = category.value || null;
+        patch.verification = base;
+      }
+      await queueDoc(P.user(user.id), () => ({
+        ...doc,
+        user: { ...doc.user, ...patch },
+      }), { delay: 0, message: 'Zuma: editar usuario' });
+      await queueDoc(P.userIndex, (indexDoc) => {
+        if (!indexDoc?.users) return undefined;
+        return {
+          ...indexDoc,
+          users: indexDoc.users.map((entry) => (
+            entry.id === user.id
+              ? {
+                ...entry,
+                firstName: patch.firstName,
+                lastName: patch.lastName,
+                name: patch.name,
+                username: patch.username,
+                verification: patch.verification ? 'celeste' : entry.verification,
+              }
+              : entry
+          )),
+        };
+      }, { delay: 0, message: 'Zuma: editar usuario' });
+      Object.assign(user, patch);
+      state.note = `Datos de ${nameOf(user)} actualizados.`;
+      state.noteType = 'info';
+      close();
+      render();
+    } catch (err) {
+      error.textContent = err.message || 'No se pudo guardar.';
+      save.disabled = false;
+    }
+  });
+
+  modal.append(
+    el('div', { class: 'pn-modal-head' },
+      el('div', null,
+        el('div', { class: 'pn-card-title', text: 'Editar usuario' }),
+        el('div', { class: 'pn-card-sub', text: `@${user.username || '—'}` })),
+      el('button', { class: 'pn-close', type: 'button', 'aria-label': 'Cerrar', onclick: close }, icon('x', 18))),
+    el('div', { class: 'pn-modal-body' }, form));
+  backdrop.appendChild(modal);
+  document.body.appendChild(backdrop);
+  setTimeout(() => firstName.focus(), 80);
+}
+
 function openUserModal(user) {
   const backdrop = el('div', { class: 'pn-modal-backdrop' });
   const modal = el('div', { class: 'pn-modal' });
@@ -1000,7 +1307,11 @@ function openUserModal(user) {
     ['Estado civil', user.maritalStatus || '—'],
     ['WhatsApp', user.whatsapp ? `+${user.whatsapp}` : '—'],
     ['Instagram', user.instagram ? `@${user.instagram}` : '—'],
-    ['Verificación', verificationType(user) ? VERIFICATION_TYPES[verificationType(user)].title : 'Sin verificar'],
+    ['Verificación', (() => {
+      const info = verificationInfo(user);
+      if (!hasVerification(user)) return 'Sin verificar';
+      return `Insignia azul${info?.active ? '' : ' (vencida)'}${info?.until ? ` · hasta ${formatDate(info.until)}` : ''}${info?.category ? ` · ${categoryLabel(info.category)}` : ''}`;
+    })()],
     ['Contraseña', 'Cifrada con PBKDF2 (no visible)'],
   ];
 
@@ -1019,7 +1330,8 @@ function openUserModal(user) {
             el('span', { text: plural(state.postsIndex.filter((entry) => entry.authorId === user.id).reduce((sum, entry) => sum + (state.postDocs.get(entry.id)?.commentsCount || 0), 0), 'comentario', 'comentarios') })))),
       el('div', { class: 'pn-section-title', text: 'Insignia' }),
       el('div', { class: 'pn-user-actions' },
-        ...verificationButtons(user, { onDone: close })),
+        ...verificationButtons(user),
+        btn('Editar usuario', () => openEditUser(user), { className: 'sm', iconName: 'edit' })),
       user.bio ? el('div', { class: 'pn-field' },
         el('div', { class: 'pn-field-label', text: 'Biografía' }),
         el('div', { class: 'pn-field-value', text: user.bio })) : null,

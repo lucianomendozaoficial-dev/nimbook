@@ -10,6 +10,7 @@ import { initTheme } from './core/theme.js';
 import { applyReduced } from './core/motion.js';
 import { initPwa } from './core/pwa.js';
 import { haptic, withViewTransition } from './core/native.js';
+import { processOwnVerificationReminder } from './core/reminders.js';
 import { unlockSounds, playSound } from './core/sounds.js';
 import { startRouter, parseRoute, goBack } from './core/router.js';
 import { toast, emptyState } from './core/ui.js';
@@ -309,6 +310,7 @@ async function startApp() {
   renderRoute(parseRoute());
   hideSplash();
   setupPullToRefresh();
+  processOwnVerificationReminder().catch(() => {});
 }
 
 /* --------------------------- tirar para actualizar ----------------------- */

@@ -352,3 +352,49 @@ html[data-theme="dark"] .pn-status.resolved { background: #143526; color: #75e6a
 
 .pn-gate .pn-btn.block { width: 100%; justify-content: center; }
 .pn-gate .pn-gate-error:empty { display: none; }
+
+/* ---------------------- insignia azul / configuración -------------------- */
+.pn-badge-blue-card {
+  display: flex; align-items: center; gap: 16px; margin: 14px 18px;
+  padding: 18px; border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 5% 0%, rgba(29, 155, 240, .16), transparent 55%),
+    var(--card-2);
+  border: 1px solid rgba(29, 155, 240, .25);
+}
+.pn-badge-blue-card .pn-card-title { font-size: 18px; }
+.pn-badge-blue-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.chip.warn { background: #fff1e6; color: #a04a00; }
+html[data-theme="dark"] .chip.warn { background: #3a2517; color: #ffbc7d; }
+.pn-verification-modal { width: min(620px, 100%); }
+.pn-verification-preview {
+  display: flex; align-items: center; gap: 12px; padding: 12px;
+  border-radius: 14px; background: rgba(29, 155, 240, .08);
+  border: .5px solid rgba(29, 155, 240, .18);
+}
+.pn-verification-payment {
+  padding: 10px 12px; border-radius: 12px; background: var(--card-2);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.pn-verification-request-fields { margin: 0; }
+.pn-verification-modal .input, .pn-edit-user-modal .input { width: 100%; }
+.pn-modal-actions {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  padding-top: 4px; flex-wrap: wrap;
+}
+.pn-edit-user-modal { width: min(680px, 100%); }
+.pn-edit-user-modal .pn-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pn-edit-user-modal .textarea { width: 100%; min-height: 76px; }
+.pn-config-body { padding: 14px 18px 18px; }
+.pn-config-actions { display: flex; justify-content: flex-end; }
+.pn-config-info { display: flex; flex-direction: column; gap: 9px; padding: 14px 18px 18px; }
+.pn-config-info-row {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 13px; color: var(--text-2); line-height: 1.45;
+}
+.pn-config-info-row .ico { color: var(--brand); flex: none; margin-top: 1px; }
+@media (max-width: 760px) {
+  .pn-badge-blue-card { align-items: flex-start; margin: 12px; padding: 14px; }
+  .pn-edit-user-modal .pn-fields { grid-template-columns: 1fr; }
+  .pn-verification-request-fields { grid-template-columns: 1fr; }
+}

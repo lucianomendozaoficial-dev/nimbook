@@ -5,6 +5,7 @@ import {
   configure, fetchDoc, cachePut, onWrite, bumpVersion,
 } from './net.js';
 import { P } from './paths.js';
+import { verificationInfo } from './verification.js';
 
 const PAGE = 30;
 
@@ -534,10 +535,19 @@ export function mutualFollowers(a, b) {
 
 export function followSuggestions(viewerId, limit = 12) {
   if (!viewerId) return [];
-  return state.userIndex
-    .filter((user) => user.id !== viewerId && !isFollowing(viewerId, user.id))
+  const scored = [];
+  for (const entry of state.userIndex) {
+    if (entry.id === viewerId || isFollowing(viewerId, entry.id)) continue;
+    const user = state.users.get(entry.id) || entry;
+    const info = verificationInfo(user);
+    let score = info?.active ? 1000 : 0;
+    score += Math.min(20, Number(user.followers || 0) / 10);
+    scored.push({ user, score });
+  }
+  return scored
+    .sort((a, b) => b.score - a.score || String(a.user.username).localeCompare(String(b.user.username)))
     .slice(0, limit)
-    .map((user) => state.users.get(user.id) || user);
+    .map((row) => row.user);
 }
 
 export function postsByAuthor(userId) {
@@ -708,10 +718,10 @@ export function searchPeople(query, limit = 20) {
       else if (name.split(/\s+/).some((part) => part.startsWith(token))) score += 110;
       else if (haystack.includes(token)) score += 30;
     }
-    const verification = typeof full.verification === 'string'
-      ? full.verification
-      : full.verification?.type;
+    const verification = verificationInfo(full)?.active;
     if (verification) score += 24;
+    if (isFollowing(state.me?.id, full.id)) score += 45;
+    if (isFollowing(full.id, state.me?.id)) score += 35;
     if (isFollowing(state.me?.id, full.id)) score += 45;
     if (isFollowing(full.id, state.me?.id)) score += 35;
     score -= Math.min(30, username.length);
@@ -854,7 +864,12 @@ function avoidSameAuthorStreak(list) {
 function feedScore(post, viewerId, seed, now) {
   const created = Date.parse(post.createdAt) || now;
   const hours = Math.max(0, (now - created) / 3_600_000);
-  const recency = 1 / Math.pow(1 + hours / 9, 1.15);
+  const author = userById(post.authorId);
+  const verified = Boolean(verificationInfo(author)?.active);
+  const rawRecency = 1 / Math.pow(1 + hours / 9, 1.15);
+  // Una cuenta verificada conserva algo de alcance aunque haya publicado
+  // hace tiempo; no compite sólo por minutos.
+  const recency = verified ? Math.max(rawRecency, 0.36) : rawRecency;
   const reactions = Object.values(post.reactions || {})
     .reduce((sum, value) => sum + (Number(value) || 0), 0);
   const engagement = 1 + Math.log1p(reactions + (Number(post.commentsCount) || 0) * 2.4) * 0.17;
@@ -864,13 +879,15 @@ function feedScore(post, viewerId, seed, now) {
   const inMyGroup = Boolean(group && viewerId && (group.memberIds || []).includes(viewerId));
   const affinity = mine ? 1.3 : followed ? 1.55 : inMyGroup ? 1.12 : 1;
   const mediaBonus = (post.media || []).length ? 1.03 : 1;
+  const verifiedBoost = verified ? 1.3 : 1;
   const jitter = 0.9 + (hashSeed(`${post.id}:${seed}`) % 100) / 500;
   return {
     post,
     mine,
     followed,
     inMyGroup,
-    score: recency * engagement * affinity * mediaBonus * jitter,
+    verified,
+    score: recency * engagement * affinity * mediaBonus * verifiedBoost * jitter,
   };
 }
 

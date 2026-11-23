@@ -1,8 +1,9 @@
 /* ==========================================================================
-   verified-badge.js — insignias de verificación de Zuma
+   verified-badge.js — insignia única azul de Zuma
    ========================================================================== */
 import { el } from '../core/util.js';
 import { navigate } from '../core/router.js';
+import { verificationType } from '../core/verification.js';
 
 export const VERIFICATION_TYPES = {
   celeste: {
@@ -10,32 +11,15 @@ export const VERIFICATION_TYPES = {
     label: 'Verificado',
     title: 'Cuenta verificada',
     short: 'Identidad confirmada',
-    description: 'Para personas verificadas que no son famosas: confirmamos que la cuenta es de quien dice ser.',
-    audience: 'Usuarios con identidad comprobada',
-  },
-  morado: {
-    id: 'morado',
-    label: 'Figura pública',
-    title: 'Figura pública',
-    short: 'Influencers, políticos y figuras públicas',
-    description: 'Para influencers, políticos, artistas y figuras públicas con presencia reconocida.',
-    audience: 'Influencers · políticos · figuras públicas',
-  },
-  dorado: {
-    id: 'dorado',
-    label: 'Equipo Zuma',
-    title: 'Equipo Zuma y aliados',
-    short: 'Equipo, colaboradores y aliados',
-    description: 'Para el equipo de Zuma, colaboradores, políticos y aliados que trabajan con el proyecto.',
-    audience: 'Equipo Zuma · aliados · colaboradores',
+    description: 'La insignia azul confirma que la cuenta es auténtica. Incluye más visibilidad, perfil en sugerencias y la posibilidad de mostrar tu tipo de cuenta.',
+    audience: 'Una sola insignia para toda la comunidad',
   },
 };
 
-export function verificationType(user) {
-  const value = user?.verification;
-  if (!value) return null;
-  const type = typeof value === 'string' ? value : value.type;
-  return VERIFICATION_TYPES[type] ? type : null;
+export { verificationType };
+
+export function verifiedLabel(user) {
+  return verificationType(user) ? 'Verificado' : '';
 }
 
 function sealSvg() {
@@ -46,15 +30,13 @@ function sealSvg() {
     </svg>`;
 }
 
-/** Insignia de un usuario (o null si no está verificado). */
+/** Insignia azul de un usuario (o null si no está verificado). */
 export function verifiedBadge(user, { size = 16, interactive = true } = {}) {
-  const type = verificationType(user);
-  if (!type) return null;
-  const info = VERIFICATION_TYPES[type];
+  if (!verificationType(user)) return null;
   const props = {
-    class: `verified-badge ${type}`,
-    title: `${info.title} · ${info.short}`,
-    'aria-label': `${info.title}: ${info.short}`,
+    class: 'verified-badge celeste',
+    title: 'Cuenta verificada',
+    'aria-label': 'Cuenta verificada',
     style: { width: `${size}px`, height: `${size}px` },
   };
   if (interactive) {
@@ -67,9 +49,4 @@ export function verifiedBadge(user, { size = 16, interactive = true } = {}) {
   }
   return el(interactive ? 'button' : 'span', props,
     el('span', { class: 'verified-badge-inner', html: sealSvg() }));
-}
-
-export function verifiedLabel(user) {
-  const type = verificationType(user);
-  return type ? VERIFICATION_TYPES[type].label : '';
 }

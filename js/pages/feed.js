@@ -139,8 +139,8 @@ export function feedPage() {
   }
 
   /**
-   * Algunas ventas de Shop se cuelan en «Para ti» aunque no sigas al vendedor.
-   * Es a propósito inestable: cambia con la sesión y a veces no aparece ninguna.
+   * Una promoción de Shop se cuela en «Para ti» aunque no sigas al vendedor.
+   * Se muestra casi siempre, con una pequeña pausa para no saturar.
    */
   function shopPicks() {
     if (mode !== 'foryou') return [];
@@ -148,10 +148,11 @@ export function feedPage() {
       .filter((item) => item.sellerId !== state.me?.id);
     if (!listings.length) return [];
     const random = seededRandom(seed * 31 + 7);
-    if (random() > 0.82) return [];
-    const picks = [listings[Math.floor(random() * listings.length)]];
-    if (listings.length > 2 && random() < 0.4) {
-      const rest = listings.filter((item) => item.id !== picks[0].id);
+    if (random() > 0.96) return [];
+    const pool = listings.slice(0, 8);
+    const picks = [pool[Math.floor(random() * pool.length)]];
+    if (pool.length > 2 && random() < 0.3) {
+      const rest = pool.filter((item) => item.id !== picks[0].id);
       picks.push(rest[Math.floor(random() * rest.length)]);
     }
     return picks;

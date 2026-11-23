@@ -290,7 +290,7 @@ export function menuPage() {
 
       section('Privacidad y cuenta', [
         item({
-          iconName: 'shield', color: 'blue', title: 'Insignias de verificación',
+          iconName: 'shield', color: 'blue', title: 'Insignia de verificación',
           sub: 'Celeste, morada y dorada: qué significa cada una',
           href: '#/verificacion',
         }),

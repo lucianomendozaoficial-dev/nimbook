@@ -51,9 +51,13 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - Publicaciones con texto, hasta 10 fotos, **sentimiento, ubicación, privacidad y fondos de color** (como Facebook).
 - **Historias en su propia sección**: la cámara se abre primero con formato **9:16** (1080×1920, como Instagram) y abajo está **tu galería de Zuma**. La foto se comparte tal cual; dura 24 h, se puede descargar y las historias vistas quedan después de las nuevas (la tuya siempre primera).
 - **Galería propia**: las fotos importadas del dispositivo quedan guardadas y comprimidas en el navegador (IndexedDB), así después las elegís desde la galería de Zuma sin abrir el selector del sistema cada vez.
-- **Insignias de verificación**: se puede **pedir** la celeste o la morada con DNI, fecha de nacimiento, país y ciudad. La celeste cuesta **$10.000/mes** y la morada **$18.000/mes**; la dorada no está a la venta (solo equipo y aliados). Soporte revisa y aprueba desde el panel.
+- **Insignia única azul**: la cuenta verificada cuesta **$10.000/mes**. Incluye mayor visibilidad en el muro, perfil en sugerencias, tipo de cuenta (influencer, gamer, político/a, artista, deportista, periodista o marca) y un estilo especial en el perfil público.
+- **Solicitud de insignia**: se piden nombre completo, DNI, localidad, fecha de nacimiento y tipo de cuenta. Los datos se envían automáticamente al chat privado de **@soporte** y quedan en el panel.
+- **Perfil verificado**: las cuentas con insignia azul tienen un perfil público con borde y brillo azul, franja de verificación, tipo de cuenta y fecha de vigencia.
+- **Muro más inteligente**: combina afinidad, reacciones, comentarios, recencia y un impulso especial para cuentas verificadas, que mantienen alcance aunque hayan publicado hace tiempo.
+- **Promociones de Shop**: las ventas que aparecen en el muro tienen una tarjeta destacada con la etiqueta **Promoción de Shop**, vendedor, precio y botones para ver o consultar.
 - **Soporte**: perfil oficial **@soporte**, chat privado con los usuarios, avisos publicados desde el panel y **reportes de cuentas con motivo**. Todo aparece en la pestaña **Soporte** del panel.
-- **Panel de control** (`panel.html`): pide una **contraseña de verificación** al entrar y permite ver usuarios, publicaciones, datos, insignias, solicitudes de verificación, reportes y el chat de soporte.
+- **Panel de control** (`panel.html`): pide una **contraseña de verificación** al entrar y permite ver usuarios, publicaciones, datos, insignias con vencimiento, solicitudes de verificación, reportes, chat de soporte y configurar los datos de pago.
 - **Actualizar Zuma** en el menú: borra la caché, desregistra el service worker y recarga para ver los cambios sin Ctrl+R.
 - **Descargar imágenes** de publicaciones e historias desde el menú de la publicación o el visor.
 - **Eliminar cuenta** desde el menú: pide la contraseña, avisa que es permanente y borra perfil, publicaciones, historias, ventas, conversaciones y vínculos.
@@ -70,7 +74,7 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - Reacciones: 👍 Me gusta, ❤️ Me encanta, 😂 Me divierte, 😮 Me asombra, 😢 Me entristece, 😡 Me enfada.
 - Comentarios, respuestas anidadas, reacciones y fotos en comentarios.
 - Compartir publicaciones (con la original incrustada).
-- La celeste es para cuentas verificadas que no son famosas; la morada para influencers, políticos y figuras públicas; la dorada es solo para el equipo de Zuma y sus aliados.
+- La insignia azul es la única: incluye identidad confirmada, alcance, sugerencias, tipo de cuenta y perfil destacado. Se renueva por mes.
 - El **nav principal ya no muestra Seguidores**; se llega a seguidores/siguiendo desde el perfil.
 - Seguidores: seguir y dejar de seguir, sugerencias con seguidores en común, sin solicitudes.
 - Grupos públicos y privados con publicaciones, miembros y administración.
@@ -80,7 +84,7 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - Perfiles con portada, foto, biografía y pestañas (publicaciones, seguidores, fotos, **Shop** e información); botón para compartir el perfil.
 - **Buscador con pestañas** (Todo, Personas, Shop, Grupos), ranking inteligente, coincidencias resaltadas, etiquetas para explorar, sugerencias y búsquedas recientes.
 - **Contactar a Luciano** desde el menú: WhatsApp **+54 11 5118-6792** e Instagram **@lucianomdz.ok**.
-- **Menú rediseñado** con el perfil, las secciones de la app, **Actualizar Zuma**, **Contactar**, **Panel de control**, **Insignias de verificación** y la zona de privacidad y cuenta.
+- **Menú rediseñado** con el perfil, las secciones de la app, **Actualizar Zuma**, **Contactar**, **Panel de control**, **Insignia de verificación** y la zona de privacidad y cuenta.
 - Modo claro / oscuro / automático, toasts, menús, visor de imágenes.
 
 **Diseño**
@@ -101,11 +105,12 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
  
 ## Panel de control
 
-`panel.html` es una página aparte para el equipo. Pide una **contraseña de verificación** al entrar (se guarda solo en la pestaña) y permite ver usuarios, datos, publicaciones y asignar o quitar la insignia de verificación. Lee y escribe en Supabase con la clave publicable de `config.js`.
+`panel.html` es una página aparte para el equipo. Pide una **contraseña de verificación** al entrar (se guarda solo en la pestaña) y permite ver usuarios, datos, publicaciones, editar sus datos y contraseña, asignar la insignia con vencimiento y gestionar soporte. Lee y escribe en Supabase con la clave publicable de `config.js`.
 
-- Pestañas: **Usuarios** (buscar, ver ficha, asignar insignia), **Publicaciones**, **Insignias** y **Soporte** (solicitudes de verificación, reportes, chat de @soporte y publicar avisos).
-- La insignia se guarda en `usuarios/<id>.json` (`verification: { type, at }`) y en `usuarios/index.json` (`verification: "celeste" | "morado" | "dorado"`) para que el muro y las listas la muestren sin descargar la ficha completa.
-- En **Soporte** se aprueban o rechazan solicitudes, se resuelven reportes y se responde el chat como @soporte. El perfil de soporte se crea solo la primera vez que se abre el panel.
+- Pestañas: **Usuarios** (buscar, ver ficha, editar datos y contraseña, asignar insignia), **Publicaciones**, **Insignias** (la única insignia azul, usuarios con vencimiento y avisos), **Soporte** (solicitudes, reportes, chat y avisos) y **Configuración** (datos de pago).
+- La insignia se guarda en `usuarios/<id>.json` (`verification: { type: "celeste", at, until, category, reminders }`) y en `usuarios/index.json` (`verification: "celeste"`).
+- En **Soporte** se aprueban o rechazan solicitudes, se elige la fecha de vencimiento, se resuelven reportes y se responde el chat como @soporte. El perfil de soporte se crea solo la primera vez que se abre el panel.
+- En **Configuración** se cargan alias, CVU/CBU, titular, banco e instrucciones de pago. Se incluyen en el mensaje privado que @soporte envía **7 días y 2 días antes** del vencimiento.
 
 > El panel tiene una contraseña de verificación, pero se comprueba en el navegador y el código es público. No reemplaza a Supabase Auth: para una comunidad grande hay que cerrar el panel con autenticación real y políticas por usuario. No compartas el enlace ni la contraseña.
 
@@ -131,8 +136,9 @@ data/
   notificaciones/<usuario>.json    bandeja de cada persona
   grupos.json                  grupos y canales (tipo, dueño y miembros)
   historias.json               historias activas (imagen; las viejas pueden tener texto y fuente)
-  soporte/verificaciones.json  solicitudes de verificación (DNI, nacimiento, país, ciudad)
+  soporte/verificaciones.json  solicitudes de la insignia azul (nombre, DNI, localidad, nacimiento y tipo)
   soporte/reportes.json        cuentas reportadas y motivo
+  soporte/config.json          datos de pago que se envían en los avisos
   tienda/index.json            productos de Shop: id, vendedor, foto, precio y estado
   tienda/<producto>.json       ficha completa (descripción, fotos y contacto opcional)
   mensajes/bandejas/<usuario>.json   conversaciones de cada persona y no leídos
@@ -201,7 +207,7 @@ La base arranca **vacía**: no se migran datos viejos. Cada persona vuelve a cre
 
 1. Entra en `https://tuusuario.github.io/nimbook/`.
 2. Pulsa **Crear una cuenta nueva**, completa tus datos y publica tu primer momento.
-3. Para asignar insignias, entra a `panel.html` directamente: no pide login.
+3. Para asignar insignias, entra a `panel.html` e ingresá la contraseña de verificación. Desde **Configuración** cargá los datos de pago antes de aprobar.
 
 > El repositorio puede ser público: GitHub Pages lo necesita para servir el sitio. Los datos no están en el repositorio; están en Supabase.
 
@@ -262,8 +268,10 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Chat en vivo | Realtime instantáneo + sonido si el chat no está abierto; el sondeo queda como respaldo |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
 | Historias | Cámara 9:16; la galería propia guarda copias comprimidas en IndexedDB y las fotos se eligen desde ahí |
-| Verificación | Tres niveles; **solicitud paga** celeste $10.000/mes y morada $18.000/mes (dorada solo por invitación). Guarda DNI, nacimiento, país y ciudad en `soporte/verificaciones.json` |
-| Soporte | Perfil @soporte, chat privado, reportes de cuentas y avisos publicados desde el panel |
+| Verificación | Una sola insignia azul, **$10.000/mes**. Guarda nombre completo, DNI, localidad, nacimiento y tipo de cuenta en `soporte/verificaciones.json`; vence en la fecha que fija el panel |
+| Soporte | Perfil @soporte, chat privado, reportes de cuentas, avisos publicados desde el panel y recordatorios de vencimiento |
+| Pagos | Datos configurables en `soporte/config.json`; se incluyen en los avisos 7 y 2 días antes del vencimiento |
+| Feed | Ranking con afinidad, engagement, recencia, impulso y piso de alcance para cuentas verificadas; promociones de Shop destacadas |
 | Panel | `panel.html` + `js/panel.js`, contraseña de verificación en el navegador; lectura y escritura en Supabase |
 | Eliminar cuenta | Verifica la contraseña y borra perfil, posts, historias, ventas, conversaciones y vínculos; el aviso indica que no se puede deshacer |
 | Imágenes | `canvas` → JPEG, máx. 1600 px y ~1,4 MB; las nuevas van a Supabase Storage |
@@ -275,8 +283,9 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - La `service_role` de Supabase **nunca** va en el navegador ni en `config.js`: solo se usa desde el SQL Editor o scripts privados.
 - Los mensajes privados se guardan como JSON en Supabase: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Alguien con la clave publicable y las políticas actuales podría leer la tabla. Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
 - La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, la app ofrece elegir una foto de la galería.
-- El trámite de verificación guarda DNI y fecha de nacimiento en Supabase. El panel pide una contraseña de verificación, pero se comprueba en el navegador; no es autenticación real. Para producción conviene cerrar el panel con Supabase Auth.
-- La **dorada** no está a la venta; solo la asigna el equipo.
+- El trámite de verificación guarda nombre completo, DNI, localidad y fecha de nacimiento en Supabase. El panel pide una contraseña de verificación, pero se comprueba en el navegador; no es autenticación real. Para producción conviene cerrar el panel con Supabase Auth.
+- La insignia azul es la única; los datos viejos con otros colores se muestran como azul.
+- Los avisos de vencimiento se envían al abrir el panel o la app del usuario (7 y 2 días antes), no con un cron del servidor: al ser un sitio estático no hay proceso en segundo plano.
 - La galería propia solo contiene las fotos que el usuario importó desde el dispositivo; el navegador no permite leer toda la galería del teléfono sin permiso.
 - Al eliminar una cuenta se borran sus documentos JSON, pero las imágenes ya subidas a Storage y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar.
 - La contraseña del panel viaja y se comprueba en el cliente: alguien con experiencia puede saltearla leyendo el código. No la uses como única protección de datos sensibles.
@@ -308,6 +317,8 @@ js/core/ui.js           modales, menús, toasts, visor de imágenes
 js/core/router.js       rutas por hash
 js/components/*         topbar, sidebars, compositor, tarjeta de post, historias, insignias, emojis
 js/components/emoji-picker.js   selector de emojis por categorías y recientes
+js/core/verification.js   insignia única, categorías, vencimiento y avisos
+js/core/reminders.js      mensajes privados de @soporte 7 y 2 días antes
 js/core/realtime.js     Supabase Realtime: cambios en vivo entre dispositivos
 js/core/gallery.js      galería propia con IndexedDB (fotos importadas)
 js/core/native.js       transiciones de vista y vibración nativa
@@ -320,8 +331,8 @@ css/ios.css             capa de estilo iOS y estilos de las secciones nuevas
 panel.html              panel de control del equipo
 js/panel.js             usuarios, publicaciones e insignias (Supabase)
 css/panel.css           estilos del panel
-js/components/verified-badge.js  insignias celeste, morada y dorada
-js/pages/verification.js         explicación de las tres insignias
+js/components/verified-badge.js  insignia azul única
+js/pages/verification.js         explicación y solicitud de la insignia azul
 assets/logo/            logo PNG en todos los tamaños + favicon
 tools/                  despliegue, emulador local de Supabase, datos de ejemplo y pruebas
 ```
