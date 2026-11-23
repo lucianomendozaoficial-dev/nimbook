@@ -325,8 +325,11 @@ export function profilePage(username, { preview = false } = {}) {
           el('div', { class: 'profile-name-row' },
             el('h1', { class: 'profile-name', text: displayNameValue }),
             verifiedBadge(user, { size: 21 }),
-            verifiedProfile && vInfo.category
+            verifiedProfile && vInfo.category && !user.support
               ? el('span', { class: 'profile-type-chip', text: categoryLabel(vInfo.category) })
+              : null,
+            user.support
+              ? el('span', { class: 'profile-support-chip' }, icon('shield', 13), 'Soporte oficial')
               : null),
           el('div', { class: 'profile-fullname', text: `@${user.username || 'usuario'}` }),
           verifiedProfile

@@ -8,7 +8,7 @@ import { el, clear } from './util.js';
 import { icon } from './icons.js';
 import { openModal, toast } from './ui.js';
 import { openFilePicker } from './media.js';
-import { compressVideo } from './video.js';
+import { probeVideo, makeVideoPoster } from './video.js';
 
 const DB_NAME = 'zuma-gallery';
 const STORE = 'photos';
@@ -96,15 +96,14 @@ export async function addMedia(files, { onProgress = null } = {}) {
         let kind = 'image';
         if (isVideo) {
           kind = 'video';
-          const output = await compressVideo(file, {
-            maxDuration: 60,
-            onProgress: (value) => onProgress?.(value, file.name),
-          });
-          blob = output.blob;
-          thumbBlob = output.poster;
-          duration = output.duration;
-          width = output.width;
-          height = output.height;
+          const info = await probeVideo(file);
+          const poster = await makeVideoPoster(file, Math.min(0.2, Math.max(0, (info.duration || 0) / 2)));
+          URL.revokeObjectURL(info.url);
+          blob = file;
+          thumbBlob = poster.blob;
+          duration = info.duration;
+          width = info.width;
+          height = info.height;
         } else {
           const output = await compressPhoto(file);
           blob = output.blob;
@@ -209,7 +208,7 @@ export function openGallery({ onPick, initialKind = 'all' } = {}) {
       grid.appendChild(el('div', { class: 'zuma-gallery-empty' },
         el('div', { class: 'big-ic' }, icon(kind === 'video' ? 'videocam' : 'photo-library', 30)),
         el('div', { class: 'strong', text: kind === 'video' ? 'No hay videos todavía' : 'Tu galería está vacía' }),
-        el('p', { class: 'muted small', text: 'Tocá el botón + para sumar fotos o videos a tu galería. Los videos se optimizan una vez.' })));
+        el('p', { class: 'muted small', text: 'Tocá el botón + para sumar fotos o videos a tu galería. Los videos se recortan y optimizan al publicar.' })));
       return;
     }
     for (const record of media) {
@@ -242,10 +241,10 @@ export function openGallery({ onPick, initialKind = 'all' } = {}) {
     if (!files.length) return;
     importing = true;
     status.classList.remove('hide');
-    status.textContent = 'Optimizando archivos…';
+    status.textContent = 'Preparando archivos…';
     try {
       const added = await addMedia(files, {
-        onProgress: (value, name) => { status.textContent = `Optimizando ${name || 'video'}… ${value}%`; },
+        onProgress: (value, name) => { status.textContent = `Preparando ${name || 'video'}… ${value}%`; },
       });
       if (!added.length) {
         toast('No se pudieron agregar esos archivos.', { type: 'error' });

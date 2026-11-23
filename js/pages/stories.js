@@ -11,7 +11,9 @@ import {
   mediaImg, uploadImage, validateImageFile,
 } from '../core/media.js';
 import { uploadR2 } from '../core/r2.js';
+import { compressVideo } from '../core/video.js';
 import { openGallery } from '../core/gallery.js';
+import { openVideoTrimmer } from '../components/video-trimmer.js';
 import { createStory } from '../core/actions.js';
 import { openStoryViewer } from '../components/stories.js';
 import { navigate } from '../core/router.js';
@@ -188,14 +190,13 @@ export function storyComposerPage() {
       onPick: (item) => {
         if (item.kind === 'video') {
           stopCamera();
-          revokePreview();
-          photoFile = null;
-          videoBlob = item.file;
-          posterBlob = item.record.thumbBlob || null;
-          videoDuration = item.record.duration || 0;
-          videoPreviewUrl = URL.createObjectURL(item.file);
-          stageName = 'publish';
-          render();
+          openVideoTrimmer({
+            file: item.file,
+            duration: item.record.duration || 0,
+            poster: item.record.thumbBlob ? URL.createObjectURL(item.record.thumbBlob) : '',
+            onDone: ({ start, end }) => prepareVideo(item, start, end),
+            onCancel: () => { stageName = 'camera'; render(); startCamera(); },
+          });
           return;
         }
         const problem = validateImageFile(item.file);
@@ -203,6 +204,41 @@ export function storyComposerPage() {
         usePhoto(item.file);
       },
     });
+  }
+
+  async function prepareVideo(item, start, end) {
+    stopCamera();
+    revokePreview();
+    photoFile = null;
+    videoBlob = item.file;
+    posterBlob = item.record.thumbBlob || null;
+    videoDuration = Math.max(0.4, end - start);
+    stageName = 'processing';
+    videoProcessing = 0;
+    render();
+    try {
+      const output = await compressVideo(item.file, {
+        startTime: start,
+        endTime: end,
+        maxDuration: 60,
+        onProgress: (value) => {
+          videoProcessing = value;
+          if (processingText) processingText.textContent = `Optimizando… ${value}%`;
+          if (processingBar) processingBar.style.width = `${value}%`;
+        },
+      });
+      videoBlob = output.blob;
+      posterBlob = output.poster;
+      videoDuration = output.duration;
+      videoPreviewUrl = URL.createObjectURL(output.blob);
+      stageName = 'publish';
+      render();
+    } catch (err) {
+      stageName = 'camera';
+      render();
+      toast(err.message || 'No se pudo preparar el video.', { type: 'error' });
+      startCamera();
+    }
   }
 
   function usePhoto(file) {

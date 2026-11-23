@@ -398,3 +398,21 @@ html[data-theme="dark"] .chip.warn { background: #3a2517; color: #ffbc7d; }
   .pn-edit-user-modal .pn-fields { grid-template-columns: 1fr; }
   .pn-verification-request-fields { grid-template-columns: 1fr; }
 }
+
+/* ------------------------- acceso de soporte ----------------------------- */
+.pn-support-access {
+  margin-top: 12px; padding: 14px;
+  border: .5px solid var(--line-soft); border-radius: 16px;
+  background: var(--card-2);
+}
+.pn-support-access-copy p, .pn-support-password p {
+  margin: 4px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--text-3);
+}
+.pn-support-access-title { font-size: 13px; font-weight: 800; }
+.pn-support-access-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pn-support-password {
+  margin-top: 10px; padding-top: 12px;
+  border-top: .5px solid var(--line-soft);
+}
+.pn-support-password-row { display: flex; gap: 6px; margin-top: 8px; }
+.pn-support-password-row .input { flex: 1; min-width: 0; }

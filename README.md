@@ -49,14 +49,14 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 **Red social**
 - Registro e inicio de sesión (contraseñas cifradas con PBKDF2-SHA256).
 - Publicaciones con texto, hasta 10 fotos, **sentimiento, ubicación, privacidad y fondos de color** (como Facebook). Los enlaces del texto se detectan y se abren con un aviso y un botón **Abrir**; el fondo solo está disponible cuando la publicación es solo texto y el texto queda centrado.
-- **Historias en su propia sección**: fotos 9:16 y **videos de hasta 60 s comprimidos a 720p**. Las imágenes duran 24 h y los videos **18 h**; al vencer se quitan y se borra el archivo de R2. La tuya va siempre primera, las no vistas antes que las vistas y dentro de cada persona se ven de la primera a la última; si ya viste la primera y hay una nueva, abre directo en la nueva. Se puede **responder una historia** y la respuesta llega al chat privado citando esa historia.
-- **Galería propia**: fotos y videos del dispositivo quedan optimizados y guardados en IndexedDB. La cámara abre directo a pantalla completa, sin header ni navegación, y con el acceso a la galería abajo; los videos se comprimen una sola vez a 720p y se reutilizan al publicar.
+- **Historias en su propia sección**: fotos 9:16 y **videos de cualquier duración**: el editor de recorte deja elegir un fragmento de hasta **60 s**, que se optimiza a **720p**. Las imágenes duran 24 h y los videos **18 h**; al vencer se quitan y se borra el archivo de R2. La tuya va siempre primera, las no vistas antes que las vistas y dentro de cada persona se ven de la primera a la última; si ya viste la primera y hay una nueva, abre directo en la nueva. Se puede **responder una historia** y la respuesta llega al chat privado citando esa historia.
+- **Galería propia**: fotos y videos del dispositivo quedan guardados en IndexedDB. La cámara abre directo a pantalla completa, sin header ni navegación, y con el acceso a la galería abajo. Los videos se recortan con handles de inicio/fin y se optimizan una sola vez al publicar el fragmento elegido.
 - **Insignia única azul**: la cuenta verificada cuesta **$10.000/mes**. Incluye mayor visibilidad en el muro, perfil en sugerencias, tipo de cuenta (influencer, gamer, político/a, artista, deportista, periodista o marca) y un estilo especial en el perfil público.
 - **Solicitud de insignia**: se piden nombre completo, DNI, localidad, fecha de nacimiento y tipo de cuenta. Los datos se envían automáticamente al chat privado de **@soporte** y quedan en el panel.
 - **Perfil verificado**: las cuentas con insignia azul tienen un perfil público normal, con ilustraciones y detalles azules, la franja **Cuenta verificada** (sin fecha) y el tipo de cuenta.
 - **Muro más inteligente**: combina afinidad, reacciones, comentarios, recencia y un impulso especial para cuentas verificadas, que mantienen alcance aunque hayan publicado hace tiempo.
 - **Promociones de Shop**: las ventas que aparecen en el muro tienen una tarjeta destacada con la etiqueta **Promoción de Shop**, vendedor, precio y botones para ver o consultar.
-- **Soporte**: perfil oficial **@soporte**, chat privado con los usuarios, avisos publicados desde el panel y **reportes de cuentas con motivo**. Todo aparece en la pestaña **Soporte** del panel.
+- **Soporte**: perfil oficial **@soporte** con página propia. Desde el panel se puede **entrar como Soporte** en una sesión real o definir su contraseña para iniciar sesión desde la app; así puede publicar, responder historias y usar el chat privado. Incluye reportes de cuentas con motivo.
 - **Panel de control** (`panel.html`): pide una **contraseña de verificación** al entrar y permite ver usuarios, publicaciones, datos, insignias con vencimiento, solicitudes de verificación, reportes, chat de soporte y configurar los datos de pago.
 - **Actualizar Zuma** en el menú: borra la caché, desregistra el service worker y recarga para ver los cambios sin Ctrl+R.
 - **Descargar imágenes** de publicaciones e historias desde el menú de la publicación o el visor.
@@ -109,7 +109,7 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 
 - Pestañas: **Usuarios** (buscar, ver ficha, editar datos y contraseña, asignar insignia), **Publicaciones**, **Insignias** (la única insignia azul, usuarios con vencimiento y avisos), **Soporte** (solicitudes, reportes, chat y avisos) y **Configuración** (datos de pago).
 - La insignia se guarda en `usuarios/<id>.json` (`verification: { type: "celeste", at, until, category, reminders }`) y en `usuarios/index.json` (`verification: "celeste"`).
-- En **Soporte** se aprueban o rechazan solicitudes, se elige la fecha de vencimiento, se resuelven reportes y se responde el chat como @soporte. El perfil de soporte se crea solo la primera vez que se abre el panel.
+- En **Soporte** se aprueban o rechazan solicitudes, se elige la fecha de vencimiento, se resuelven reportes, se responde el chat como @soporte y se puede **entrar a la app como @soporte** (o definir su contraseña). El perfil de soporte se crea solo la primera vez que se abre el panel.
 - En **Configuración** se cargan alias, CVU/CBU, titular, banco e instrucciones de pago. Se incluyen en el mensaje privado que @soporte envía **7 días y 2 días antes** del vencimiento.
 
 > El panel tiene una contraseña de verificación, pero se comprueba en el navegador y el código es público. No reemplaza a Supabase Auth: para una comunidad grande hay que cerrar el panel con autenticación real y políticas por usuario. No compartas el enlace ni la contraseña.
@@ -289,10 +289,10 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Tiempo real | Supabase Realtime Broadcast: cada escritura avisa a los demás dispositivos, más indicador de “escribiendo…”; el chat tiene sondeo de respaldo cada 5 s |
 | Chat en vivo | Realtime instantáneo + sonido si el chat no está abierto; el sondeo queda como respaldo |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
-| Historias | Fotos 24 h y videos de 60 s máx. / 18 h, 720p; galería propia en IndexedDB; videos en R2 |
+| Historias | Fotos 24 h y videos de cualquier duración / 18 h; recorte de hasta 60 s, 720p; galería propia en IndexedDB; videos en R2 |
 | Enlaces | Los links del texto se abren desde un modal con un único botón **Abrir** |
 | Verificación | Una sola insignia azul, **$10.000/mes**. Guarda nombre completo, DNI, localidad, nacimiento y tipo de cuenta en `soporte/verificaciones.json`; vence en la fecha que fija el panel |
-| Soporte | Perfil @soporte, chat privado, reportes de cuentas, avisos publicados desde el panel y recordatorios de vencimiento |
+| Soporte | Perfil @soporte con página propia, acceso desde el panel, contraseña opcional, chat privado, reportes, avisos y recordatorios |
 | Pagos | Datos configurables en `soporte/config.json`; se incluyen en los avisos 7 y 2 días antes del vencimiento |
 | Feed | Ranking con afinidad, engagement, recencia, impulso y piso de alcance para cuentas verificadas; promociones de Shop destacadas |
 | Panel | `panel.html` + `js/panel.js`, contraseña de verificación en el navegador; lectura y escritura en Supabase |
@@ -306,7 +306,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - La `service_role` de Supabase **nunca** va en el navegador ni en `config.js`: solo se usa desde el SQL Editor o scripts privados.
 - Los mensajes privados se guardan como JSON en Supabase: la app solo los muestra dentro del hilo de las dos personas, pero **no están cifrados**. Alguien con la clave publicable y las políticas actuales podría leer la tabla. Para conversaciones realmente secretas haría falta cifrado de extremo a extremo, que esta versión no incluye.
 - La cámara de historias necesita HTTPS (GitHub Pages lo es) y permiso del navegador; si no está disponible, queda el acceso a la galería abajo.
-- Los videos se comprimen en el navegador a **720 × 1280** con `MediaRecorder`; si ya son 720p se reutiliza el original para evitar recodificar. La galería comprime una vez al agregar y la historia publica ese archivo listo.
+- Los videos se recortan en el navegador y el fragmento se comprime a **720 × 1280** con `MediaRecorder` (VP8/WebM, 24 fps y ~1,5 Mbps). Si el fragmento completo ya es 720p se reutiliza el original. El archivo vive en R2 y los metadatos en Supabase.
 - **Seguridad de R2:** al ser una app estática, la URL firmada se genera en el navegador y las credenciales de R2 están en `config.js`. Cualquiera que abra el código puede verlas y subir/borrar archivos del bucket. Para producción hay que mover la firma a un Worker o Edge Function y rotar las claves. No uses ese bucket para archivos privados.
 - Los videos de historias se eliminan de la app a las 18 h y se intenta borrar el archivo de R2; si nadie abre la app, la limpieza queda pendiente.
 - El trámite de verificación guarda nombre completo, DNI, localidad y fecha de nacimiento en Supabase. El panel pide una contraseña de verificación, pero se comprueba en el navegador; no es autenticación real. Para producción conviene cerrar el panel con Supabase Auth.
@@ -339,7 +339,8 @@ js/core/actions.js      todas las escrituras (posts, seguidores, chats…)
 js/core/auth.js         registro, acceso y sesión
 js/core/crypto.js       PBKDF2
 js/core/media.js        compresión y subida de imágenes
-js/core/video.js        compresión de videos a 720 × 1280 y poster
+js/core/video.js        recorte, compresión 720 × 1280 y poster
+js/components/video-trimmer.js  editor de recorte de videos para historias
 js/core/r2.js           Cloudflare R2: URLs firmadas, subida y borrado
 js/core/ui.js           modales, menús, toasts, visor de imágenes
 js/pages/verification.js         explicación y solicitud de la insignia azul

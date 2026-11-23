@@ -535,6 +535,58 @@ async function resolveReport(report) {
   render();
 }
 
+function supportPasswordForm(support) {
+  const input = el('input', {
+    class: 'input', type: 'password', minlength: '6', autocomplete: 'new-password',
+    placeholder: 'Contraseña para entrar como @soporte',
+  });
+  const save = btn('Guardar acceso', async () => {
+    const clean = input.value;
+    if (clean.length < 6) {
+      state.note = 'La contraseña de soporte necesita al menos 6 caracteres.';
+      state.noteType = 'error';
+      render();
+      return;
+    }
+    save.disabled = true;
+    try {
+      const record = await hashPassword(clean);
+      const doc = await readJson(P.user(support.id));
+      const user = { ...(doc?.user || support), password: record };
+      await queueDoc(P.user(support.id), () => ({ version: 1, user }), {
+        delay: 0, message: 'Zuma: acceso de soporte',
+      });
+      state.supportUser = user;
+      state.users = state.users.map((row) => (row.id === user.id ? { ...row, ...user } : row));
+      state.note = 'Acceso de @soporte actualizado. Ya puede iniciar sesión con su contraseña.';
+      state.noteType = 'info';
+      render();
+    } catch (err) {
+      state.note = err.message || 'No se pudo guardar el acceso de soporte.';
+      state.noteType = 'error';
+      render();
+    } finally {
+      save.disabled = false;
+    }
+  }, { className: 'primary sm', iconName: 'lock' });
+  return el('div', { class: 'pn-support-password' },
+    el('div', { class: 'pn-support-access-title', text: 'Acceso con contraseña' }),
+    el('p', { text: 'También podés entrar desde la pantalla de inicio con el usuario @soporte y esta contraseña.' }),
+    el('div', { class: 'pn-support-password-row' }, input, save));
+}
+
+function openAsSupport(hash = '#/inicio') {
+  if (!state.supportUser) return;
+  try {
+    localStorage.setItem('nb.session.v2', JSON.stringify({
+      userId: state.supportUser.id, at: Date.now(),
+    }));
+  } catch { /* noop */ }
+  const opened = window.open(`index.html${hash}`, '_blank');
+  if (opened) opened.opener = null;
+  else window.location.href = `index.html${hash}`;
+}
+
 function renderSupportView() {
   const pending = state.verifications.filter((row) => row.status === 'pending');
   const reports = state.reports;
@@ -552,11 +604,20 @@ function renderSupportView() {
     el('div', { class: 'pn-card-head' },
       el('div', null,
         el('div', { class: 'pn-card-title', text: 'Perfil de soporte' }),
-        el('div', { class: 'pn-card-sub', text: 'Los usuarios pueden escribirle a @soporte y ver sus publicaciones.' })),
+        el('div', { class: 'pn-card-sub', text: 'La cuenta @soporte tiene página propia, puede publicar, responder historias y usar el chat privado.' })),
       el('div', { class: 'pn-user-actions' },
         support ? el('a', {
-          class: 'pn-btn primary sm', href: 'index.html#/u/soporte', target: '_blank', rel: 'noopener',
-        }, icon('user', 15), 'Ver perfil') : null))));
+          class: 'pn-btn sm', href: 'index.html#/u/soporte', target: '_blank', rel: 'noopener',
+        }, icon('user', 15), 'Ver página') : null,
+        support ? btn('Entrar como Soporte', () => openAsSupport('#/inicio'), { className: 'primary sm', iconName: 'user' }) : null)),
+    support ? el('div', { class: 'pn-support-access' },
+      el('div', { class: 'pn-support-access-copy' },
+        el('div', { class: 'pn-support-access-title', text: 'Acceso rápido' }),
+        el('p', { text: 'Abre Zuma en una pestaña nueva con la sesión de @soporte. Es una sesión real: puede publicar, mandar mensajes y responder historias. La sesión de este navegador pasa a ser la de soporte.' })),
+      el('div', { class: 'pn-support-access-actions' },
+        btn('Publicar en la app', () => openAsSupport('#/publicar'), { className: 'sm', iconName: 'plus' }),
+        btn('Mensajes', () => openAsSupport('#/mensajes'), { className: 'sm', iconName: 'message' }))) : null,
+    support ? supportPasswordForm(support) : null));
 
   const verCard = el('div', { class: 'pn-card' },
     el('div', { class: 'pn-card-head' },
