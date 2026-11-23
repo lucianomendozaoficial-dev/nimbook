@@ -1,9 +1,10 @@
 /* ==========================================================================
-   config.js — conexión de Zuma con Supabase.
+   config.js — conexión de Zuma con Supabase y Cloudflare R2.
 
-   La URL y la clave publicable están pensadas para el navegador: cualquiera
-   puede leerlas, pero el acceso real lo controlan las políticas (RLS) de
-   Supabase. No pongas acá la clave service_role ni secretos privados.
+   La URL y la clave publicable de Supabase están pensadas para el navegador.
+   Las credenciales de R2 se usan para firmar subidas desde esta app estática:
+   quedan visibles en el código. Para producción hay que moverlas a un Worker
+   o Edge Function y rotarlas. No pongas acá la service_role de Supabase.
    ========================================================================== */
 window.NIMBOOK_CONFIG = {
   supabaseUrl: 'https://jnewregdsxppdzfdvsqb.supabase.co',
