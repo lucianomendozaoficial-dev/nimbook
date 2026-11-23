@@ -364,6 +364,11 @@ function openVerificationModal(user, { request = null } = {}) {
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!until.value) {
+      until.focus();
+      alert('Elegí hasta qué fecha dura la insignia.');
+      return;
+    }
     save.disabled = true;
     const ok = await setVerification(user.id, {
       until: until.value,
