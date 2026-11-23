@@ -2,10 +2,11 @@
    store.js — estado en memoria y lecturas desde Supabase
    ========================================================================== */
 import {
-  configure, fetchDoc, cachePut, onWrite, bumpVersion,
+  configure, fetchDoc, cachePut, onWrite, bumpVersion, queueDoc,
 } from './net.js';
 import { P } from './paths.js';
 import { verificationInfo } from './verification.js';
+import { deleteR2 } from './r2.js';
 
 const PAGE = 30;
 
@@ -27,6 +28,7 @@ export const state = {
   comments: new Map(),     // postId -> { index, items: Map, loaded }
   groups: [],
   stories: [],
+  reels: [],
   notifications: [],
 
   shopIndex: [],           // [{ id, sellerId, title, price, ... }]
@@ -88,6 +90,9 @@ export function attach(cfg) {
     } else if (path === P.stories) {
       state.stories = doc?.stories || [];
       topic = 'stories';
+    } else if (path === P.reels) {
+      state.reels = Array.isArray(doc?.reels) ? doc.reels : [];
+      topic = 'reels';
     } else if (path === P.shopIndex) {
       state.shopIndex = doc?.items || [];
       topic = 'shop';
@@ -276,10 +281,37 @@ export async function loadGroups() {
 
 export async function loadStories() {
   const doc = await docJson(P.stories);
-  const now = Date.now();
-  state.stories = (doc?.stories || []).filter((story) =>
-    story.createdAt && now - new Date(story.createdAt).getTime() < 24 * 3600 * 1000);
+  const all = Array.isArray(doc?.stories) ? doc.stories : [];
+  const alive = [];
+  const expired = [];
+  for (const story of all) {
+    const isVideo = story.type === 'video' || Boolean(story.video);
+    const ttl = isVideo ? 18 * 3600 * 1000 : 24 * 3600 * 1000;
+    const expires = story.expiresAt
+      ? new Date(story.expiresAt).getTime()
+      : new Date(story.createdAt).getTime() + ttl;
+    if (expires > Date.now()) alive.push(story);
+    else expired.push(story);
+  }
+  state.stories = alive;
+  if (expired.length) {
+    queueDoc(P.stories, (current) => {
+      if (!current?.stories) return undefined;
+      const ids = new Set(expired.map((story) => story.id));
+      return { ...current, stories: current.stories.filter((story) => !ids.has(story.id)) };
+    }, { delay: 0, message: 'Zuma: limpiar historias vencidas' }).catch(() => {});
+    for (const story of expired) {
+      if (story.videoKey) deleteR2(story.videoKey).catch(() => {});
+      if (story.posterKey) deleteR2(story.posterKey).catch(() => {});
+    }
+  }
   return state.stories;
+}
+
+export async function loadReels({ fresh = false } = {}) {
+  const doc = await docJson(P.reels, { fresh });
+  state.reels = Array.isArray(doc?.reels) ? doc.reels : [];
+  return state.reels;
 }
 
 /* -------------------------------- tienda --------------------------------- */
@@ -662,17 +694,17 @@ export function storiesGrouped(viewerId) {
     if (!user) continue;
     // solo mis historias y las de las personas que sigo
     if (userId !== viewerId && !isFollowing(viewerId, userId)) continue;
-    list.sort((a, b) => {
-      const seenDiff = Number(seen.has(a.id)) - Number(seen.has(b.id));
-      return seenDiff || new Date(b.createdAt) - new Date(a.createdAt);
-    });
-    const latest = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+    // Dentro de cada persona, de la primera subida a la última.
+    list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const latest = list[list.length - 1];
+    const firstUnseen = list.findIndex((story) => !seen.has(story.id));
     groups.push({
       user,
       stories: list,
       latest,
-      unseen: list.some((story) => !seen.has(story.id)),
-      unseenCount: list.filter((story) => !seen.has(story.id)).length,
+      startIndex: firstUnseen >= 0 ? firstUnseen : 0,
+      unseen: firstUnseen >= 0,
+      unseenCount: firstUnseen >= 0 ? list.length - firstUnseen : 0,
     });
   }
   groups.sort((a, b) => {
@@ -952,6 +984,7 @@ export async function bootData() {
       loadInbox(state.me.id),
       loadGroups(),
       loadStories(),
+      loadReels(),
     ]);
   }
   await loadFeedPage({ reset: true });
@@ -968,6 +1001,7 @@ export async function refreshAll() {
     loadShopIndex({ fresh: true }),
     loadGroups(),
     loadStories(),
+    loadReels(),
   ]);
   if (state.me) {
     await Promise.all([

@@ -97,6 +97,22 @@ function renderShared(post, container) {
   container.appendChild(box);
 }
 
+function openExternalLink(url) {
+  const safe = String(url || '');
+  if (!/^https?:\/\//i.test(safe)) return;
+  openModal({
+    title: 'Enlace externo',
+    size: 'sm',
+    body: el('div', { class: 'external-link-modal' },
+      el('p', { class: 'muted small', text: 'Vas a abrir este enlace fuera de Zuma:' }),
+      el('div', { class: 'external-link-url', text: safe }),
+      el('a', {
+        class: 'btn primary block', href: safe,
+        target: '_blank', rel: 'noopener noreferrer nofollow',
+      }, 'Abrir')),
+  });
+}
+
 export function postCard(post, { onUpdate, suggested = false } = {}) {
   const root = el('article', { class: 'card post', 'data-post-id': post.id });
   const postData = () => state.posts.get(post.id) || post;
@@ -110,6 +126,12 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
     }));
   const headEl = el('div', { class: 'post-head' });
   const textEl = el('div', { class: 'post-text' });
+  textEl.addEventListener('click', (event) => {
+    const link = event.target.closest?.('.external-link');
+    if (!link) return;
+    event.preventDefault();
+    openExternalLink(link.dataset.url || link.href);
+  });
   const shareEl = el('div');
   const mediaEl = el('div', { class: 'post-media' });
   const statsEl = el('div', { class: 'post-stats' });
@@ -143,8 +165,10 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
           el('span', { class: 'post-fullname', text: fullName(author) }),
           el('span', { class: 'dot' }),
           el('a', { href: `#/p/${current.id}`, text: timeAgo(current.createdAt) }),
-          current.feeling ? el('span', { text: ` · ${current.feeling}` }) : null,
-          current.location ? el('span', { text: ` · ${current.location}` }) : null,
+          current.feeling ? el('span', { class: 'dot' }) : null,
+          current.feeling ? el('span', { text: current.feeling }) : null,
+          current.location ? el('span', { class: 'dot' }) : null,
+          current.location ? el('span', { text: current.location }) : null,
           el('span', { class: 'dot' }),
           icon(privacyIcon(current), 12, { cls: 'dim' }))),
       menuBtn,

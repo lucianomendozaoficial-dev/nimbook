@@ -25,7 +25,7 @@ export function openStoryViewer(groups, startIndex = 0) {
   if (!groups.length) return null;
   const me = state.me;
   let groupIndex = Math.max(0, Math.min(startIndex, groups.length - 1));
-  let storyIndex = 0;
+  let storyIndex = groups[groupIndex]?.startIndex || 0;
   let timer = null;
 
   const root = el('div', { class: 'story-viewer', role: 'dialog', 'aria-modal': 'true' });
@@ -33,6 +33,7 @@ export function openStoryViewer(groups, startIndex = 0) {
   const bars = el('div', { class: 'sv-bars' });
   const header = el('div', { class: 'sv-head' });
   const image = el('img', { alt: 'Historia', class: 'sv-image' });
+  const storyVideo = el('video', { class: 'sv-video hide', playsinline: true, autoplay: true });
   const caption = el('div', { class: 'sv-text' });
 
   const closeBtn = el('button', {
@@ -48,7 +49,7 @@ export function openStoryViewer(groups, startIndex = 0) {
     onclick: (event) => { event.stopPropagation(); step(1); },
   });
 
-  card.append(image, bars, header, caption, prevZone, nextZone, closeBtn);
+  card.append(storyVideo, image, bars, header, caption, prevZone, nextZone, closeBtn);
   root.appendChild(card);
 
   function currentStory() {
@@ -62,8 +63,28 @@ export function openStoryViewer(groups, startIndex = 0) {
     const { group, story } = current;
     markStorySeen(story.id);
 
-    image.style.background = storyGradient(story.id);
-    image.src = fetchImageUrl(story.image);
+    const isVideo = Boolean(story.video);
+    if (isVideo) {
+      image.classList.add('hide');
+      storyVideo.classList.remove('hide');
+      storyVideo.src = story.video;
+      storyVideo.poster = story.poster || story.image || '';
+      storyVideo.muted = false;
+      storyVideo.currentTime = 0;
+      const play = () => storyVideo.play().catch(() => {
+        storyVideo.muted = true;
+        storyVideo.play().catch(() => {});
+      });
+      play();
+      storyVideo.onended = () => step(1);
+    } else {
+      storyVideo.pause();
+      storyVideo.removeAttribute('src');
+      storyVideo.classList.add('hide');
+      image.classList.remove('hide');
+      image.style.background = storyGradient(story.id);
+      image.src = fetchImageUrl(story.image);
+    }
 
     caption.className = `sv-text ${storyFontClass(story.font)}`;
     caption.textContent = story.text || '';
@@ -105,11 +126,14 @@ export function openStoryViewer(groups, startIndex = 0) {
         : null);
 
     clear(bars);
+    const duration = story.video
+      ? Math.min(60, Math.max(0.5, Number(story.duration) || 15)) + 0.4
+      : 6.2;
     for (let i = 0; i < group.stories.length; i++) {
       const segment = el('span', { class: 'sv-bar' }, el('i'));
       if (i < storyIndex) segment.firstChild.style.width = '100%';
       if (i === storyIndex) {
-        segment.firstChild.style.transition = 'width 6s linear';
+        segment.firstChild.style.transition = `width ${duration}s linear`;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             segment.firstChild.style.width = '100%';
@@ -118,22 +142,27 @@ export function openStoryViewer(groups, startIndex = 0) {
       }
       bars.appendChild(segment);
     }
-    scheduleAdvance();
+    scheduleAdvance(duration);
   }
 
-  function scheduleAdvance() {
+  function scheduleAdvance(duration = 6.2) {
     clearTimeout(timer);
-    timer = setTimeout(() => step(1), 6200);
+    timer = setTimeout(() => step(1), duration * 1000);
   }
 
   function step(delta) {
     const group = groups[groupIndex];
     const nextIndex = storyIndex + delta;
     if (nextIndex < 0) {
-      if (groupIndex > 0) { groupIndex -= 1; storyIndex = groups[groupIndex].stories.length - 1; }
+      if (groupIndex > 0) {
+        groupIndex -= 1;
+        storyIndex = groups[groupIndex].startIndex || 0;
+      }
     } else if (nextIndex >= group.stories.length) {
-      if (groupIndex < groups.length - 1) { groupIndex += 1; storyIndex = 0; }
-      else { destroy(); return; }
+      if (groupIndex < groups.length - 1) {
+        groupIndex += 1;
+        storyIndex = groups[groupIndex].startIndex || 0;
+      } else { destroy(); return; }
     } else {
       storyIndex = nextIndex;
     }
@@ -148,6 +177,7 @@ export function openStoryViewer(groups, startIndex = 0) {
 
   function destroy() {
     clearTimeout(timer);
+    storyVideo.pause();
     document.removeEventListener('keydown', onKey);
     root.remove();
     document.body.style.overflow = '';
@@ -226,6 +256,9 @@ export function mountStories() {
           style: { background: storyGradient(story.id) },
           text: story.text || '',
         }));
+      }
+      if (story.video) {
+        card.appendChild(el('span', { class: 'story-video-badge' }, icon('play', 13)));
       }
       if (story.text) {
         card.appendChild(el('div', {

@@ -264,8 +264,13 @@ export async function copyText(text) {
 export function linkify(text = '') {
   const safe = escapeHtml(text);
   return safe
-    .replace(/(https?:\/\/(?:www\.)?[^\s<]+)/g, (url) =>
-      `<a href="${url}" target="_blank" rel="noopener noreferrer nofollow">${url.length > 60 ? `${url.slice(0, 57)}…` : url}</a>`)
+    .replace(/(https?:\/\/(?:www\.)?[^\s<]+|(?:^|\s)www\.[^\s<]+)/g, (match) => {
+      const prefix = match.startsWith(' ') ? ' ' : '';
+      const raw = match.trim();
+      const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      const label = raw.length > 60 ? `${raw.slice(0, 57)}…` : raw;
+      return `${prefix}<a class="text-link external-link" href="${escapeHtml(url)}" data-url="${escapeHtml(url)}" rel="noopener noreferrer nofollow">${escapeHtml(label)}</a>`;
+    })
     .replace(/(^|\s)@([a-zA-Z0-9._-]{2,32})/g, (m, pre, user) =>
       `${pre}<span class="mention">@${user}</span>`);
 }

@@ -12,6 +12,7 @@ import {
 import { hashPassword, verifyPassword } from './crypto.js';
 import { ValidationError } from './auth.js';
 import { BADGE_PRICE, VERIFICATION_CATEGORIES } from './verification.js';
+import { deleteR2 } from './r2.js';
 
 function requireMe() {
   if (!state.me) throw new ValidationError('Primero tenés que iniciar sesión.');
@@ -776,22 +777,38 @@ export async function reportAccount(userId, reason, detail = '') {
 
 /* -------------------------------- historias ------------------------------ */
 
-export async function createStory({ image, text = '', font = 'clasica' } = {}) {
+export async function createStory({
+  image = '', video = '', poster = '', videoKey = '', posterKey = '',
+  duration = 0, text = '', font = 'clasica',
+} = {}) {
   const me = requireMe();
-  if (!image) throw new ValidationError('Elegí una foto para tu historia.');
+  if (!image && !video) throw new ValidationError('Elegí una foto o un video para tu historia.');
+  const isVideo = Boolean(video);
   const story = {
     id: newId('s'),
     userId: me.id,
-    image,
+    type: isVideo ? 'video' : 'image',
+    image: image || poster,
+    video,
+    poster: poster || image,
+    videoKey,
+    posterKey,
+    duration: isVideo ? Math.min(60, Math.max(0.5, Number(duration) || 0)) : 0,
     text: norm(text),
     font: String(font || 'clasica'),
     createdAt: nowISO(),
+    expiresAt: new Date(Date.now() + (isVideo ? 18 : 24) * 3600 * 1000).toISOString(),
   };
   state.stories = [story, ...state.stories];
   await queueDoc(P.stories, (doc) => {
     const data = doc || { version: 1, stories: [] };
-    const alive = (data.stories || []).filter((item) =>
-      Date.now() - new Date(item.createdAt).getTime() < 24 * 3600 * 1000);
+    const alive = (data.stories || []).filter((item) => {
+      const ttl = item.type === 'video' || item.video ? 18 : 24;
+      const expires = item.expiresAt
+        ? new Date(item.expiresAt).getTime()
+        : new Date(item.createdAt).getTime() + ttl * 3600 * 1000;
+      return expires > Date.now();
+    });
     data.stories = [story, ...alive].slice(0, 300);
     return data;
   }, { delay: 400, message: 'Zuma: nueva historia' });
@@ -801,13 +818,82 @@ export async function createStory({ image, text = '', font = 'clasica' } = {}) {
 
 export async function deleteStory(storyId) {
   const me = requireMe();
+  const story = state.stories.find((item) => item.id === storyId && item.userId === me.id);
   state.stories = state.stories.filter((story) => story.id !== storyId);
   await queueDoc(P.stories, (doc) => {
     const data = doc || { version: 1, stories: [] };
     data.stories = (data.stories || []).filter((item) => item.id !== storyId || item.userId !== me.id);
     return data;
   }, { delay: 0, message: 'Zuma: borrar historia' });
+  if (story?.videoKey) deleteR2(story.videoKey).catch(() => {});
+  if (story?.posterKey) deleteR2(story.posterKey).catch(() => {});
   notify('stories');
+}
+
+/* ---------------------------------- reels --------------------------------- */
+
+export async function createReel({
+  video = '', videoKey = '', poster = '', posterKey = '', duration = 0, caption = '',
+} = {}) {
+  const me = requireMe();
+  if (!video) throw new ValidationError('Subí un video para publicar el Reel.');
+  const cleanDuration = Math.min(120, Math.max(0.5, Number(duration) || 0));
+  const reel = {
+    id: newId('rl'),
+    userId: me.id,
+    video,
+    videoKey,
+    poster,
+    posterKey,
+    duration: cleanDuration,
+    caption: norm(caption).slice(0, 500),
+    likes: [],
+    createdAt: nowISO(),
+  };
+  state.reels = [reel, ...state.reels];
+  await queueDoc(P.reels, (doc) => {
+    const data = doc || { version: 1, reels: [] };
+    data.reels = [reel, ...(data.reels || []).filter((item) => item.id !== reel.id)].slice(0, 300);
+    return data;
+  }, { delay: 300, message: 'Zuma: nuevo Reel' });
+  notify('reels');
+  return reel;
+}
+
+export async function toggleReelLike(reelId) {
+  const me = requireMe();
+  const reel = state.reels.find((item) => item.id === reelId);
+  if (!reel) return false;
+  const likes = new Set(Array.isArray(reel.likes) ? reel.likes : []);
+  const liked = likes.has(me.id);
+  if (liked) likes.delete(me.id); else likes.add(me.id);
+  reel.likes = [...likes];
+  const next = [...state.reels];
+  state.reels = next;
+  await queueDoc(P.reels, (doc) => {
+    if (!doc?.reels) return undefined;
+    return {
+      ...doc,
+      reels: doc.reels.map((item) => (item.id === reelId ? { ...item, likes: [...likes] } : item)),
+    };
+  }, { delay: 80, message: 'Zuma: me gusta en Reel' });
+  notify('reels');
+  return !liked;
+}
+
+export async function deleteReel(reelId) {
+  const me = requireMe();
+  const reel = state.reels.find((item) => item.id === reelId);
+  if (!reel) return;
+  if (reel.userId !== me.id) throw new ValidationError('Ese Reel no es tuyo.');
+  state.reels = state.reels.filter((item) => item.id !== reelId);
+  await queueDoc(P.reels, (doc) => {
+    if (!doc?.reels) return undefined;
+    return { ...doc, reels: doc.reels.filter((item) => item.id !== reelId) };
+  }, { delay: 0, message: 'Zuma: borrar Reel' });
+  if (reel.videoKey) deleteR2(reel.videoKey).catch(() => {});
+  if (reel.posterKey) deleteR2(reel.posterKey).catch(() => {});
+  notify('reels');
 }
 
 /* ---------------------------------- shop --------------------------------- */

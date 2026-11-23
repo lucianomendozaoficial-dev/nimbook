@@ -17,7 +17,7 @@ import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
 import { listingCard } from './shop.js';
 import { verifiedBadge } from '../components/verified-badge.js';
-import { verificationInfo, categoryLabel, formatDate } from '../core/verification.js';
+import { verificationInfo, categoryLabel } from '../core/verification.js';
 import { navigate, goBack, parseRoute } from '../core/router.js';
 import { ValidationError } from '../core/auth.js';
 
@@ -255,6 +255,22 @@ export function profilePage(username, { preview = false } = {}) {
     });
   }
 
+  function verifiedCoverArt() {
+    return el('div', {
+      class: 'verified-cover-art', 'aria-hidden': 'true',
+      html: `<svg viewBox="0 0 260 130" fill="none">
+        <circle cx="196" cy="35" r="42" fill="white" fill-opacity=".10"/>
+        <circle cx="196" cy="35" r="27" stroke="white" stroke-opacity=".45" stroke-width="1.5"/>
+        <path d="M183 35l9 9 18-20" stroke="white" stroke-opacity=".8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M72 16l3.2 8.8L84 28l-8.8 3.2L72 40l-3.2-8.8L60 28l8.8-3.2L72 16z" fill="white" fill-opacity=".65"/>
+        <path d="M228 84l2.4 6.6 6.6 2.4-6.6 2.4-2.4 6.6-2.4-6.6-6.6-2.4 6.6-2.4L228 84z" fill="white" fill-opacity=".45"/>
+        <circle cx="126" cy="99" r="3" fill="white" fill-opacity=".5"/>
+        <circle cx="103" cy="49" r="2" fill="white" fill-opacity=".4"/>
+        <path d="M18 96c20-15 41-18 62-8s39 10 58 0 37-11 58 4" stroke="white" stroke-opacity=".17" stroke-width="1.2"/>
+      </svg>`,
+    });
+  }
+
   function header(user) {
     const isMe = user.id === state.me?.id;
     const followers = followersOf(user.id);
@@ -291,8 +307,11 @@ export function profilePage(username, { preview = false } = {}) {
     const vInfo = verificationInfo(user);
     const verifiedProfile = Boolean(vInfo?.active);
 
+    const cover = coverEl(user);
+    if (verifiedProfile) cover.appendChild(verifiedCoverArt());
+
     return el('div', { class: `profile-header profile-hero${verifiedProfile ? ' verified-profile' : ''}` },
-      coverEl(user),
+      cover,
       el('div', { class: 'profile-main-row' },
         el('div', { class: 'profile-avatar-big' }, avatarEl(user, 'xxl')),
         el('div', { class: 'profile-info' },
@@ -306,10 +325,7 @@ export function profilePage(username, { preview = false } = {}) {
           verifiedProfile
             ? el('div', { class: 'profile-verified-strip' },
               verifiedBadge(user, { size: 17, interactive: false }),
-              el('span', { class: 'profile-verified-label', text: 'Cuenta verificada' }),
-              vInfo.until
-                ? el('span', { class: 'profile-verified-until', text: `Hasta ${formatDate(vInfo.until)}` })
-                : null)
+              el('span', { class: 'profile-verified-label', text: 'Cuenta verificada' }))
             : null,
           user.bio ? el('p', { class: 'muted profile-bio', text: user.bio }) : null,
           el('div', { class: 'profile-stats' },

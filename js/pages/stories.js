@@ -8,8 +8,10 @@ import {
 } from '../core/store.js';
 import { avatarEl, emptyState, toast } from '../core/ui.js';
 import {
-  mediaImg, uploadImage, validateImageFile,
+  mediaImg, uploadImage, validateImageFile, openFilePicker,
 } from '../core/media.js';
+import { compressVideo } from '../core/video.js';
+import { uploadR2 } from '../core/r2.js';
 import { openGallery } from '../core/gallery.js';
 import { createStory } from '../core/actions.js';
 import { openStoryViewer } from '../components/stories.js';
@@ -65,6 +67,9 @@ export function storiesPage() {
           style: { background: 'linear-gradient(160deg,#1877f2,#8a2be2)' },
         }));
       }
+      if (latest.video) {
+        tile.appendChild(el('span', { class: 'story-video-badge' }, icon('play', 13)));
+      }
       if (latest.text) {
         tile.appendChild(el('div', {
           class: `story-tile-text ${storyFontClass(latest.font)}`,
@@ -78,7 +83,7 @@ export function storiesPage() {
       tile.appendChild(el('div', { class: 'story-tile-meta' },
         el('span', { text: timeAgo(latest.createdAt) }),
         group.stories.length > 1
-          ? el('span', { class: 'story-tile-count', text: `${group.stories.length} fotos` })
+          ? el('span', { class: 'story-tile-count', text: `${group.stories.length} historias` })
           : null));
       grid.appendChild(tile);
     });
@@ -88,7 +93,7 @@ export function storiesPage() {
     el('div', { class: 'page-head stories-head' },
       el('div', { class: 'grow' },
         el('h1', { text: 'Historias' }),
-        el('p', { class: 'muted small', text: 'Lo que compartió tu gente en las últimas 24 horas.' })),
+        el('p', { class: 'muted small', text: 'Lo que compartió tu gente: fotos 24 h y videos 18 h.' })),
       el('button', {
         class: 'btn primary', type: 'button',
         onclick: () => navigate('/historias/crear'),
@@ -110,6 +115,13 @@ export function storyComposerPage() {
   let stream = null;
   let photoFile = null;
   let previewUrl = '';
+  let videoBlob = null;
+  let posterBlob = null;
+  let videoPreviewUrl = '';
+  let videoDuration = 0;
+  let videoProcessing = 0;
+  let processingText = null;
+  let processingBar = null;
   let facing = 'user';
   let stageName = 'camera';
   let cameraError = '';
@@ -129,7 +141,12 @@ export function storyComposerPage() {
 
   function revokePreview() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
     previewUrl = '';
+    videoPreviewUrl = '';
+    videoBlob = null;
+    posterBlob = null;
+    videoDuration = 0;
   }
 
   async function startCamera() {
@@ -184,6 +201,38 @@ export function storyComposerPage() {
     render();
   }
 
+  async function pickVideo() {
+    const files = await openFilePicker({ accept: 'video/*' });
+    if (!files.length) return;
+    stopCamera();
+    revokePreview();
+    photoFile = null;
+    stageName = 'processing';
+    videoProcessing = 0;
+    render();
+    try {
+      const output = await compressVideo(files[0], {
+        maxDuration: 60,
+        onProgress: (value) => {
+          videoProcessing = value;
+          if (processingText) processingText.textContent = `Comprimiendo… ${value}%`;
+          if (processingBar) processingBar.style.width = `${value}%`;
+        },
+      });
+      videoBlob = output.blob;
+      posterBlob = output.poster;
+      videoDuration = output.duration;
+      videoPreviewUrl = URL.createObjectURL(output.blob);
+      stageName = 'publish';
+      render();
+    } catch (err) {
+      stageName = 'camera';
+      render();
+      toast(err.message || 'No se pudo comprimir el video.', { type: 'error' });
+      startCamera();
+    }
+  }
+
   async function shoot() {
     if (!stream || busy) return;
     const targetW = 1080;
@@ -233,7 +282,10 @@ export function storyComposerPage() {
           class: 'story-shutter', type: 'button', 'aria-label': 'Tomar foto',
           onclick: shoot,
         }, el('span')),
-        el('span', { class: 'story-gallery-btn ghost' })));
+        el('button', {
+          class: 'story-gallery-btn ghost', type: 'button',
+          onclick: pickVideo,
+        }, icon('videocam', 22), el('span', { text: 'Video' }))));
 
     if (cameraError || !stream) {
       preview.classList.add('no-camera');
@@ -244,7 +296,10 @@ export function storyComposerPage() {
         el('div', { class: 'row gap-8 center' },
           el('button', {
             class: 'btn primary', type: 'button', onclick: pickFromGallery,
-          }, icon('photo-library', 17), 'Elegir de la galería'),
+          }, icon('photo-library', 17), 'Elegir foto'),
+          el('button', {
+            class: 'btn soft', type: 'button', onclick: pickVideo,
+          }, icon('videocam', 17), 'Elegir video'),
           el('button', {
             class: 'btn soft', type: 'button', onclick: startCamera,
           }, icon('refresh', 17), 'Reintentar'))));
@@ -253,34 +308,74 @@ export function storyComposerPage() {
     return preview;
   }
 
+  function renderProcessing() {
+    processingText = el('div', { class: 'story-processing-text', text: `Comprimiendo… ${videoProcessing}%` });
+    processingBar = el('div', { class: 'story-processing-bar' });
+    return el('div', { class: 'story-processing' },
+      el('div', { class: 'story-processing-card' },
+        el('div', { class: 'big-ic' }, icon('videocam', 30)),
+        el('div', { class: 'strong', text: 'Preparando tu video' }),
+        el('p', { class: 'muted small', text: 'Se comprime a 720p para que cargue rápido. Esto puede tardar lo mismo que dura el video.' }),
+        processingText,
+        el('div', { class: 'story-processing-track' }, processingBar),
+        el('p', { class: 'muted tiny', text: 'Máximo 60 segundos · se verá 18 horas' })));
+  }
+
   function renderPublish() {
+    const isVideo = Boolean(videoBlob);
     const publish = el('button', {
       class: 'btn primary block lg', type: 'button',
-    }, icon('send', 17), 'Compartir historia');
+    }, icon('send', 17), isVideo ? 'Compartir video' : 'Compartir historia');
 
     publish.addEventListener('click', async () => {
-      if (busy || !photoFile) return;
+      if (busy || (!photoFile && !videoBlob)) return;
       busy = true;
       publish.disabled = true;
       publish.replaceChildren(el('span', { class: 'spinner', style: { width: '15px', height: '15px' } }));
       publish.append(document.createTextNode(' Publicando…'));
       try {
-        const record = await uploadImage(photoFile, 'stories', { maxSize: 1440 });
-        await createStory({ image: record.path });
+        if (isVideo) {
+          const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const videoKey = `stories/${state.me.id}/${stamp}.${videoBlob.type.includes('mp4') ? 'mp4' : 'webm'}`;
+          const video = await uploadR2(videoBlob, videoKey, { contentType: videoBlob.type });
+          let poster = '';
+          let posterKey = '';
+          if (posterBlob) {
+            posterKey = `stories/${state.me.id}/${stamp}.jpg`;
+            poster = (await uploadR2(posterBlob, posterKey, { contentType: 'image/jpeg' })).url;
+          }
+          await createStory({
+            video: video.url,
+            videoKey,
+            poster,
+            posterKey,
+            image: poster,
+            duration: videoDuration,
+          });
+          toast('Video publicado (visible 18 h)', { type: 'success' });
+        } else {
+          const record = await uploadImage(photoFile, 'stories', { maxSize: 1440 });
+          await createStory({ image: record.path });
+          toast('Historia publicada (visible 24 h)', { type: 'success' });
+        }
         playSound('send');
-        toast('Historia publicada (visible 24 h)', { type: 'success' });
         navigate('/historias');
       } catch (err) {
         busy = false;
         publish.disabled = false;
-        publish.replaceChildren(icon('send', 17), document.createTextNode(' Compartir historia'));
+        publish.replaceChildren(icon('send', 17), document.createTextNode(isVideo ? ' Compartir video' : ' Compartir historia'));
         toast(err.message || 'No se pudo publicar la historia.', { type: 'error' });
       }
     });
 
     return el('div', { class: 'story-publish' },
       el('div', { class: 'story-publish-preview' },
-        el('img', { src: previewUrl, alt: 'Tu historia' }),
+        isVideo
+          ? el('video', {
+            class: 'story-publish-video', src: videoPreviewUrl,
+            controls: true, autoplay: true, loop: true, playsinline: true, muted: true,
+          })
+          : el('img', { src: previewUrl, alt: 'Tu historia' }),
         el('button', {
           class: 'story-round-btn story-publish-close', type: 'button', 'aria-label': 'Cerrar',
           onclick: () => navigate('/historias'),
@@ -289,14 +384,17 @@ export function storyComposerPage() {
         publish,
         el('button', {
           class: 'btn soft block', type: 'button',
-          onclick: () => { stageName = 'camera'; startCamera(); },
-        }, icon('camera', 17), 'Cambiar foto')));
+          onclick: () => { revokePreview(); stageName = 'camera'; startCamera(); },
+        }, icon(isVideo ? 'videocam' : 'camera', 17), isVideo ? 'Cambiar video' : 'Cambiar foto')));
   }
 
   function render() {
     if (destroyed) return;
     clear(stage);
-    if (stageName === 'publish' && previewUrl) stage.appendChild(renderPublish());
+    processingText = null;
+    processingBar = null;
+    if (stageName === 'processing') stage.appendChild(renderProcessing());
+    else if (stageName === 'publish' && (previewUrl || videoPreviewUrl)) stage.appendChild(renderPublish());
     else stage.appendChild(renderCamera());
   }
 

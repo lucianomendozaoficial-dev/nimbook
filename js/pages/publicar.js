@@ -153,6 +153,9 @@ export function composePage() {
       palette.classList.add('hide');
       applyBackground();
     }
+    bgBtn.disabled = files.length > 0;
+    bgBtn.classList.toggle('disabled', files.length > 0);
+    bgBtn.title = files.length ? 'El fondo solo está disponible cuando la publicación es texto' : 'Fondo del texto';
     updateCounter();
   }
 
@@ -262,6 +265,18 @@ export function composePage() {
     }
   });
 
+  const bgBtn = el('button', {
+    class: 'compose-tool', type: 'button',
+    onclick: () => {
+      if (files.length) {
+        toast('Quitá las fotos si querés usar un fondo de texto.', { type: 'error' });
+        return;
+      }
+      palette.classList.toggle('hide');
+      if (!palette.children.length) paintPalette();
+    },
+  }, icon('image', 19), el('span', { text: 'Fondo' }));
+
   const toolbar = el('div', { class: 'compose-tools' },
     emojiButton(textarea, { className: 'compose-tool', label: 'Emoji', title: 'Agregar emoji' }),
     el('button', { class: 'compose-tool', type: 'button', onclick: addPhotos },
@@ -270,10 +285,7 @@ export function composePage() {
       icon('smile', 19), el('span', { text: 'Sentimiento' })),
     el('button', { class: 'compose-tool', type: 'button', onclick: openLocation },
       icon('map-pin', 19), el('span', { text: 'Ubicación' })),
-    el('button', {
-      class: 'compose-tool', type: 'button',
-      onclick: () => { palette.classList.toggle('hide'); if (!palette.children.length) paintPalette(); },
-    }, icon('image', 19), el('span', { text: 'Fondo' })));
+    bgBtn);
 
   root.append(
     el('div', { class: 'page-head compose-head' },
