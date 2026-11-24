@@ -74,6 +74,9 @@ export function parseRoute(hash = window.location.hash) {
         return { name: 'grcompose', params: { section: second || 'trabajos' }, query };
       }
       return { name: 'gr', params: { section: second || '' }, query };
+    case 'instalar':
+    case 'install':
+      return { name: 'install', params: {}, query };
     case 'mi-perfil':
       return { name: 'myprofile', params: { tab: second || 'posts' }, query };
     case 'u':
@@ -100,13 +103,16 @@ export function navigate(to, { replace = false } = {}) {
     emit();
     return;
   }
+  try {
+    history.replaceState({ ...(history.state || {}), scrollY: window.scrollY }, '', window.location.href);
+  } catch { /* noop */ }
   if (replace) {
-    history.replaceState({ nb: true, depth }, '', hash);
+    history.replaceState({ nb: true, depth, scrollY: 0 }, '', hash);
     emit();
     return;
   }
   depth += 1;
-  history.pushState({ nb: true, depth }, '', hash);
+  history.pushState({ nb: true, depth, scrollY: 0 }, '', hash);
   emit();
 }
 
@@ -144,6 +150,7 @@ export function startRouter(fn) {
     // Las secciones abiertas (antes modales) manejan su propio historial.
     // Si hay una página encima, no volvemos a pintar la ruta de abajo.
     if (window.__zumaModalActive || event.state?.zumaPage) return;
+    if (Number.isFinite(event.state?.scrollY)) window.__zumaRestoreScroll = event.state.scrollY;
     depth = Number(event.state?.depth) || 0;
     emit();
   });

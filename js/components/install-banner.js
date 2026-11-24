@@ -1,34 +1,39 @@
 /* ==========================================================================
-   install-banner.js — aviso para instalar Zuma como aplicación
+   install-banner.js — alerta fija para instalar Zuma como aplicación
    ========================================================================== */
 import { el } from '../core/util.js';
 import { icon } from '../core/icons.js';
 import {
-  canInstall, isDismissed, dismissInstall, promptInstall, onPwaChange,
+  canInstall, promptInstall, onPwaChange, isStandalone, isWebView,
 } from '../core/pwa.js';
 import { toast } from '../core/ui.js';
 import { playSound } from '../core/sounds.js';
+import { navigate } from '../core/router.js';
 
 export function mountInstallBanner() {
-  const root = el('div', { class: 'install-banner hide', role: 'dialog', 'aria-label': 'Instalar Zuma' });
-
-  const close = el('button', {
-    class: 'ib-close', type: 'button', 'aria-label': 'Ahora no',
-    onclick: () => {
-      dismissInstall();
-      root.classList.add('hide');
-    },
-  }, icon('x', 16));
+  const root = el('div', {
+    class: 'install-banner hide', role: 'alert', 'aria-live': 'polite',
+    'aria-label': 'Instalar Zuma',
+  });
 
   const installBtn = el('button', {
     class: 'btn primary sm', type: 'button',
     onclick: async () => {
       playSound('open');
+      if (!canInstall()) {
+        navigate('/instalar');
+        return;
+      }
       const accepted = await promptInstall();
-      root.classList.add('hide');
       if (accepted) toast('¡Listo! Zuma se está instalando.', { type: 'success' });
+      else navigate('/instalar');
     },
-  }, icon('download', 16), 'Instalar');
+  }, icon('download', 16), 'Instalar Zuma');
+
+  const helpBtn = el('button', {
+    class: 'btn soft sm ib-help', type: 'button',
+    onclick: () => navigate('/instalar'),
+  }, 'Cómo instalar');
 
   root.append(
     el('img', {
@@ -37,26 +42,19 @@ export function mountInstallBanner() {
     }),
     el('div', { class: 'ib-text' },
       el('strong', { text: 'Instalá Zuma' }),
-      el('span', { text: 'Acceso directo desde tu pantalla de inicio, como una app.' })),
-    installBtn,
-    close,
+      el('span', { text: 'Tenela siempre en tu pantalla, como una app.' })),
+    el('div', { class: 'ib-actions' }, helpBtn, installBtn),
   );
 
   function refresh() {
-    const show = canInstall() && !isDismissed();
-    if (!show) {
-      root.classList.add('hide');
-      return;
-    }
-    if (!root.dataset.shown) {
-      root.dataset.shown = '1';
-      setTimeout(() => {
-        if (canInstall() && !isDismissed()) root.classList.remove('hide');
-      }, 5000);
-    }
+    const offer = !isStandalone() && !isWebView();
+    const show = offer && document.body.dataset.route !== 'storycompose';
+    root.classList.toggle('hide', !show);
+    document.body.classList.toggle('has-pwa-alert', show);
   }
 
   onPwaChange(refresh);
   refresh();
+  setTimeout(refresh, 1200);
   return { el: root, refresh };
 }

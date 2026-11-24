@@ -3,7 +3,7 @@
    ========================================================================== */
 import { el } from '../core/util.js';
 import { icon } from '../core/icons.js';
-import { navigate, parseRoute } from '../core/router.js';
+import { navigate, parseRoute, goBack } from '../core/router.js';
 import { state, displayName } from '../core/store.js';
 import { avatarEl, popover, closeDropdown, toast } from '../core/ui.js';
 import { logout } from '../core/auth.js';
@@ -20,6 +20,11 @@ const TABS = [
 
 export function mountTopbar() {
   const root = el('header', { class: 'topbar' });
+
+  const backBtn = el('button', {
+    class: 'tb-btn tb-back hide', type: 'button', 'aria-label': 'Volver', title: 'Volver',
+    onclick: () => goBack('/inicio'),
+  }, icon('arrow-left', 22));
 
   const brand = el('a', { class: 'brand', href: '#/inicio', 'aria-label': 'Zuma' },
     el('img', { src: 'assets/logo/zuma-logo-128.png', alt: 'Zuma', width: '40', height: '40' }),
@@ -84,7 +89,7 @@ export function mountTopbar() {
   });
 
   root.append(
-    el('div', { class: 'topbar-left' }, brand, searchBox),
+    el('div', { class: 'topbar-left' }, backBtn, brand, searchBox),
     searchMobile,
     nav,
     el('div', { class: 'topbar-right' }, installBtn, messagesBtn, notifBtn, avatarBtn),
@@ -128,6 +133,8 @@ export function mountTopbar() {
 
   function refresh() {
     const route = parseRoute();
+    const canGoBack = !['feed', 'myprofile'].includes(route.name);
+    backBtn.classList.toggle('hide', !canGoBack);
     installBtn.classList.toggle('hide', !canInstall());
     const active = route.name === 'group' ? 'groups'
       : route.name === 'post' ? 'feed'

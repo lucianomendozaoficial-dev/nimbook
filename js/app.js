@@ -25,6 +25,7 @@ import { groupsPage, groupPage } from './pages/groups.js';
 import { shopPage, shopItemPage } from './pages/shop.js';
 import { messagesPage } from './pages/messages.js';
 import { grPage, grComposePage } from './pages/gr.js';
+import { installPage } from './pages/install.js';
 import { storiesPage, storyComposerPage } from './pages/stories.js';
 import { verificationPage } from './pages/verification.js';
 import { savedPage } from './pages/saved.js';
@@ -197,6 +198,8 @@ function layoutFor(route) {
       return { right: false, left: true, wide: true };
     case 'grcompose':
       return { right: false, left: false, wide: true };
+    case 'install':
+      return { right: false, left: false, wide: true };
     case 'profile':
     case 'myprofile':
     case 'friends':
@@ -228,6 +231,7 @@ function pageFor(route) {
     case 'messages': return messagesPage(route.params.username || '', route.query || {});
     case 'gr': return grPage(route.params.section || '');
     case 'grcompose': return grComposePage(route.params.section || 'trabajos');
+    case 'install': return installPage();
     case 'stories': return storiesPage();
     case 'storycompose': return storyComposerPage();
     case 'verification': return verificationPage();
@@ -277,7 +281,11 @@ function renderRoute(route) {
     currentPage = page;
     shell.center.appendChild(page.el);
     shell.refreshChrome();
-    if (route.name !== lastRouteName) {
+    if (Number.isFinite(window.__zumaRestoreScroll)) {
+      const y = window.__zumaRestoreScroll;
+      window.__zumaRestoreScroll = null;
+      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo({ top: y, behavior: 'instant' })));
+    } else if (route.name !== lastRouteName) {
       window.scrollTo({ top: 0 });
       lastRouteName = route.name;
     }

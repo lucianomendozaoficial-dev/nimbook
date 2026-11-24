@@ -180,13 +180,13 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
           current.location ? el('span', { class: 'dot' }) : null,
           current.location ? el('span', { text: current.location }) : null,
           el('span', { class: 'dot' }),
-          icon(privacyIcon(current), 12, { cls: 'dim' }))),
+          icon(privacyIcon(current), 12, { cls: 'dim' })),
+        current.gr
+          ? el('div', { class: 'post-gr-badge' },
+            icon('map-pin', 12),
+            el('span', { text: `GR · ${grLabel(current.gr)}` }))
+          : null),
     ];
-    if (current.gr) {
-      headChildren.push(el('div', { class: 'post-gr-badge' },
-        icon('map-pin', 12),
-        el('span', { text: `GR · ${grLabel(current.gr)}` })));
-    }
     headChildren.push(menuBtn);
     headEl.append(...headChildren);
   }

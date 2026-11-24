@@ -56,6 +56,8 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - **Panel**: rediseñado como dashboard con sidebar, resumen, tarjetas KPI, secciones y accesos de soporte.
 - **Cámara**: abre en pantalla completa con la cámara trasera y sin zoom forzado; la galería queda como único acceso inferior.
 - **Reels eliminado** por completo; sus videos guardados en R2 fueron borrados.
+- **PWA**: alerta fija en pantalla para instalar Zuma (sin botón de cerrar) y página `#/instalar` con instrucciones para iPhone, Android y escritorio. Si el navegador ofrece la instalación, el botón abre el diálogo nativo; si no, muestra los pasos. Ningún navegador permite forzar la instalación sin confirmación del usuario.
+- **Retroceso**: botón Volver en la barra superior para todas las secciones, restauración de la posición de scroll al volver y cierre con Atrás en las secciones a pantalla completa.
 
 
 **Red social**
@@ -101,7 +103,7 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 
 **Diseño**
 - Estilo **iOS** renovado: barra superior y navegación inferior translúcidas con desenfoque, tarjetas redondeadas, secciones a pantalla completa, botones con presión y tipografía del sistema. El nombre **Zuma** aparece junto al logo también en el móvil.
-- Sin flechas de retroceso en las secciones: se vuelve con el botón del dispositivo (o con la navegación inferior en el móvil).
+- Botón Volver en la barra superior y en las secciones a pantalla completa; el historial del navegador restaura la posición anterior.
 - Réplica del layout de Facebook: barra superior, columna izquierda, feed central y contactos a la derecha.
 - Responsive: 3 columnas en escritorio, rail de iconos en tablet, feed completo y navegación inferior en móvil.
 - Logo propio en PNG para todas las resoluciones, favicon `.ico`, iconos PWA y `manifest` instalable.
