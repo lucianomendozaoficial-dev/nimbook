@@ -5,6 +5,26 @@
 const listeners = new Set();
 let depth = 0;
 let ignoreHash = false;
+let lastHash = typeof window !== 'undefined' ? window.location.hash : '';
+const SCROLL_KEY = 'zuma.scroll.v1';
+
+function readScrollMemory() {
+  try { return JSON.parse(sessionStorage.getItem(SCROLL_KEY) || '{}') || {}; }
+  catch { return {}; }
+}
+
+function rememberScroll(hash = lastHash) {
+  if (!hash) return;
+  try {
+    const memory = readScrollMemory();
+    memory[hash] = window.scrollY;
+    sessionStorage.setItem(SCROLL_KEY, JSON.stringify(memory));
+  } catch { /* noop */ }
+}
+
+function scrollFor(hash) {
+  try { return Number(readScrollMemory()[hash]); } catch { return NaN; }
+}
 
 export function parseRoute(hash = window.location.hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
@@ -106,13 +126,16 @@ export function navigate(to, { replace = false } = {}) {
   try {
     history.replaceState({ ...(history.state || {}), scrollY: window.scrollY }, '', window.location.href);
   } catch { /* noop */ }
+  rememberScroll(lastHash);
   if (replace) {
     history.replaceState({ nb: true, depth, scrollY: 0 }, '', hash);
+    lastHash = hash;
     emit();
     return;
   }
   depth += 1;
   history.pushState({ nb: true, depth, scrollY: 0 }, '', hash);
+  lastHash = hash;
   emit();
 }
 
@@ -143,6 +166,7 @@ export function onRouteChange(fn) {
 
 export function startRouter(fn) {
   history.replaceState({ nb: true, depth: 0 }, '', window.location.hash || '#/inicio');
+  lastHash = window.location.hash || '#/inicio';
 
   window.addEventListener('popstate', (event) => {
     ignoreHash = true;
@@ -150,7 +174,10 @@ export function startRouter(fn) {
     // Las secciones abiertas (antes modales) manejan su propio historial.
     // Si hay una página encima, no volvemos a pintar la ruta de abajo.
     if (window.__zumaModalActive || event.state?.zumaPage) return;
-    if (Number.isFinite(event.state?.scrollY)) window.__zumaRestoreScroll = event.state.scrollY;
+    const memoryScroll = scrollFor(location.hash);
+    if (Number.isFinite(memoryScroll)) window.__zumaRestoreScroll = memoryScroll;
+    else if (Number.isFinite(event.state?.scrollY)) window.__zumaRestoreScroll = event.state.scrollY;
+    lastHash = location.hash;
     depth = Number(event.state?.depth) || 0;
     emit();
   });
@@ -158,8 +185,10 @@ export function startRouter(fn) {
   // Enlaces <a href="#/..."> y ediciones manuales de la URL
   window.addEventListener('hashchange', () => {
     if (ignoreHash) return;
+    rememberScroll(lastHash);
     depth += 1;
-    history.replaceState({ nb: true, depth }, '', window.location.hash);
+    history.replaceState({ nb: true, depth, scrollY: 0 }, '', window.location.hash);
+    lastHash = window.location.hash;
     emit();
   });
 
