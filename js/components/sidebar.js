@@ -52,6 +52,10 @@ export function mountSidebar() {
       href: '#/tienda', active: route.name === 'shop' || route.name === 'shopitem',
     }));
     root.appendChild(item({
+      iconName: 'map-pin', color: 'green', label: 'GR · Mi Rodríguez',
+      href: '#/gr', active: route.name === 'gr' || route.name === 'grcompose',
+    }));
+    root.appendChild(item({
       iconName: 'story', color: 'purple', label: 'Historias',
       href: '#/historias', active: route.name === 'stories' || route.name === 'storycompose',
     }));

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ui.js — toasts, modales, menús, visor de imágenes y piezas reutilizables
+   ui.js â€” toasts, modales, menÃºs, visor de imÃ¡genes y piezas reutilizables
    ========================================================================== */
 import { el, $$, avatarGradient, uid, clear } from './util.js';
 import { icon } from './icons.js';
@@ -9,12 +9,12 @@ import { displayName, initialsOf } from './store.js';
 /* ------------------------------ reacciones ------------------------------ */
 
 export const REACTIONS = {
-  like: { emoji: '👍', label: 'Me gusta', color: '#1877f2' },
-  love: { emoji: '❤️', label: 'Me encanta', color: '#f33e58' },
-  haha: { emoji: '😂', label: 'Me divierte', color: '#f7b125' },
-  wow: { emoji: '😮', label: 'Me asombra', color: '#f7b125' },
-  sad: { emoji: '😢', label: 'Me entristece', color: '#f7b125' },
-  angry: { emoji: '😡', label: 'Me enfada', color: '#e9710f' },
+  like: { emoji: 'ðŸ‘', label: 'Me gusta', color: '#1877f2' },
+  love: { emoji: 'â¤ï¸', label: 'Me encanta', color: '#f33e58' },
+  haha: { emoji: 'ðŸ˜‚', label: 'Me divierte', color: '#f7b125' },
+  wow: { emoji: 'ðŸ˜®', label: 'Me asombra', color: '#f7b125' },
+  sad: { emoji: 'ðŸ˜¢', label: 'Me entristece', color: '#f7b125' },
+  angry: { emoji: 'ðŸ˜¡', label: 'Me enfada', color: '#e9710f' },
 };
 
 export const REACTION_ORDER = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
@@ -77,9 +77,11 @@ export function openModal({
   dismissible = true, onClose = null, headless = false,
 } = {}) {
   const previousFocus = document.activeElement;
-  const backdrop = el('div', { class: 'modal-backdrop' });
+  const token = `zuma_page_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  const page = el('div', { class: 'modal-page', role: 'dialog', 'aria-modal': 'true' });
   const bodyEl = el('div', { class: 'modal-body' });
-  const modal = el('div', { class: `modal ${size} ${className}`.trim(), role: 'dialog', 'aria-modal': 'true' });
+  const modal = el('div', { class: `modal ${size} ${className}`.trim() });
+  let closed = false;
 
   const api = {
     el: modal,
@@ -88,25 +90,46 @@ export function openModal({
       const h = modal.querySelector('.modal-head h2');
       if (h) h.textContent = text;
     },
-    close(result) {
+    close(result, options = {}) {
+      if (closed) return;
+      closed = true;
       const index = modalStack.findIndex((entry) => entry.api === api);
       if (index < 0) return;
+      const wasTop = index === modalStack.length - 1;
       modalStack.splice(index, 1);
-      backdrop.remove();
+      window.removeEventListener('popstate', onPop);
+      page.remove();
       unlockScroll();
+      window.__zumaModalActive = wasTop;
+      if (wasTop) {
+        setTimeout(() => {
+          window.__zumaModalActive = modalStack.length > 0;
+        }, 150);
+      } else {
+        window.__zumaModalActive = modalStack.length > 0;
+      }
       onClose?.(result);
       try { previousFocus?.focus?.({ preventScroll: true }); } catch { /* noop */ }
+      if (!options.fromHistory && wasTop) {
+        setTimeout(() => {
+          if (history.state?.zumaPage === token) {
+            try { history.back(); } catch { /* noop */ }
+          }
+        }, 0);
+      }
     },
   };
 
   if (!headless) {
     const header = el('div', { class: 'modal-head' },
-      el('h2', { text: title }),
       el('button', {
-        class: 'close', type: 'button', 'aria-label': 'Cerrar',
-        onclick: () => api.close(),
-      }, icon('x', 18)));
+        class: 'modal-back close', type: 'button', 'aria-label': 'Volver',
+        onclick: () => api.close('back'),
+      }, icon('arrow-left', 19)),
+      el('h2', { text: title }));
     modal.appendChild(header);
+  } else {
+    page.classList.add('headless');
   }
 
   if (body instanceof Node) bodyEl.appendChild(body);
@@ -120,20 +143,28 @@ export function openModal({
     modal.appendChild(foot);
   }
 
-  backdrop.appendChild(modal);
-  backdrop.addEventListener('mousedown', (event) => {
-    if (event.target === backdrop && dismissible) api.close('backdrop');
-  });
-  document.getElementById('modal-root').appendChild(backdrop);
+  page.appendChild(modal);
+  document.getElementById('modal-root').appendChild(page);
   lockScroll();
-  modalStack.push({ api, backdrop });
+  modalStack.push({ api, page, token, close: (result) => api.close(result) });
+  window.__zumaModalActive = true;
+
+  function onPop() {
+    if (history.state?.zumaPage === token) return;
+    api.close('back', { fromHistory: true });
+  }
+  window.addEventListener('popstate', onPop);
+
+  try {
+    history.pushState({ ...(history.state || {}), zumaPage: token }, '', location.href);
+  } catch { /* noop */ }
+
   requestAnimationFrame(() => {
     const focusable = modal.querySelector('textarea, input, button.primary, button');
     focusable?.focus?.({ preventScroll: true });
   });
   return api;
 }
-
 export function closeAllModals() {
   while (modalStack.length) modalStack[modalStack.length - 1].api.close('all');
 }
@@ -142,9 +173,9 @@ export function isModalOpen() {
   return modalStack.length > 0;
 }
 
-/** Confirmación con estética de Facebook. */
+/** ConfirmaciÃ³n con estÃ©tica de Facebook. */
 export function confirmDialog({
-  title = '¿Seguro?', message = '', confirmText = 'Aceptar',
+  title = 'Â¿Seguro?', message = '', confirmText = 'Aceptar',
   cancelText = 'Cancelar', danger = false, iconName = null,
 } = {}) {
   return new Promise((resolve) => {
@@ -229,7 +260,7 @@ export function popover(anchor, node, { width = 360, align = 'end', className = 
 }
 
 /**
- * Menú contextual anclado a un elemento.
+ * MenÃº contextual anclado a un elemento.
  * @param {HTMLElement} anchor
  * @param {Array} items  [{icon, label, sub, onClick, danger, separator}]
  */
@@ -312,7 +343,7 @@ export function lightbox(paths, startIndex = 0) {
     title: 'Descargar imagen',
     onclick: async () => {
       const saved = await downloadImage(list[index], mediaFileName(list[index], 'zuma.jpg'));
-      toast(saved ? 'Imagen descargada' : 'Se abrió la imagen para guardarla',
+      toast(saved ? 'Imagen descargada' : 'Se abriÃ³ la imagen para guardarla',
         { type: saved ? 'success' : 'info' });
     },
   }, icon('download', 21));
@@ -393,7 +424,7 @@ export function spinnerEl(label = '') {
     label ? el('span', { text: label }) : null);
 }
 
-export function emptyState({ iconName = 'info', title = 'Nada por aquí', description = '', action = null, illustration = '' } = {}) {
+export function emptyState({ iconName = 'info', title = 'Nada por aquÃ­', description = '', action = null, illustration = '' } = {}) {
   return el('div', { class: 'empty' },
     illustration
       ? el('div', { class: 'empty-illustration', html: illustration })
@@ -422,8 +453,8 @@ export function fieldRow(label, input, hint) {
     hint ? el('span', { class: 'field-hint', text: hint }) : null);
 }
 
-/** Botón con estado de carga (spinner) y bloqueo. */
-export async function withBusy(button, fn, busyText = 'Guardando…') {
+/** BotÃ³n con estado de carga (spinner) y bloqueo. */
+export async function withBusy(button, fn, busyText = 'Guardandoâ€¦') {
   const original = button.innerHTML;
   button.disabled = true;
   clear(button);
@@ -437,7 +468,7 @@ export async function withBusy(button, fn, busyText = 'Guardando…') {
   }
 }
 
-/** Crea una fila de pestañas. */
+/** Crea una fila de pestaÃ±as. */
 export function tabsBar(items, activeId, onSelect, { className = '' } = {}) {
   const bar = el('div', { class: `tabs ${className}`.trim() });
   for (const item of items) {
@@ -446,7 +477,7 @@ export function tabsBar(items, activeId, onSelect, { className = '' } = {}) {
       onclick: () => onSelect(item.id),
     }, item.label);
     if (item.count !== undefined) {
-      tab.appendChild(el('span', { class: 'tab-count', text: `· ${item.count}` }));
+      tab.appendChild(el('span', { class: 'tab-count', text: `Â· ${item.count}` }));
     }
     bar.appendChild(tab);
   }
@@ -455,15 +486,15 @@ export function tabsBar(items, activeId, onSelect, { className = '' } = {}) {
 
 export function closeMenus() {
   closeDropdown();
-  // cualquier menú custom (picker de emojis, etc.)
+  // cualquier menÃº custom (picker de emojis, etc.)
   $$('.popover').forEach((node) => node.remove());
 }
 
 /* picker de emojis sencillo */
-const EMOJI_SET = ['😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😎', '🤔', '😅', '😇', '🥰',
-  '😴', '😭', '😡', '🤯', '🥳', '😱', '🤗', '🙃', '👍', '👎', '👏', '🙌', '🙏', '💪',
-  '❤️', '💙', '💚', '💛', '🧡', '💜', '🔥', '✨', '🎉', '🎂', '☕', '🍕', '⚽', '🎮',
-  '🌞', '🌙', '🌈', '🌸', '🐶', '🐱', '📷', '📚', '💻', '📱', '🚀', '🏆'];
+const EMOJI_SET = ['ðŸ˜€', 'ðŸ˜', 'ðŸ˜‚', 'ðŸ¤£', 'ðŸ˜Š', 'ðŸ˜', 'ðŸ˜˜', 'ðŸ˜Ž', 'ðŸ¤”', 'ðŸ˜…', 'ðŸ˜‡', 'ðŸ¥°',
+  'ðŸ˜´', 'ðŸ˜­', 'ðŸ˜¡', 'ðŸ¤¯', 'ðŸ¥³', 'ðŸ˜±', 'ðŸ¤—', 'ðŸ™ƒ', 'ðŸ‘', 'ðŸ‘Ž', 'ðŸ‘', 'ðŸ™Œ', 'ðŸ™', 'ðŸ’ª',
+  'â¤ï¸', 'ðŸ’™', 'ðŸ’š', 'ðŸ’›', 'ðŸ§¡', 'ðŸ’œ', 'ðŸ”¥', 'âœ¨', 'ðŸŽ‰', 'ðŸŽ‚', 'â˜•', 'ðŸ•', 'âš½', 'ðŸŽ®',
+  'ðŸŒž', 'ðŸŒ™', 'ðŸŒˆ', 'ðŸŒ¸', 'ðŸ¶', 'ðŸ±', 'ðŸ“·', 'ðŸ“š', 'ðŸ’»', 'ðŸ“±', 'ðŸš€', 'ðŸ†'];
 
 export function emojiPicker(anchor, onPick) {
   closeMenus();

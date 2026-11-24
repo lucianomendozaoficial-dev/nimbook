@@ -17,6 +17,7 @@ import { followButton } from '../components/follow-button.js';
 import { postCard } from '../components/postcard.js';
 import { listingCard } from './shop.js';
 import { verifiedBadge } from '../components/verified-badge.js';
+import { openImageCropper } from '../components/image-cropper.js';
 import { verificationInfo, categoryLabel } from '../core/verification.js';
 import { navigate, goBack, parseRoute } from '../core/router.js';
 import { ValidationError } from '../core/auth.js';
@@ -67,17 +68,26 @@ export function editProfileModal(user, onSaved) {
     if (!files.length) return;
     const problem = validateImageFile(files[0]);
     if (problem) { toast(problem, { type: 'error' }); return; }
-    try {
-      toast('Subiendo imagen…');
-      const record = await uploadImage(files[0], kind === 'cover' ? 'covers' : 'avatars', {
-        maxSize: kind === 'cover' ? 2200 : 720,
-      });
-      const updated = await updateProfile(kind === 'cover' ? { cover: record.path } : { avatar: record.path });
-      updateProfileCache(updated);
-      clear(avatarBox);
-      avatarBox.appendChild(avatarEl(updated, 'xl'));
-      toast('Imagen actualizada', { type: 'success' });
-    } catch (err) { toast(err.message, { type: 'error' }); }
+    openImageCropper({
+      file: files[0],
+      aspect: kind === 'cover' ? 3 : 1,
+      outputWidth: kind === 'cover' ? 1800 : 720,
+      outputHeight: kind === 'cover' ? 600 : 720,
+      title: kind === 'cover' ? 'Recortar portada' : 'Recortar foto de perfil',
+      onCrop: async (cropped) => {
+        try {
+          toast('Subiendo imagen…');
+          const record = await uploadImage(cropped, kind === 'cover' ? 'covers' : 'avatars', {
+            maxSize: kind === 'cover' ? 2200 : 720,
+          });
+          const updated = await updateProfile(kind === 'cover' ? { cover: record.path } : { avatar: record.path });
+          updateProfileCache(updated);
+          clear(avatarBox);
+          avatarBox.appendChild(avatarEl(updated, 'xl'));
+          toast('Imagen actualizada', { type: 'success' });
+        } catch (err) { toast(err.message || 'No se pudo subir la imagen.', { type: 'error' }); }
+      },
+    });
   }
 
   const api = openModal({

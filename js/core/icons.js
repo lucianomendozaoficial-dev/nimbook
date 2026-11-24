@@ -1,10 +1,10 @@
-/* ==========================================================================
-   icons.js — set de iconos SVG (trazo y relleno) al estilo Zuma/Facebook
+﻿/* ==========================================================================
+   icons.js â€” set de iconos SVG (trazo y relleno) al estilo Zuma/Facebook
    ========================================================================== */
 const NS = 'http://www.w3.org/2000/svg';
 
 const P = {
-  /* navegación principal (con variante rellena) */
+  /* navegaciÃ³n principal (con variante rellena) */
   home: '<path d="M3 10.4 12 3l9 7.4V20a1.6 1.6 0 0 1-1.6 1.6H4.6A1.6 1.6 0 0 1 3 20z"/><path d="M9.4 21.6v-6.8a1 1 0 0 1 1-1h3.2a1 1 0 0 1 1 1v6.8"/>',
   'home-f': '<path fill-rule="evenodd" d="M3 10.4 12 3l9 7.4V20a1.6 1.6 0 0 1-1.6 1.6H4.6A1.6 1.6 0 0 1 3 20zm6.4 11.2v-6.8a1 1 0 0 1 1-1h3.2a1 1 0 0 1 1 1v6.8z"/>',
   radio: '<rect x="3.5" y="9" width="17" height="12" rx="3"/><path d="M7.5 9 13 3.5a2.2 2.2 0 0 1 3.1 3.1L12.5 9"/><circle cx="12" cy="15" r="2.4"/>',
@@ -23,7 +23,7 @@ const P = {
   bell: '<path d="M18.4 8.8a6.4 6.4 0 1 0-12.8 0c0 4.4-1.9 5.7-1.9 5.7h16.6s-1.9-1.3-1.9-5.7z"/><path d="M10.1 20.4a2.2 2.2 0 0 0 3.8 0"/>',
   'bell-f': '<path d="M18.4 8.8a6.4 6.4 0 1 0-12.8 0c0 4.4-1.9 5.7-1.9 5.7h16.6s-1.9-1.3-1.9-5.7z"/><path d="M9.8 20.2h4.4a2.2 2.2 0 0 1-4.4 0z"/>',
 
-  /* básicos */
+  /* bÃ¡sicos */
   search: '<circle cx="10.7" cy="10.7" r="6.9"/><path d="m20.4 20.4-4.7-4.7"/>',
   plus: '<path d="M12 4.5v15M4.5 12h15"/>',
   x: '<path d="M5.5 5.5 18.5 18.5M18.5 5.5 5.5 18.5"/>',
@@ -99,7 +99,12 @@ const P = {
   videocam: '<rect x="2.8" y="6" width="12.6" height="12" rx="2.6"/><path d="m15.4 10.6 5.8-3.2v9.2l-5.8-3.2z"/>',
   'video-off': '<path d="M4.5 4.5 19.5 19.5"/><path d="M15.4 6H5.4A2.6 2.6 0 0 0 2.8 8.6v6.8A2.6 2.6 0 0 0 5.4 18h10"/><path d="m15.4 10.6 5.8-3.2v9.2l-5.8-3.2z"/>',
   mic: '<rect x="9" y="2.8" width="6" height="11" rx="3"/><path d="M5.4 11.4a6.6 6.6 0 0 0 13.2 0M12 18v3.2"/>',
-  'dots-grid': '<circle cx="6" cy="6" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.9" fill="currentColor" stroke="none"/><circle cx="18" cy="6" r="1.9" fill="currentColor" stroke="none"/><circle cx="6" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="6" cy="18" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.9" fill="currentColor" stroke="none"/><circle cx="18" cy="18" r="1.9" fill="currentColor" stroke="none"/>',
+  'dots-grid': '<circle cx="6" cy="6" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.9" fill="currentColor" stroke="none"/><circle cx="18" cy="6" r="1.9" fill="currentColor" stroke="none"/><circle cx="6" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="6" cy="18" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.9" fill="currentColor" stroke="none"/><circle cx="18" cy="18" r="1.9" fill="currentColor" stroke="none"/>',  cloud: '<path d="M7 18h9.5a3.8 3.8 0 0 0 .6-7.5A5.3 5.3 0 0 0 6.8 11 3.6 3.6 0 0 0 7 18z"/>',
+  'cloud-sun': '<circle cx="8" cy="8" r="3"/><path d="M8 2.8v1.4M2.8 8h1.4M4.3 4.3l1 1M11.7 4.3l-1 1"/><path d="M10 18h7a3.2 3.2 0 0 0 .5-6.4A4.6 4.6 0 0 0 9 13a3.1 3.1 0 0 0 1 5z"/>',
+  rain: '<path d="M7 14h9a3.4 3.4 0 0 0 .5-6.8A4.8 4.8 0 0 0 7 9a3.2 3.2 0 0 0 0 5z"/><path d="M8 17.5 7 20M12 17.5 11 20M16 17.5 15 20"/>',
+  storm: '<path d="M7 13h9a3.3 3.3 0 0 0 .5-6.6A4.7 4.7 0 0 0 7 8a3.1 3.1 0 0 0 0 5z"/><path d="m12.5 15-2 3h3l-1 2.5"/>',
+  snow: '<path d="M7 13h9a3.3 3.3 0 0 0 .5-6.6A4.7 4.7 0 0 0 7 8a3.1 3.1 0 0 0 0 5z"/><path d="M8 17h.01M12 18h.01M16 17h.01M10 20h.01M14 20h.01"/>',
+  crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/>',
 };
 
 const EMPTY = '<circle cx="12" cy="12" r="9"/>';

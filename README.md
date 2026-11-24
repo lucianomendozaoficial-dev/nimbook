@@ -46,10 +46,22 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 
 ## Características
 
+### Novedades de esta versión
+- **GR · Mi Rodríguez** en el nav: clima de General Rodríguez en vivo (Open-Meteo), tres accesos rápidos a **Trabajos, Alertas y Locales** y publicaciones de la comunidad. Cualquier usuario puede publicar en cada sección; las publicaciones de GR aparecen en el muro con sello y estilo propio.
+- **Sin modales**: los formularios, fichas, galería, recortador y confirmaciones se abren como **secciones a pantalla completa** con botón Volver e historial del navegador, para que Atrás no rompa la página.
+- **Historias**: la X se reemplazó por un menú de tres puntos arriba a la derecha con **Descargar**, **Eliminar historia** (solo la propia) y **Cerrar**.
+- **Galería**: la primera vez muestra un botón de permiso para cargar las fotos de una carpeta (File System Access) o elegirlas todas del dispositivo; después quedan guardadas en Zuma. Los videos están ocultos mientras el interruptor esté apagado.
+- **Mensajes**: se puede **eliminar un mensaje para ambos** (solo los propios) y **eliminar el chat para mí** sin borrar la conversación de la otra persona.
+- **Fotos de perfil y portada**: editor de recorte con arrastre y zoom antes de subir, con proporciones de avatar y portada.
+- **Panel**: rediseñado como dashboard con sidebar, resumen, tarjetas KPI, secciones y accesos de soporte.
+- **Cámara**: abre en pantalla completa con la cámara trasera y sin zoom forzado; la galería queda como único acceso inferior.
+- **Reels eliminado** por completo; sus videos guardados en R2 fueron borrados.
+
+
 **Red social**
 - Registro e inicio de sesión (contraseñas cifradas con PBKDF2-SHA256).
 - Publicaciones con texto, hasta 10 fotos, **sentimiento, ubicación, privacidad y fondos de color** (como Facebook). Los enlaces del texto se detectan y se abren con un aviso y un botón **Abrir**; el fondo solo está disponible cuando la publicación es solo texto y el texto queda centrado.
-- **Historias en su propia sección**: fotos 9:16 y **videos de cualquier duración**: el editor de recorte deja elegir un fragmento de hasta **60 s**, que se optimiza a **720p**. Las imágenes duran 24 h y los videos **18 h**; al vencer se quitan y se borra el archivo de R2. La tuya va siempre primera, las no vistas antes que las vistas y dentro de cada persona se ven de la primera a la última; si ya viste la primera y hay una nueva, abre directo en la nueva. Se puede **responder una historia** y la respuesta llega al chat privado citando esa historia.
+- **Historias**: por ahora **solamente fotos** (24 h). Los videos están desactivados con el interruptor `features.videoStories` de `config.js`; todo el código de recorte/compresión, las claves R2 y los archivos existentes se conservan para reactivarlos más adelante sin rehacer nada.
 - **Galería propia**: fotos y videos del dispositivo quedan guardados en IndexedDB. La cámara abre directo a pantalla completa, sin header ni navegación, y con el acceso a la galería abajo. Los videos se recortan con handles de inicio/fin y se optimizan una sola vez al publicar el fragmento elegido.
 - **Insignia única azul**: la cuenta verificada cuesta **$10.000/mes**. Incluye mayor visibilidad en el muro, perfil en sugerencias, tipo de cuenta (influencer, gamer, político/a, artista, deportista, periodista o marca) y un estilo especial en el perfil público.
 - **Solicitud de insignia**: se piden nombre completo, DNI, localidad, fecha de nacimiento y tipo de cuenta. Los datos se envían automáticamente al chat privado de **@soporte** y quedan en el panel.
@@ -88,7 +100,7 @@ Los usuarios, las publicaciones, las historias, los chats y las ventas viven en 
 - Modo claro / oscuro / automático, toasts, menús, visor de imágenes.
 
 **Diseño**
-- Estilo **iOS** renovado: barra superior y navegación inferior translúcidas con desenfoque, tarjetas redondeadas, hojas modales, botones con presión y tipografía del sistema. El nombre **Zuma** aparece junto al logo también en el móvil.
+- Estilo **iOS** renovado: barra superior y navegación inferior translúcidas con desenfoque, tarjetas redondeadas, secciones a pantalla completa, botones con presión y tipografía del sistema. El nombre **Zuma** aparece junto al logo también en el móvil.
 - Sin flechas de retroceso en las secciones: se vuelve con el botón del dispositivo (o con la navegación inferior en el móvil).
 - Réplica del layout de Facebook: barra superior, columna izquierda, feed central y contactos a la derecha.
 - Responsive: 3 columnas en escritorio, rail de iconos en tablet, feed completo y navegación inferior en móvil.
@@ -136,6 +148,7 @@ data/
   notificaciones/<usuario>.json    bandeja de cada persona
   grupos.json                  grupos y canales (tipo, dueño y miembros)
   historias.json               historias activas (fotos 24 h y videos 18 h; los videos apuntan a R2)
+  gr/index.json                publicaciones de GR (trabajos, alertas y locales)
   soporte/verificaciones.json  solicitudes de la insignia azul (nombre, DNI, localidad, nacimiento y tipo)
   soporte/reportes.json        cuentas reportadas y motivo
   soporte/config.json          datos de pago que se envían en los avisos
@@ -280,7 +293,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Tema | Decisión |
 | --- | --- |
 | Framework | Ninguno: módulos ES nativos, DOM a mano |
-| Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/tienda`, `#/tienda/producto`, `#/mensajes`, `#/mensajes/usuario`, `#/historias`, `#/historias/crear`, `#/verificacion`) y `panel.html`, compatibles con Pages |
+| Rutas | Hash (`#/u/usuario`, `#/p/id`, `#/tienda`, `#/tienda/producto`, `#/mensajes`, `#/mensajes/usuario`, `#/historias`, `#/historias/crear`, `#/verificacion`, `#/gr`, `#/gr/trabajos`, `#/gr/alertas`, `#/gr/locales`) y `panel.html`, compatibles con Pages |
 | Estado | Store propio con índices (`Map`) y selectores |
 | Base de datos | Supabase Postgres, tabla `zuma_docs` (`path` + `data jsonb` + `updated_at`) |
 | Concurrencia | Cola por documento + bloqueo optimista con `updated_at` y reintentos |
@@ -290,7 +303,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 | Chat en vivo | Realtime instantáneo + sonido si el chat no está abierto; el sondeo queda como respaldo |
 | Contraseñas | PBKDF2-SHA256, 150 000 iteraciones, sal de 16 bytes |
 | Historias | Fotos 24 h y videos de cualquier duración / 18 h; recorte de hasta 60 s, 720p; galería propia en IndexedDB; videos en R2 |
-| Enlaces | Los links del texto se abren desde un modal con un único botón **Abrir** |
+| Enlaces | Los links del texto se abren en una sección con un único botón **Abrir** |
 | Verificación | Una sola insignia azul, **$10.000/mes**. Guarda nombre completo, DNI, localidad, nacimiento y tipo de cuenta en `soporte/verificaciones.json`; vence en la fecha que fija el panel |
 | Soporte | Perfil @soporte con página propia, acceso desde el panel, contraseña opcional, chat privado, reportes, avisos y recordatorios |
 | Pagos | Datos configurables en `soporte/config.json`; se incluyen en los avisos 7 y 2 días antes del vencimiento |
@@ -312,7 +325,7 @@ node tools/reset.mjs --wipe-media   # JSON vacíos y carpetas de imágenes limpi
 - El trámite de verificación guarda nombre completo, DNI, localidad y fecha de nacimiento en Supabase. El panel pide una contraseña de verificación, pero se comprueba en el navegador; no es autenticación real. Para producción conviene cerrar el panel con Supabase Auth.
 - La insignia azul es la única; los datos viejos con otros colores se muestran como azul.
 - Los avisos de vencimiento se envían al abrir el panel o la app del usuario (7 y 2 días antes), no con un cron del servidor: al ser un sitio estático no hay proceso en segundo plano.
-- La galería propia contiene las fotos y videos que el usuario agregó desde el dispositivo; el navegador no permite leer toda la galería del teléfono sin permiso, por eso el botón **+** abre el selector una vez y después los archivos quedan dentro de Zuma.
+- La galería propia contiene las fotos que el usuario cargó con el permiso inicial o con el botón +; el navegador no permite leer toda la galería del teléfono sin permiso.
 - Al eliminar una cuenta se borran sus documentos JSON, pero las imágenes ya subidas a Storage y los comentarios sueltos que haya dejado en otras publicaciones pueden quedar.
 - La contraseña del panel viaja y se comprueba en el cliente: alguien con experiencia puede saltearla leyendo el código. No la uses como única protección de datos sensibles.
 - Si dos personas escriben a la vez, la app relee y reintenta; en el peor caso avisa para volver a intentarlo.
@@ -340,6 +353,11 @@ js/core/auth.js         registro, acceso y sesión
 js/core/crypto.js       PBKDF2
 js/core/media.js        compresión y subida de imágenes
 js/core/video.js        recorte, compresión 720 × 1280 y poster
+js/core/features.js    interruptores de funciones (videos de historias apagados)
+js/core/weather.js     clima de General Rodríguez (Open-Meteo)
+js/pages/gr.js         portada GR, secciones y formulario de publicación
+js/components/image-cropper.js  recorte de foto de perfil y portada
+js/components/video-trimmer.js  editor de fragmento de video (guardado para cuando se reactiven)
 js/components/video-trimmer.js  editor de recorte de videos para historias
 js/core/r2.js           Cloudflare R2: URLs firmadas, subida y borrado
 js/core/ui.js           modales, menús, toasts, visor de imágenes

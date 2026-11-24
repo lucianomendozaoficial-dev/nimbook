@@ -10,6 +10,12 @@ window.NIMBOOK_CONFIG = {
   supabaseUrl: 'https://jnewregdsxppdzfdvsqb.supabase.co',
   supabaseKey: 'sb_publishable_9d8K0f5M894ijPc49OznyQ_OeubQgYQ',
   storageBucket: 'zuma-media',
+  /* Interruptores públicos de funciones. Los videos de historias quedan
+     desactivados por ahora, pero todo el código, las claves R2 y los datos
+     existentes se conservan para poder reactivarlos sin rehacer nada. */
+  features: {
+    videoStories: false,
+  },
   /* Cloudflare R2: solo para videos. La URL pública es de lectura.
      En una app estática la firma se genera en el navegador; para producción
      conviene mover estas credenciales a un Worker/Edge Function. */

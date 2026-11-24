@@ -1188,36 +1188,48 @@ function render() {
   };
 
   root.append(
-    el('header', { class: 'pn-head' },
-      el('div', { class: 'pn-brand' },
-        el('img', { src: 'assets/logo/zuma-logo-128.png', alt: 'Zuma' }),
-        el('div', null,
-          el('div', { class: 'pn-title', text: 'Panel de control' }),
-          el('div', { class: 'pn-sub', text: 'Usuarios, publicaciones e insignias de Zuma' }))),
-      el('div', { class: 'pn-actions' },
-        el('div', { class: 'pn-admin' },
-          avatarEl(state.me, 28),
-          el('span', { text: nameOf(state.me) }),
-          verifiedBadge(state.me, { size: 15, interactive: false })),
-        btn('Actualizar', async () => {
-          state.note = 'Actualizando datos…';
-          state.noteType = 'info';
-          render();
-          try { await loadData(); state.note = 'Datos actualizados.'; }
-          catch (err) { state.note = err.message || 'No se pudo actualizar.'; state.noteType = 'error'; }
-          render();
-        }, { iconName: 'refresh' }),
-        btn('Bloquear', () => {
-          sessionStorage.removeItem(PANEL_GATE_KEY);
-          location.reload();
-        }, { iconName: 'lock' }),
-        el('a', { class: 'pn-btn primary', href: 'index.html' }, icon('home', 16), 'Abrir Zuma'))),
-    renderStats(),
-    renderTabs(),
-    content,
-    el('div', { class: 'pn-footer' },
-      el('div', { text: 'Zuma · panel de control del equipo' }),
-      el('div', { text: `Última carga: ${new Date(state.loadedAt || Date.now()).toLocaleString('es-AR')} · datos y escrituras en Supabase` })));
+    el('div', { class: 'pn-dashboard' },
+      el('aside', { class: 'pn-sidebar' },
+        el('div', { class: 'pn-brand' },
+          el('img', { src: 'assets/logo/zuma-logo-128.png', alt: 'Zuma' }),
+          el('div', null,
+            el('div', { class: 'pn-title', text: 'Panel de control' }),
+            el('div', { class: 'pn-sub', text: 'Zuma · equipo' }))),
+        el('div', { class: 'pn-side-label', text: 'Secciones' }),
+        renderTabs(),
+        el('div', { class: 'pn-side-foot' },
+          el('div', { class: 'pn-admin' },
+            avatarEl(state.me, 30),
+            el('div', { class: 'grow' },
+              el('div', { class: 'pn-admin-name', text: nameOf(state.me) }),
+              el('div', { class: 'pn-admin-sub', text: 'Administrador' })),
+            verifiedBadge(state.me, { size: 15, interactive: false })),
+          el('a', { class: 'pn-btn primary block', href: 'index.html' }, icon('home', 16), 'Abrir Zuma'))),
+      el('main', { class: 'pn-main' },
+        el('header', { class: 'pn-head' },
+          el('div', { class: 'grow' },
+            el('div', { class: 'pn-eyebrow', text: 'Resumen general' }),
+            el('div', { class: 'pn-head-title', text: state.tab === 'support' ? 'Soporte' : state.tab === 'badges' ? 'Insignias' : state.tab === 'posts' ? 'Publicaciones' : state.tab === 'config' ? 'Configuración' : 'Usuarios' }),
+            el('div', { class: 'pn-sub', text: `Última actualización: ${new Date(state.loadedAt || Date.now()).toLocaleString('es-AR')}` })),
+          el('div', { class: 'pn-actions' },
+            btn('Actualizar', async () => {
+              state.note = 'Actualizando datos…';
+              state.noteType = 'info';
+              render();
+              try { await loadData(); state.note = 'Datos actualizados.'; }
+              catch (err) { state.note = err.message || 'No se pudo actualizar.'; state.noteType = 'error'; }
+              render();
+            }, { iconName: 'refresh' }),
+            btn('Bloquear', () => {
+              sessionStorage.removeItem(PANEL_GATE_KEY);
+              location.reload();
+            }, { iconName: 'lock' }))),
+        renderStats(),
+        content,
+        el('div', { class: 'pn-footer' },
+          el('div', { text: 'Zuma · panel de control del equipo' }),
+          el('div', { text: `Datos y escrituras en Supabase · ${new Date(state.loadedAt || Date.now()).toLocaleString('es-AR')}` })))));
+
 
   paintContent();
 }

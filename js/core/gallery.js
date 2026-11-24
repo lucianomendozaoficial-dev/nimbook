@@ -9,11 +9,13 @@ import { icon } from './icons.js';
 import { openModal, toast } from './ui.js';
 import { openFilePicker } from './media.js';
 import { probeVideo, makeVideoPoster } from './video.js';
+import { FEATURES } from './features.js';
 
 const DB_NAME = 'zuma-gallery';
 const STORE = 'photos';
 const VERSION = 1;
-const MAX_MEDIA = 30;
+const MAX_MEDIA = 160;
+const PERMISSION_KEY = 'zuma.gallery.permission.v1';
 
 let dbPromise = null;
 
@@ -77,8 +79,8 @@ export async function listMedia(kind = 'all') {
   }
 }
 
-export async function addMedia(files, { onProgress = null } = {}) {
-  const list = [...(files || [])].filter(Boolean).slice(0, 12);
+export async function addMedia(files, { onProgress = null, limit = 12 } = {}) {
+  const list = [...(files || [])].filter(Boolean).slice(0, limit);
   if (!list.length) return [];
   const added = [];
   try {
@@ -169,8 +171,39 @@ function durationLabel(seconds) {
   return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
 }
 
+function hasGalleryPermission() {
+  try { return localStorage.getItem(PERMISSION_KEY) === '1'; } catch { return false; }
+}
+
+function setGalleryPermission() {
+  try { localStorage.setItem(PERMISSION_KEY, '1'); } catch { /* noop */ }
+}
+
+async function collectImageFiles() {
+  if (typeof window.showDirectoryPicker === 'function') {
+    const directory = await window.showDirectoryPicker({ mode: 'read' });
+    const out = [];
+    async function walk(handle, depth = 0) {
+      if (out.length >= 160 || depth > 4) return;
+      for await (const entry of handle.values()) {
+        if (out.length >= 160) return;
+        if (entry.kind === 'file') {
+          const file = await entry.getFile().catch(() => null);
+          if (file && /^image\//i.test(file.type || '')) out.push(file);
+        } else if (entry.kind === 'directory' && !entry.name.startsWith('.')) {
+          await walk(entry, depth + 1);
+        }
+      }
+    }
+    await walk(directory);
+    return out;
+  }
+  return openFilePicker({ multiple: true, accept: 'image/*' });
+}
+
 /** Galería unificada de fotos y videos. */
 export function openGallery({ onPick, initialKind = 'all' } = {}) {
+  const allowVideo = FEATURES.videoStories;
   const grid = el('div', { class: 'zuma-gallery-grid' });
   const tabs = el('div', { class: 'zuma-gallery-tabs' });
   const status = el('div', { class: 'zuma-gallery-status hide' });
@@ -189,7 +222,7 @@ export function openGallery({ onPick, initialKind = 'all' } = {}) {
     for (const item of [
       { id: 'all', label: 'Todo' },
       { id: 'image', label: 'Fotos' },
-      { id: 'video', label: 'Videos' },
+      ...(allowVideo ? [{ id: 'video', label: 'Videos' }] : []),
     ]) {
       tabs.appendChild(el('button', {
         class: `zuma-gallery-tab${kind === item.id ? ' active' : ''}`.trim(),
@@ -203,12 +236,27 @@ export function openGallery({ onPick, initialKind = 'all' } = {}) {
     if (closed) return;
     revokeAll();
     clear(grid);
-    const media = await listMedia(kind);
+    const media = (await listMedia(kind)).filter((record) => allowVideo || record.kind !== 'video');
     if (!media.length) {
+      if (!hasGalleryPermission()) {
+        const allow = el('button', {
+          class: 'btn primary', type: 'button',
+          onclick: () => requestAllPhotos(allow),
+        }, icon('photo-library', 17), 'Permitir acceso a mis fotos');
+        grid.appendChild(el('div', { class: 'zuma-gallery-permission' },
+          el('div', { class: 'zuma-gallery-permission-ic' }, icon('photo-library', 32)),
+          el('div', { class: 'strong', text: 'Cargá tus fotos una sola vez' }),
+          el('p', { class: 'muted small', text: 'Tocá el botón y elegí la carpeta de fotos del teléfono o la computadora. Zuma va a guardar una copia optimizada para que después las elijas sin volver al selector.' }),
+          allow,
+          el('span', { class: 'muted tiny', text: 'El navegador pide permiso una vez. En equipos sin selector de carpetas se abre el selector de fotos.' })));
+        return;
+      }
       grid.appendChild(el('div', { class: 'zuma-gallery-empty' },
         el('div', { class: 'big-ic' }, icon(kind === 'video' ? 'videocam' : 'photo-library', 30)),
         el('div', { class: 'strong', text: kind === 'video' ? 'No hay videos todavía' : 'Tu galería está vacía' }),
-        el('p', { class: 'muted small', text: 'Tocá el botón + para sumar fotos o videos a tu galería. Los videos se recortan y optimizan al publicar.' })));
+        el('p', { class: 'muted small', text: allowVideo
+          ? 'Tocá el botón + para sumar fotos o videos a tu galería. Los videos se recortan y optimizan al publicar.'
+          : 'Tocá el botón + para sumar fotos a tu galería.' })));
       return;
     }
     for (const record of media) {
@@ -235,9 +283,40 @@ export function openGallery({ onPick, initialKind = 'all' } = {}) {
     }
   }
 
+  async function requestAllPhotos(button) {
+    if (importing) return;
+    importing = true;
+    if (button) button.disabled = true;
+    status.classList.remove('hide');
+    status.textContent = 'Esperando permiso para leer tus fotos…';
+    try {
+      const files = await collectImageFiles();
+      if (!files.length) {
+        toast('No se encontraron fotos para cargar.', { type: 'info' });
+        return;
+      }
+      setGalleryPermission();
+      status.textContent = `Cargando ${files.length} fotos…`;
+      const added = await addMedia(files, {
+        limit: 160,
+        onProgress: (value, name) => { status.textContent = `Preparando ${name || 'foto'}… ${value}%`; },
+      });
+      toast(added.length ? `${added.length} fotos cargadas en tu galería` : 'No se pudieron cargar las fotos.', {
+        type: added.length ? 'success' : 'error',
+      });
+      render();
+    } catch (err) {
+      if (err?.name !== 'AbortError') toast('No se pudo acceder a las fotos.', { type: 'error' });
+    } finally {
+      importing = false;
+      if (button) button.disabled = false;
+      status.classList.add('hide');
+    }
+  }
+
   async function importMedia() {
     if (importing) return;
-    const files = await openFilePicker({ multiple: true, accept: 'image/*,video/*' });
+    const files = await openFilePicker({ multiple: true, accept: allowVideo ? 'image/*,video/*' : 'image/*' });
     if (!files.length) return;
     importing = true;
     status.classList.remove('hide');

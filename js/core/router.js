@@ -69,6 +69,11 @@ export function parseRoute(hash = window.location.hash) {
     case 'publicar':
     case 'compose':
       return { name: 'compose', params: {}, query };
+    case 'gr':
+      if (third === 'publicar') {
+        return { name: 'grcompose', params: { section: second || 'trabajos' }, query };
+      }
+      return { name: 'gr', params: { section: second || '' }, query };
     case 'mi-perfil':
       return { name: 'myprofile', params: { tab: second || 'posts' }, query };
     case 'u':
@@ -136,6 +141,9 @@ export function startRouter(fn) {
   window.addEventListener('popstate', (event) => {
     ignoreHash = true;
     setTimeout(() => { ignoreHash = false; }, 0);
+    // Las secciones abiertas (antes modales) manejan su propio historial.
+    // Si hay una página encima, no volvemos a pintar la ruta de abajo.
+    if (window.__zumaModalActive || event.state?.zumaPage) return;
     depth = Number(event.state?.depth) || 0;
     emit();
   });

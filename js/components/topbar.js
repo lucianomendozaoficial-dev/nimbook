@@ -14,6 +14,7 @@ const TABS = [
   { id: 'feed', icon: 'home', href: '#/inicio', label: 'Inicio' },
   { id: 'groups', icon: 'groups', href: '#/grupos', label: 'Grupos' },
   { id: 'shop', icon: 'shop', href: '#/tienda', label: 'Shop' },
+  { id: 'gr', icon: 'map-pin', href: '#/gr', label: 'GR' },
   { id: 'saved', icon: 'bookmark', href: '#/guardados', label: 'Guardado' },
 ];
 

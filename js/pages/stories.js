@@ -19,6 +19,7 @@ import { openStoryViewer } from '../components/stories.js';
 import { navigate } from '../core/router.js';
 import { storyFontClass } from '../core/story-fonts.js';
 import { playSound } from '../core/sounds.js';
+import { FEATURES } from '../core/features.js';
 
 /* --------------------------------- secciÃ³n -------------------------------- */
 
@@ -94,9 +95,9 @@ export function storiesPage() {
     el('div', { class: 'page-head stories-head' },
       el('div', { class: 'grow' },
         el('h1', { text: 'Historias' }),
-        el('p', { class: 'muted small', text: 'Lo que compartiÃ³ tu gente: fotos 24 h y videos 18 h.' })),
+        el('p', { class: 'muted small', text: FEATURES.videoStories ? 'Lo que compartió tu gente: fotos 24 h y videos 18 h.' : 'Fotos de tu gente, visibles 24 horas.' })),
       el('div', { class: 'stories-head-actions' },
-        el('span', { class: 'stories-duration-pill' }, icon('clock', 14), 'Fotos 24 h Â· Videos 18 h'),
+        el('span', { class: 'stories-duration-pill' }, icon('clock', 14), FEATURES.videoStories ? 'Fotos 24 h · Videos 18 h' : 'Fotos 24 h'),
         el('button', {
           class: 'btn primary', type: 'button',
           onclick: () => navigate('/historias/crear'),
@@ -125,7 +126,7 @@ export function storyComposerPage() {
   let videoProcessing = 0;
   let processingText = null;
   let processingBar = null;
-  let facing = 'user';
+  let facing = 'environment';
   let stageName = 'camera';
   let cameraError = '';
   let busy = false;

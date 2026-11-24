@@ -320,10 +320,21 @@ export async function deleteAccount(password) {
 
 export async function createPost({
   text = '', media = [], privacy = 'public', feeling = null, location = null,
-  shareOf = null, groupId = null, bg = null,
+  shareOf = null, groupId = null, bg = null, gr = null,
 } = {}) {
   const me = requireMe();
   const clean = String(text || '').trim();
+  const cleanGr = gr ? {
+    section: ['trabajos', 'alertas', 'locales'].includes(gr.section) ? gr.section : 'trabajos',
+    title: String(gr.title || '').trim().slice(0, 140),
+    contact: String(gr.contact || '').trim().slice(0, 120),
+    location: String(gr.location || '').trim().slice(0, 140),
+    meta: Object.fromEntries(Object.entries(gr.meta || {})
+      .slice(0, 12)
+      .map(([key, value]) => [String(key).slice(0, 30), String(value || '').slice(0, 160)])),
+  } : null;
+  if (cleanGr && !cleanGr.title) throw new ValidationError('Poné un título para la publicación de GR.');
+
   if (!clean && !media.length && !shareOf) throw new ValidationError('EscribÃƒÂ­ algo o agregÃƒÂ¡ una foto.');
   if (groupId) {
     const group = state.groups.find((item) => item.id === groupId);
@@ -343,6 +354,7 @@ export async function createPost({
     bg: media.length ? null : (bg || null),
     shareOf: shareOf || null,
     groupId: groupId || null,
+    gr: cleanGr,
     createdAt: nowISO(),
     reactions: {},
     commentsCount: 0,
@@ -361,6 +373,15 @@ export async function createPost({
 
   state.posts.set(post.id, post);
   state.feedIndex = [entry, ...state.feedIndex.filter((item) => item.id !== entry.id)].slice(0, 200);
+  if (cleanGr) {
+    await queueDoc(P.gr, (doc) => {
+      const data = doc || { version: 1, posts: [] };
+      data.posts = [post, ...(data.posts || []).filter((item) => item.id !== post.id)].slice(0, 200);
+      return data;
+    }, { delay: 200, message: 'Zuma: publicación de GR' });
+    state.gr = [post, ...state.gr.filter((item) => item.id !== post.id)].slice(0, 200);
+    notify('gr');
+  }
   notify('feed');
   return post;
 }
@@ -377,6 +398,14 @@ export async function deletePost(postId) {
 
   state.feedIndex = state.feedIndex.filter((item) => item.id !== postId);
   state.posts.delete(postId);
+  if (post?.gr) {
+    await queueDoc(P.gr, (doc) => {
+      if (!doc?.posts) return undefined;
+      return { ...doc, posts: doc.posts.filter((item) => item.id !== postId) };
+    }, { delay: 0, message: 'Zuma: borrar publicación de GR' }).catch(() => {});
+    state.gr = state.gr.filter((item) => item.id !== postId);
+    notify('gr');
+  }
   forget(P.post(postId));
   await deleteDoc(P.post(postId), 'Zuma: borrar publicaciÃƒÂ³n').catch(() => {});
   notify('feed');
@@ -567,6 +596,60 @@ export async function toggleFollow(userId) {
 }
 
 /* ------------------------------ notificaciones --------------------------- */
+
+export async function deleteMessage(threadId, messageId) {
+  const me = requireMe();
+  const cached = state.threads.get(threadId);
+  const message = cached?.messages?.find((row) => row.id === messageId);
+  if (!message) throw new ValidationError('No encontramos ese mensaje.');
+  if (message.fromId !== me.id) throw new ValidationError('Solo podés eliminar tus propios mensajes.');
+  let memberIds = [me.id];
+  await queueDoc(P.thread(threadId), (doc) => {
+    if (!doc?.thread) return undefined;
+    memberIds = doc.thread.memberIds || memberIds;
+    const remaining = (doc.thread.messages || []).filter((row) => row.id !== messageId);
+    doc.thread.messages = remaining;
+    doc.thread.updatedAt = nowISO();
+    return doc;
+  }, { delay: 0, message: 'Zuma: mensaje eliminado' });
+  if (cached) cached.messages = cached.messages.filter((row) => row.id !== messageId);
+  const remaining = cached?.messages || [];
+  const last = remaining[remaining.length - 1] || null;
+  for (const memberId of [...new Set(memberIds.filter(Boolean))]) {
+    await queueDoc(P.inbox(memberId), (doc) => {
+      if (!doc?.threads) return undefined;
+      const entry = doc.threads.find((row) => row.threadId === threadId);
+      if (!entry) return undefined;
+      if (last) {
+        entry.lastText = last.text || '';
+        entry.lastAt = last.createdAt;
+        entry.lastFromId = last.fromId;
+      } else {
+        doc.threads = doc.threads.filter((row) => row.threadId !== threadId);
+      }
+      return doc;
+    }, { delay: 0, message: 'Zuma: mensaje eliminado' }).catch(() => {});
+  }
+  if (last) {
+    state.inbox = state.inbox.map((row) => (row.threadId === threadId
+      ? { ...row, lastText: last.text || '', lastAt: last.createdAt, lastFromId: last.fromId }
+      : row));
+  } else {
+    state.inbox = state.inbox.filter((row) => row.threadId !== threadId);
+  }
+  notify('messages');
+}
+
+export async function deleteChat(threadId) {
+  const me = requireMe();
+  state.inbox = state.inbox.filter((row) => row.threadId !== threadId);
+  state.threads.delete(threadId);
+  await queueDoc(P.inbox(me.id), (doc) => {
+    if (!doc?.threads) return undefined;
+    return { ...doc, threads: doc.threads.filter((row) => row.threadId !== threadId) };
+  }, { delay: 0, message: 'Zuma: chat eliminado' });
+  notify('messages');
+}
 
 export async function markNotificationRead(id) {
   const me = requireMe();

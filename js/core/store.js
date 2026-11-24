@@ -7,6 +7,7 @@ import {
 import { P } from './paths.js';
 import { verificationInfo } from './verification.js';
 import { deleteR2 } from './r2.js';
+import { FEATURES } from './features.js';
 
 const PAGE = 30;
 
@@ -29,6 +30,7 @@ export const state = {
   groups: [],
   stories: [],
   notifications: [],
+  gr: [],
 
   shopIndex: [],           // [{ id, sellerId, title, price, ... }]
   shopItems: new Map(),    // id -> ficha completa del producto
@@ -89,6 +91,10 @@ export function attach(cfg) {
     } else if (path === P.stories) {
       state.stories = doc?.stories || [];
       topic = 'stories';
+    } else if (path === P.gr) {
+      const incoming = Array.isArray(doc?.posts) ? doc.posts : [];
+      state.gr = [...incoming, ...state.gr.filter((post) => !incoming.some((row) => row.id === post.id))].slice(0, 200);
+      topic = 'gr';
     } else if (path === P.shopIndex) {
       state.shopIndex = doc?.items || [];
       topic = 'shop';
@@ -302,6 +308,13 @@ export async function loadStories() {
     }
   }
   return state.stories;
+}
+
+export async function loadGr({ fresh = false } = {}) {
+  const doc = await docJson(P.gr, { fresh });
+  const incoming = Array.isArray(doc?.posts) ? doc.posts : [];
+  state.gr = [...incoming, ...state.gr.filter((post) => !incoming.some((row) => row.id === post.id))].slice(0, 200);
+  return state.gr;
 }
 
 /* -------------------------------- tienda --------------------------------- */
@@ -675,6 +688,7 @@ export function storiesGrouped(viewerId) {
   const seen = readSeenStories();
   const byUser = new Map();
   for (const story of state.stories) {
+    if (!FEATURES.videoStories && (story.video || story.type === 'video')) continue;
     if (!byUser.has(story.userId)) byUser.set(story.userId, []);
     byUser.get(story.userId).push(story);
   }
@@ -974,6 +988,7 @@ export async function bootData() {
       loadInbox(state.me.id),
       loadGroups(),
       loadStories(),
+      loadGr(),
     ]);
   }
   await loadFeedPage({ reset: true });
@@ -990,6 +1005,7 @@ export async function refreshAll() {
     loadShopIndex({ fresh: true }),
     loadGroups(),
     loadStories(),
+    loadGr(),
   ]);
   if (state.me) {
     await Promise.all([

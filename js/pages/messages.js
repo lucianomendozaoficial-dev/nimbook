@@ -7,9 +7,9 @@ import {
   state, displayName, userById, userByUsername, loadUser, loadInbox, loadThread,
   messagesOf, threadIdFor, inboxSorted, searchPeople, loadShopItem,
 } from '../core/store.js';
-import { avatarEl, openModal, toast } from '../core/ui.js';
+import { avatarEl, openModal, toast, dropdown, confirmDialog } from '../core/ui.js';
 import { mediaImg } from '../core/media.js';
-import { sendMessage, markThreadRead } from '../core/actions.js';
+import { sendMessage, markThreadRead, deleteMessage, deleteChat } from '../core/actions.js';
 import { navigate } from '../core/router.js';
 import { playSound } from '../core/sounds.js';
 import { onTyping, sendTyping } from '../core/realtime.js';
@@ -160,6 +160,36 @@ export function messagesPage(username = '', routeQuery = {}) {
 
   function messageRow(message, partner) {
     const mine = message.fromId === state.me?.id;
+    const threadId = threadIdFor(state.me?.id, partner.id);
+    const more = mine && !message.pending
+      ? el('button', {
+        class: 'msg-more', type: 'button', 'aria-label': 'Opciones del mensaje',
+      }, icon('more-h', 15))
+      : null;
+    if (more) {
+      more.addEventListener('click', (event) => {
+        event.stopPropagation();
+        dropdown(more, [
+          {
+            icon: 'trash', label: 'Eliminar para todos', danger: true,
+            onClick: async () => {
+              const ok = await confirmDialog({
+                title: '¿Eliminar este mensaje?',
+                message: 'Se va a borrar también de la conversación de la otra persona.',
+                confirmText: 'Eliminar para todos', danger: true,
+              });
+              if (!ok) return;
+              try {
+                await deleteMessage(threadId, message.id);
+                toast('Mensaje eliminado para ambos', { type: 'success' });
+                renderChatBody(partner);
+                renderList();
+              } catch (err) { toast(err.message || 'No se pudo eliminar el mensaje.', { type: 'error' }); }
+            },
+          },
+        ], { align: 'start', width: 220 });
+      });
+    }
     return el('div', {
       class: `msg${mine ? ' me' : ''}${message.pending ? ' pending' : ''}`,
       'data-message-id': message.id,
@@ -171,7 +201,8 @@ export function messagesPage(username = '', routeQuery = {}) {
       el('span', {
         class: 'stamp',
         text: message.pending ? 'enviando…' : clockTime(message.createdAt),
-      })));
+      })),
+    more);
   }
 
   function renderChatBody(partner) {
@@ -331,6 +362,31 @@ export function messagesPage(username = '', routeQuery = {}) {
 
     const chatSubNode = el('div', { class: 'ch-sub', text: 'Mensaje privado' });
     chatSub = chatSubNode;
+    const chatMenuBtn = el('button', {
+      class: 'btn-icon', type: 'button', title: 'Opciones del chat', 'aria-label': 'Opciones del chat',
+    }, icon('more-h', 19));
+    chatMenuBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      dropdown(chatMenuBtn, [
+        {
+          icon: 'trash', label: 'Eliminar chat para mí', danger: true,
+          onClick: async () => {
+            const ok = await confirmDialog({
+              title: '¿Eliminar este chat?',
+              message: 'Solo se va a borrar de tu lista. La otra persona conserva la conversación.',
+              confirmText: 'Eliminar para mí', danger: true,
+            });
+            if (!ok) return;
+            try {
+              await deleteChat(threadIdFor(state.me.id, partner.id));
+              toast('Chat eliminado de tu lista', { type: 'success' });
+              navigate('/mensajes');
+            } catch (err) { toast(err.message || 'No se pudo eliminar el chat.', { type: 'error' }); }
+          },
+        },
+        { icon: 'user', label: 'Ver perfil', onClick: () => navigate(`/u/${partner.username}`) },
+      ], { align: 'end', width: 230 });
+    });
     const head = el('header', { class: 'chat-head' },
       el('button', {
         class: 'btn-icon chat-list-btn', type: 'button',
@@ -346,7 +402,8 @@ export function messagesPage(username = '', routeQuery = {}) {
       el('a', {
         class: 'btn-icon', href: `#/u/${partner.username}`, title: 'Ver perfil', 'aria-label': 'Ver perfil',
       }, icon('user', 19)),
-      refreshBtn);
+      refreshBtn,
+      chatMenuBtn);
 
     chatBody = el('div', { class: 'chat-body' });
 

@@ -24,6 +24,7 @@ import { notificationsPage } from './pages/notifications.js';
 import { groupsPage, groupPage } from './pages/groups.js';
 import { shopPage, shopItemPage } from './pages/shop.js';
 import { messagesPage } from './pages/messages.js';
+import { grPage, grComposePage } from './pages/gr.js';
 import { storiesPage, storyComposerPage } from './pages/stories.js';
 import { verificationPage } from './pages/verification.js';
 import { savedPage } from './pages/saved.js';
@@ -110,6 +111,7 @@ function buildShell() {
     { id: 'feed', icon: 'home', label: 'Inicio', href: '#/inicio' },
     { id: 'compose', icon: 'plus', label: 'Publicar', href: '#/publicar' },
     { id: 'shop', icon: 'shop', label: 'Shop', href: '#/tienda' },
+    { id: 'gr', icon: 'map-pin', label: 'GR', href: '#/gr' },
     { id: 'messages', icon: 'message', label: 'Mensajes', href: '#/mensajes', badge: true },
     { id: 'menu', icon: 'menu', label: 'Menú', href: '#/menu' },
   ];
@@ -176,6 +178,7 @@ function activeNavFor(route) {
     case 'group': return 'groups';
     case 'post': return 'feed';
     case 'shopitem': return 'shop';
+    case 'grcompose': return 'gr';
     default: return route.name;
   }
 }
@@ -187,10 +190,13 @@ function layoutFor(route) {
     case 'shop':
     case 'shopitem':
     case 'messages':
+    case 'gr':
     case 'stories':
     case 'storycompose':
     case 'verification':
       return { right: false, left: true, wide: true };
+    case 'grcompose':
+      return { right: false, left: false, wide: true };
     case 'profile':
     case 'myprofile':
     case 'friends':
@@ -220,6 +226,8 @@ function pageFor(route) {
     case 'shop': return shopPage();
     case 'shopitem': return shopItemPage(route.params.id);
     case 'messages': return messagesPage(route.params.username || '', route.query || {});
+    case 'gr': return grPage(route.params.section || '');
+    case 'grcompose': return grComposePage(route.params.section || 'trabajos');
     case 'stories': return storiesPage();
     case 'storycompose': return storyComposerPage();
     case 'verification': return verificationPage();

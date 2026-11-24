@@ -6,7 +6,7 @@ import { icon } from '../core/icons.js';
 import {
   state, displayName, storiesGrouped, initialsOf, markStorySeen, notify,
 } from '../core/store.js';
-import { avatarEl, toast } from '../core/ui.js';
+import { avatarEl, toast, dropdown } from '../core/ui.js';
 import { mediaImg, downloadImage, mediaFileName } from '../core/media.js';
 import { fetchImageUrl } from '../core/net.js';
 import { deleteStory, sendMessage } from '../core/actions.js';
@@ -40,9 +40,44 @@ export function openStoryViewer(groups, startIndex = 0) {
   });
   const caption = el('div', { class: 'sv-text' });
 
-  const closeBtn = el('button', {
-    class: 'sv-close', type: 'button', 'aria-label': 'Cerrar', onclick: () => destroy(),
-  }, icon('x', 18));
+  const menuBtn = el('button', {
+    class: 'sv-menu', type: 'button', 'aria-label': 'Opciones de la historia',
+  }, icon('more-h', 20));
+
+  menuBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const current = currentStory();
+    if (!current) return;
+    const { group, story } = current;
+    const options = [];
+    if (story.image) {
+      options.push({
+        icon: 'download',
+        label: 'Descargar historia',
+        onClick: async () => {
+          const ok = await downloadImage(story.image, mediaFileName(story.image, 'zuma-historia.jpg'));
+          toast(ok ? 'Historia descargada' : 'Se abrió la imagen para guardarla',
+            { type: ok ? 'success' : 'info' });
+        },
+      });
+    }
+    if (group.user.id === me.id) {
+      options.push({
+        icon: 'trash',
+        label: 'Eliminar historia',
+        danger: true,
+        onClick: async () => {
+          try {
+            await deleteStory(story.id);
+            toast('Historia eliminada', { type: 'success' });
+            destroy();
+          } catch (err) { toast(err.message, { type: 'error' }); }
+        },
+      });
+    }
+    options.push({ icon: 'x', label: 'Cerrar', onClick: () => destroy() });
+    dropdown(menuBtn, options, { align: 'end', width: 220 });
+  });
 
   const replyInput = el('input', {
     class: 'sv-reply-input', type: 'text', maxlength: '500',
@@ -63,7 +98,7 @@ export function openStoryViewer(groups, startIndex = 0) {
     onclick: (event) => { event.stopPropagation(); step(1); },
   });
 
-  card.append(storyVideo, image, bars, header, caption, prevZone, nextZone, replyForm, closeBtn);
+  card.append(storyVideo, image, bars, header, caption, prevZone, nextZone, replyForm);
   root.appendChild(card);
 
   function currentStory() {
@@ -115,32 +150,7 @@ export function openStoryViewer(groups, startIndex = 0) {
           el('div', { class: 'sv-name', text: displayName(group.user) }),
           verifiedBadge(group.user, { size: 14 })),
         el('div', { class: 'sv-time', text: timeAgo(story.createdAt) })),
-      story.image
-        ? el('button', {
-          class: 'sv-close', type: 'button', 'aria-label': 'Descargar historia',
-          style: { position: 'static' },
-          onclick: async (event) => {
-            event.stopPropagation();
-            const ok = await downloadImage(story.image, mediaFileName(story.image, 'zuma-historia.jpg'));
-            toast(ok ? 'Historia descargada' : 'Se abrió la imagen para guardarla',
-              { type: ok ? 'success' : 'info' });
-          },
-        }, icon('download', 17))
-        : null,
-      group.user.id === me.id
-        ? el('button', {
-          class: 'sv-close', type: 'button', 'aria-label': 'Eliminar historia',
-          style: { position: 'static' },
-          onclick: async (event) => {
-            event.stopPropagation();
-            try {
-              await deleteStory(story.id);
-              toast('Historia eliminada', { type: 'success' });
-              destroy();
-            } catch (err) { toast(err.message, { type: 'error' }); }
-          },
-        }, icon('trash', 16))
-        : null);
+      menuBtn);
 
     clear(bars);
     const playback = story.video

@@ -35,4 +35,5 @@ export const P = {
   supportReports: 'data/soporte/reportes.json',
   supportConfig: 'data/soporte/config.json',
   supportUser: 'u_support',
+  gr: 'data/gr/index.json',
 };

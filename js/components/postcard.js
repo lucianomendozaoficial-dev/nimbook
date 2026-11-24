@@ -15,6 +15,15 @@ import { navigate } from '../core/router.js';
 import { verifiedBadge } from './verified-badge.js';
 
 const PRIVACY_ICON = { public: 'globe', followers: 'users', friends: 'users', private: 'lock', group: 'groups' };
+const GR_LABELS = { trabajos: 'Trabajos', alertas: 'Alertas', locales: 'Locales' };
+const GR_META_LABELS = {
+  mode: 'Modalidad', area: 'Rubro', pay: 'Pago', type: 'Tipo',
+  address: 'Dirección', urgent: 'Urgente', category: 'Rubro',
+  hours: 'Horarios', offer: 'Promo',
+};
+function grLabel(gr) {
+  return GR_LABELS[gr?.section] || 'Comunidad';
+}
 const BG_IDS = ['azul', 'rosa', 'verde', 'arena', 'violeta', 'oscuro'];
 
 function privacyIcon(post) {
@@ -148,6 +157,7 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
     const current = postData();
     const author = userById(current.authorId) || { name: 'Usuario' };
     const authorLink = `#/u/${author.username || ''}`;
+    root.classList.toggle('post-gr', Boolean(current.gr));
     clear(headEl);
 
     const menuBtn = el('button', {
@@ -155,7 +165,7 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
       onclick: (event) => { event.stopPropagation(); openMenu(menuBtn); },
     }, icon('more-h', 20));
 
-    headEl.append(
+    const headChildren = [
       el('a', { href: authorLink }, avatarEl(author, 'md')),
       el('div', { class: 'who' },
         el('div', { class: 'post-name-row' },
@@ -171,8 +181,14 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
           current.location ? el('span', { text: current.location }) : null,
           el('span', { class: 'dot' }),
           icon(privacyIcon(current), 12, { cls: 'dim' }))),
-      menuBtn,
-    );
+    ];
+    if (current.gr) {
+      headChildren.push(el('div', { class: 'post-gr-badge' },
+        icon('map-pin', 12),
+        el('span', { text: `GR · ${grLabel(current.gr)}` })));
+    }
+    headChildren.push(menuBtn);
+    headEl.append(...headChildren);
   }
 
   function openMenu(anchor) {
@@ -269,7 +285,7 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
     const current = postData();
     clear(textEl);
     textEl.className = 'post-text';
-    if (!current.text) {
+    if (!current.text && !current.gr) {
       textEl.classList.add('hide');
       return;
     }
@@ -279,7 +295,31 @@ export function postCard(post, { onUpdate, suggested = false } = {}) {
       textEl.classList.add('post-bg', `post-bg-${current.bg}`);
     }
     textEl.classList.toggle('collapsed', !expanded && current.text.length > 320);
-    textEl.innerHTML = linkify(current.text);
+    if (current.gr) {
+      textEl.appendChild(el('div', { class: 'post-gr-title', text: current.gr.title || 'Publicación de GR' }));
+      if (current.text) {
+        const body = el('div', { class: 'post-gr-desc' });
+        body.innerHTML = linkify(current.text);
+        textEl.appendChild(body);
+      }
+      if (current.gr.contact || current.gr.location || Object.keys(current.gr.meta || {}).length) {
+        const chips = [];
+        if (current.gr.location) chips.push(el('span', null, icon('map-pin', 12), current.gr.location));
+        if (current.gr.contact) chips.push(el('span', null, icon('message', 12), current.gr.contact));
+        for (const [key, value] of Object.entries(current.gr.meta || {}).slice(0, 4)) {
+          if (!value) continue;
+          const shown = key === 'mode'
+            ? (value === 'busco' ? 'Busco trabajo' : 'Ofrezco trabajo')
+            : value;
+          chips.push(el('span', null,
+            el('b', { text: `${GR_META_LABELS[key] || key}: ` }),
+            shown));
+        }
+        if (chips.length) textEl.appendChild(el('div', { class: 'post-gr-meta' }, ...chips));
+      }
+    } else {
+      textEl.innerHTML = linkify(current.text);
+    }
     if (!expanded && current.text.length > 320) {
       const more = el('button', {
         class: 'see-more', type: 'button', text: 'Ver más',
